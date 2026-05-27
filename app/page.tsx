@@ -321,7 +321,7 @@ function MainApp({ currentUser, setAuthState, showSupportBtn, setShowSupportBtn,
                 {activeTab === 'dashboard' && <DashboardView />}
                 {activeTab === 'alunos' && <AlunosView />}
                 {activeTab === 'protocolos' && <ProtocolosView />}
-                {activeTab === 'config' && <ConfigView />}
+                {activeTab === 'config' && <ConfigView currentUser={currentUser} />}
                 {activeTab === 'inspecoes' && <InspecoesView />}
              </motion.div>
            </AnimatePresence>
@@ -362,6 +362,22 @@ function MainApp({ currentUser, setAuthState, showSupportBtn, setShowSupportBtn,
 // --- SUB-VIEWS ---
 
 function DashboardView() {
+  const [goal, setGoal] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('elite_coach_goal') || '10000';
+    }
+    return '10000';
+  });
+
+  const handleGoalChange = (e: any) => {
+    setGoal(e.target.value);
+    localStorage.setItem('elite_coach_goal', e.target.value);
+  };
+
+  const currentRevenue = 8500;
+  const goalValue = parseFloat(goal) || 1;
+  const progressPercent = Math.min(100, Math.round((currentRevenue / goalValue) * 100));
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -375,19 +391,53 @@ function DashboardView() {
         {[
           { label: 'Alunos Ativos', val: '45', icon: <Users/>, trend: '+12%' },
           { label: 'Protocolos Gerados (Mês)', val: '128', icon: <Dumbbell/>, trend: '+5%' },
-          { label: 'Faturamento Estimado', val: 'R$ 8.5K', icon: <Zap/>, trend: '+20%' },
+          { label: 'Faturamento Estimado', val: `R$ ${currentRevenue.toLocaleString()}`, icon: <Zap/>, trend: '+20%' },
           { label: 'Inspeções no Prazo', val: '98%', icon: <CheckCircle2/>, trend: '+2%' },
         ].map((s, i) => (
-          <div key={i} className="bg-surface-container border border-surface-highest p-5 rounded-xl hover:border-primary/50 transition-colors cursor-default group">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ duration: 0.3, delay: i * 0.1 }}
+            key={i} 
+            className="bg-surface-container border border-surface-highest p-5 rounded-xl hover:border-primary/50 transition-colors cursor-default group"
+          >
              <div className="flex items-center justify-between mb-4 text-zinc-400 group-hover:text-primary transition-colors">
                {React.cloneElement(s.icon as any, {className: "w-5 h-5"})}
                <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">{s.trend}</span>
              </div>
              <div className="text-3xl font-heading font-bold text-white">{s.val}</div>
              <div className="text-sm text-zinc-500 mt-1">{s.label}</div>
-          </div>
+          </motion.div>
         ))}
       </div>
+
+      {/* Monthly Goals Card */}
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.4 }} className="bg-gradient-to-r from-surface-container to-surface border border-primary/20 rounded-xl p-6 relative overflow-hidden">
+         <div className="absolute top-0 left-0 h-1 bg-primary transition-all duration-1000" style={{ width: `${progressPercent}%` }} />
+         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+            <div>
+              <h3 className="font-heading font-semibold text-lg text-white mb-1 flex items-center gap-2"><Award className="w-5 h-5 text-primary" /> Metas Mensais</h3>
+              <p className="text-sm text-zinc-400">Faturamento alvo vs Atual (Mês Anterior: R$ 7.083)</p>
+            </div>
+            
+            <div className="flex items-center gap-6 w-full md:w-auto">
+               <div className="flex-1 md:w-48">
+                 <div className="flex justify-between text-xs font-bold mb-2">
+                   <span className="text-white">R$ {currentRevenue.toLocaleString()}</span>
+                   <span className="text-primary">{progressPercent}%</span>
+                 </div>
+                 <div className="w-full bg-surface-highest rounded-full h-2 overflow-hidden">
+                   <div className="bg-primary h-full rounded-full transition-all duration-1000" style={{ width: `${progressPercent}%` }} />
+                 </div>
+               </div>
+               
+               <div>
+                  <label className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block mb-1">Definir Meta (R$)</label>
+                  <input type="number" value={goal} onChange={handleGoalChange} className="w-24 bg-surface-high border border-surface-highest rounded p-1.5 text-white text-sm outline-none focus:border-primary transition-colors text-right font-mono" />
+               </div>
+            </div>
+         </div>
+      </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-surface-container border border-surface-highest rounded-xl p-6">
@@ -624,6 +674,155 @@ function AlunosView() {
   );
 }
 
+// --- PDF EXPORT HELPER ---
+const generatePDFAndShare = async (item: any, onlyDownload: boolean = false) => {
+  const { student, objective, durationWeeks, weight, height, imc, clinicalNotes, workoutData } = item;
+  
+  if (!workoutData || !workoutData.days) return;
+
+  const doc = new jsPDF();
+  
+  let profile = {
+    name: 'Treinador',
+    instagram: '',
+    whatsapp: '',
+    logoUrl: '',
+    pdfTemplate: '1'
+  };
+  
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('elite_coach_profile');
+    if (saved) profile = JSON.parse(saved);
+  }
+  
+  const isDark = profile.pdfTemplate === '2';
+  
+  // Page bg
+  if (isDark) {
+    doc.setFillColor(24, 24, 27); // zinc-900
+    doc.rect(0, 0, 210, 297, 'F');
+  }
+  
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(212, 175, 55); // Gold
+  doc.text(profile.name.toUpperCase() + " - PROTOCOLO DE TREINO", 14, 22);
+  
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(isDark ? 200 : 50, isDark ? 200 : 50, isDark ? 200 : 50);
+  
+  const startY = 32;
+  doc.text(`Aluno:`, 14, startY); doc.setFont("helvetica", "normal"); doc.text(student, 30, startY);
+  doc.setFont("helvetica", "bold"); doc.text(`Objetivo:`, 14, startY + 6); doc.setFont("helvetica", "normal"); doc.text(objective, 35, startY + 6);
+  doc.setFont("helvetica", "bold"); doc.text(`Duração:`, 14, startY + 12); doc.setFont("helvetica", "normal"); doc.text(`${durationWeeks} semanas`, 35, startY + 12);
+  
+  // Novas informações do aluno
+  doc.setFont("helvetica", "bold"); 
+  doc.text(`Físico:`, 100, startY); 
+  doc.setFont("helvetica", "normal"); 
+  doc.text(`Peso: ${weight || '-'} kg | Alt: ${height || '-'} cm | IMC: ${imc || '-'}`, 118, startY);
+  
+  doc.setFont("helvetica", "bold"); 
+  doc.text(`Clínico:`, 100, startY + 6); 
+  doc.setFont("helvetica", "normal"); 
+  doc.text(clinicalNotes || '-', 118, startY + 6, { maxWidth: 80 });
+  
+  let yPos = startY + 24;
+
+  workoutData.days.forEach((dayItem: any) => {
+     doc.setFont("helvetica", "bold");
+     doc.setFontSize(14);
+     doc.setTextColor(isDark ? 255 : 0, isDark ? 255 : 0, isDark ? 255 : 0);
+     doc.text(dayItem.dayName, 14, yPos);
+     
+     const tableData = dayItem.exercises.map((ex: any) => [
+       ex.name, ex.sets, ex.reps, ex.rest, ex.notes || '-'
+     ]);
+
+     autoTable(doc, {
+       startY: yPos + 4,
+       head: [['Exercício', 'Séries', 'Reps', 'Descanso', 'Notas']],
+       body: tableData,
+       theme: isDark ? 'grid' : 'grid',
+       headStyles: { fillColor: isDark ? [40, 40, 40] : [212, 175, 55], textColor: isDark ? [212, 175, 55] : [0,0,0], fontStyle: 'bold' },
+       styles: { fontSize: 10, cellPadding: 4, textColor: isDark ? [220, 220, 220] : [40, 40, 40], fillColor: isDark ? [30, 30, 30] : [255, 255, 255] },
+       alternateRowStyles: { fillColor: isDark ? [40, 40, 40] : [250, 248, 239] }
+     });
+     
+     yPos = (doc as any).lastAutoTable.finalY + 15;
+     if (yPos > 270) {
+       doc.addPage();
+       if (isDark) { doc.setFillColor(24, 24, 27); doc.rect(0, 0, 210, 297, 'F'); }
+       yPos = 20;
+     }
+  });
+  
+  // Add Footer
+  const pageCount = (doc as any).internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(150, 150, 150);
+    let footerText = `Personal: ${profile.name}`;
+    if (profile.instagram) footerText += `  |  Instagram: ${profile.instagram}`;
+    if (profile.whatsapp) footerText += `  |  WhatsApp: ${profile.whatsapp}`;
+    
+    const pageWidth = doc.internal.pageSize.width;
+    const textWidth = doc.getStringUnitWidth(footerText) * doc.getFontSize() / doc.internal.scaleFactor;
+    const textOffset = (pageWidth - textWidth) / 2;
+    doc.text(footerText, textOffset, 290);
+  }
+
+  if (onlyDownload) {
+     doc.save(`Protocolo_${student.replace(/ /g, '_')}.pdf`);
+     return;
+  }
+
+  let workoutText = `*PLANILHA DE TREINO (Elite Coach Premium)*\n👤 Aluno: ${student}\n🎯 Objetivo: ${objective}\n\n`;
+  if (workoutData && workoutData.days) {
+    workoutData.days.forEach((day: any) => {
+       workoutText += `*${day.dayName}*\n`;
+       day.exercises.forEach((ex: any) => {
+          workoutText += `• ${ex.name} | ${ex.sets}x${ex.reps} | ⏱️ ${ex.rest}\n`;
+          if (ex.notes) workoutText += `   _${ex.notes}_\n`;
+       });
+       workoutText += `\n`;
+    });
+  }
+
+  let filesArray: File[] = [];
+  try {
+      const pdfBlob = doc.output('blob');
+      const file = new File([pdfBlob], `Protocolo_${student.replace(/ /g, '_')}.pdf`, { type: 'application/pdf' });
+      filesArray.push(file);
+  } catch (e) {
+      console.error("Could not generate PDF for sharing:", e);
+  }
+  
+  if (navigator.share) {
+    try {
+      if (navigator.canShare && navigator.canShare({ files: filesArray })) {
+        await navigator.share({
+          title: 'Planilha de Treino',
+          text: workoutText,
+          files: filesArray
+        });
+      } else {
+        await navigator.share({
+          title: 'Planilha de Treino',
+          text: workoutText,
+        });
+      }
+    } catch (err) {
+      console.error('Error sharing:', err);
+    }
+  } else {
+    window.open(`https://wa.me/?text=${encodeURIComponent(workoutText)}`, '_blank');
+  }
+};
+
 function ProtocolosView() {
   const loadDraft = () => {
     if (typeof window !== 'undefined') {
@@ -727,175 +926,34 @@ function ProtocolosView() {
     }
   };
 
-  const createPDFDoc = () => {
-    const doc = new jsPDF();
-    
-    let profile = {
-      name: 'Treinador',
-      instagram: '',
-      whatsapp: '',
-      logoUrl: '',
-      pdfTemplate: '1'
-    };
-    
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('elite_coach_profile');
-      if (saved) profile = JSON.parse(saved);
-    }
-    
-    const isDark = profile.pdfTemplate === '2';
-    
-    // Page bg
-    if (isDark) {
-      doc.setFillColor(24, 24, 27); // zinc-900
-      doc.rect(0, 0, 210, 297, 'F');
-    }
-    
-    // Logo
-    if (profile.logoUrl) {
-       try {
-         // jsPDF doesn't automatically load images from remote URLs perfectly without base64 or waiting,
-         // In a real app we'd fetch and convert to base64 or pass canvas, but here we just try standard addImage
-         // Using a fallback approach if it fails
-       } catch (e) {}
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(22);
-    doc.setTextColor(212, 175, 55); // Gold
-    doc.text(profile.name.toUpperCase() + " - PROTOCOLO DE TREINO", 14, 22);
-    
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(isDark ? 200 : 50, isDark ? 200 : 50, isDark ? 200 : 50);
-    
-    const startY = 32;
-    doc.text(`Aluno:`, 14, startY); doc.setFont("helvetica", "normal"); doc.text(student, 30, startY);
-    doc.setFont("helvetica", "bold"); doc.text(`Objetivo:`, 14, startY + 6); doc.setFont("helvetica", "normal"); doc.text(objective, 35, startY + 6);
-    doc.setFont("helvetica", "bold"); doc.text(`Duração:`, 14, startY + 12); doc.setFont("helvetica", "normal"); doc.text(`${durationWeeks} semanas`, 35, startY + 12);
-    
-    // Novas informações do aluno
-    doc.setFont("helvetica", "bold"); 
-    doc.text(`Físico:`, 100, startY); 
-    doc.setFont("helvetica", "normal"); 
-    doc.text(`Peso: ${weight || '-'} kg | Alt: ${height || '-'} cm | IMC: ${imc || '-'}`, 118, startY);
-    
-    doc.setFont("helvetica", "bold"); 
-    doc.text(`Clínico:`, 100, startY + 6); 
-    doc.setFont("helvetica", "normal"); 
-    doc.text(clinicalNotes || '-', 118, startY + 6, { maxWidth: 80 });
-    
-    let yPos = startY + 24;
-
-    workoutData.days.forEach((dayItem: any) => {
-       doc.setFont("helvetica", "bold");
-       doc.setFontSize(14);
-       doc.setTextColor(isDark ? 255 : 0, isDark ? 255 : 0, isDark ? 255 : 0);
-       doc.text(dayItem.dayName, 14, yPos);
-       
-       const tableData = dayItem.exercises.map((ex: any) => [
-         ex.name, ex.sets, ex.reps, ex.rest, ex.notes || '-'
-       ]);
-
-       autoTable(doc, {
-         startY: yPos + 4,
-         head: [['Exercício', 'Séries', 'Reps', 'Descanso', 'Notas']],
-         body: tableData,
-         theme: isDark ? 'grid' : 'grid', // You can customize styling below
-         headStyles: { fillColor: isDark ? [40, 40, 40] : [212, 175, 55], textColor: isDark ? [212, 175, 55] : [0,0,0], fontStyle: 'bold' },
-         styles: { fontSize: 10, cellPadding: 4, textColor: isDark ? [220, 220, 220] : [40, 40, 40], fillColor: isDark ? [30, 30, 30] : [255, 255, 255] },
-         alternateRowStyles: { fillColor: isDark ? [40, 40, 40] : [250, 248, 239] }
-       });
-       
-       yPos = (doc as any).lastAutoTable.finalY + 15;
-       if (yPos > 270) {
-         doc.addPage();
-         if (isDark) { doc.setFillColor(24, 24, 27); doc.rect(0, 0, 210, 297, 'F'); }
-         yPos = 20;
-       }
-    });
-    
-    // Add Footer
-    const pageCount = (doc as any).internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      doc.setTextColor(150, 150, 150);
-      let footerText = `Personal: ${profile.name}`;
-      if (profile.instagram) footerText += `  |  Instagram: ${profile.instagram}`;
-      if (profile.whatsapp) footerText += `  |  WhatsApp: ${profile.whatsapp}`;
-      
-      const pageWidth = doc.internal.pageSize.width;
-      const textWidth = doc.getStringUnitWidth(footerText) * doc.getFontSize() / doc.internal.scaleFactor;
-      const textOffset = (pageWidth - textWidth) / 2;
-      doc.text(footerText, textOffset, 290);
-    }
-
-    return doc;
-  };
-
   const handleExportPDF = () => {
-    if (!workoutData || !workoutData.days) return;
-    const doc = createPDFDoc();
-    doc.save(`Protocolo_${student.replace(/ /g, '_')}.pdf`);
+    generatePDFAndShare({ student, objective, durationWeeks, weight, height, imc, clinicalNotes, workoutData }, true);
   };
 
-  const shareWorkout = async () => {
-    let workoutText = `*PLANILHA DE TREINO (Elite Coach Premium)*\n👤 Aluno: ${student}\n🎯 Objetivo: ${objective}\n\n`;
-    
-    if (workoutData && workoutData.days) {
-      workoutData.days.forEach((day: any) => {
-         workoutText += `*${day.dayName}*\n`;
-         day.exercises.forEach((ex: any) => {
-            workoutText += `• ${ex.name} | ${ex.sets}x${ex.reps} | ⏱️ ${ex.rest}\n`;
-            if (ex.notes) workoutText += `   _${ex.notes}_\n`;
-         });
-         workoutText += `\n`;
-      });
-    }
-
-    let filesArray: File[] = [];
-    if (workoutData && workoutData.days) {
-       try {
-           const doc = createPDFDoc();
-           const pdfBlob = doc.output('blob');
-           const file = new File([pdfBlob], `Protocolo_${student.replace(/ /g, '_')}.pdf`, { type: 'application/pdf' });
-           filesArray.push(file);
-       } catch (e) {
-           console.error("Could not generate PDF for sharing:", e);
-       }
-    }
-    
-    if (navigator.share) {
-      try {
-        if (navigator.canShare && navigator.canShare({ files: filesArray })) {
-          await navigator.share({
-            title: 'Planilha de Treino',
-            text: workoutText,
-            files: filesArray
-          });
-        } else {
-          await navigator.share({
-            title: 'Planilha de Treino',
-            text: workoutText,
-          });
-        }
-      } catch (err) {
-        console.error('Error sharing:', err);
-      }
-    } else {
-      window.open(`https://wa.me/?text=${encodeURIComponent(workoutText)}`, '_blank');
-    }
+  const shareWorkout = () => {
+    generatePDFAndShare({ student, objective, durationWeeks, weight, height, imc, clinicalNotes, workoutData }, false);
   };
+
+  const [focusMode, setFocusMode] = useState(false);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className={focusMode ? "fixed inset-0 z-50 bg-surface overflow-y-auto p-12" : "space-y-6"}>
+      {focusMode && (
+        <button onClick={() => setFocusMode(false)} className="fixed top-6 right-8 z-50 bg-surface-highest text-white p-3 rounded-full hover:bg-zinc-700 transition">
+           <X className="w-5 h-5"/>
+        </button>
+      )}
+      
+      <div className="flex items-center justify-between pointer-events-auto">
          <h2 className="text-2xl font-heading font-bold text-white">Criador de Protocolos</h2>
-         <span className="text-xs bg-primary/20 text-primary border border-primary/30 px-2 py-1 rounded font-bold uppercase tracking-widest flex items-center gap-1 shadow-[0_0_10px_rgba(212,175,55,0.2)]">
-            <Zap className="w-3 h-3" /> IA Agent
-         </span>
+         <div className="flex items-center gap-4">
+           <button onClick={() => setFocusMode(!focusMode)} className="text-xs bg-surface-high text-zinc-300 border border-surface-highest px-3 py-1.5 rounded font-bold uppercase tracking-widest flex items-center gap-2 hover:border-primary/50 transition">
+              <Search className="w-3 h-3" /> Modo Foco
+           </button>
+           <span className="text-xs bg-primary/20 text-primary border border-primary/30 px-2 py-1.5 rounded font-bold uppercase tracking-widest flex items-center gap-1 shadow-[0_0_10px_rgba(212,175,55,0.2)]">
+              <Zap className="w-3 h-3" /> IA Agent
+           </span>
+         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1170,11 +1228,13 @@ function InspecoesView() {
   );
 }
 
-function ConfigView() {
+function ConfigView({ currentUser }: { currentUser?: any }) {
   const [users, setUsers] = useState(MOCK_USERS);
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Treinador' });
   const [adding, setAdding] = useState(false);
   
+  const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, id: number | null, userTarget: any | null}>({isOpen: false, id: null, userTarget: null});
+
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<any>(null);
 
@@ -1249,9 +1309,11 @@ function ConfigView() {
   };
 
   const removeUser = (id: number) => {
-    if(confirm('Tem certeza que deseja remover este usuário?')) {
-      setUsers(users.filter(u => u.id !== id));
-    }
+    setUsers(users.filter(u => u.id !== id));
+  };
+
+  const tryRemoveUser = (u: any) => {
+    setConfirmModal({ isOpen: true, id: u.id, userTarget: u });
   };
 
   return (
@@ -1420,7 +1482,7 @@ function ConfigView() {
                            {u.unremovable ? (
                               <span className="text-xs text-zinc-600 italic">Protegido</span>
                            ) : (
-                              <button onClick={() => removeUser(u.id)} className="text-zinc-500 hover:text-red-400 transition-colors uppercase text-xs font-bold tracking-wider flex items-center"><X className="w-3 h-3 mr-1" /> Remover</button>
+                              <button onClick={() => tryRemoveUser(u)} className="text-zinc-500 hover:text-red-400 transition-colors uppercase text-xs font-bold tracking-wider flex items-center"><X className="w-3 h-3 mr-1" /> Remover</button>
                            )}
                         </>
                       )}
@@ -1461,7 +1523,7 @@ function ConfigView() {
                      <span className="px-2 py-1 bg-[#00ff41]/10 text-[#00ff41] border border-[#00ff41]/20 rounded text-[10px] font-bold uppercase tracking-widest">Concluído</span>
                    </td>
                    <td className="p-3 text-right text-zinc-500">
-                     <button className="hover:text-primary transition-colors inline-block"><Share2 className="w-4 h-4"/></button>
+                     <button onClick={() => generatePDFAndShare(item, false)} className="hover:text-primary transition-colors inline-block"><Share2 className="w-4 h-4"/></button>
                    </td>
                  </tr>
                ))}
@@ -1471,6 +1533,35 @@ function ConfigView() {
       </div>
 
       </div>
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen} 
+        onClose={() => setConfirmModal({isOpen: false, id: null, userTarget: null})}
+        onConfirm={() => removeUser(confirmModal.id as number)}
+        userTarget={confirmModal.userTarget}
+        currentUser={currentUser}
+      />
+    </div>
+  );
+}
+
+function ConfirmModal({ isOpen, onClose, onConfirm, userTarget, currentUser }: any) {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-sm w-full shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-orange-500" />
+        <h3 className="text-xl font-heading font-bold text-white mb-4">Confirmar Exclusão</h3>
+        
+        <p className="text-zinc-400 mb-6 text-sm leading-relaxed">
+          Olá <span className="font-bold text-white">{currentUser?.name || 'Treinador'}</span>, você está prestes a remover o registro <span className="font-bold text-red-400">{userTarget?.name || userTarget?.student || 'selecionado'}</span>. Esta ação não poderá ser desfeita. Tem certeza?
+        </p>
+
+        <div className="flex justify-end gap-3">
+           <button onClick={onClose} className="px-4 py-2 bg-surface text-zinc-300 font-bold uppercase tracking-wider text-[11px] rounded hover:text-white transition-colors">Cancelar</button>
+           <button onClick={() => { onConfirm(); onClose(); }} className="px-4 py-2 bg-red-500/10 text-red-500 border border-red-500/30 font-bold uppercase tracking-wider text-[11px] rounded hover:bg-red-500/20 transition-colors">Sim, Remover</button>
+        </div>
+      </motion.div>
     </div>
   );
 }
