@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, Zap, CheckCircle2, ChevronRight, Send, LayoutDashboard, Users, Dumbbell, History, Settings, FileSpreadsheet, Plus, Share2, Mail, Save, Download, Camera, Check, Award, X, MessageCircle, ArrowRight } from 'lucide-react';
+import { Bell, Search, Zap, CheckCircle2, ChevronRight, Send, LayoutDashboard, Users, Dumbbell, History, Settings, FileSpreadsheet, Plus, Share2, Mail, Save, Download, Camera, Check, Award, X, MessageCircle, ArrowRight, RotateCcw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -238,7 +238,7 @@ function MainApp({ currentUser, setAuthState, showSupportBtn, setShowSupportBtn,
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5"/> },
     { id: 'alunos', label: 'Alunos', icon: <Users className="w-5 h-5"/> },
-    { id: 'protocolos', label: 'Protocolos de Treino', icon: <Dumbbell className="w-5 h-5"/> },
+    { id: 'protocolos', label: 'Criar Treino', icon: <Dumbbell className="w-5 h-5"/> },
     { id: 'inspecoes', label: 'Inspeções de Campo', icon: <FileSpreadsheet className="w-5 h-5"/> },
   ];
 
@@ -703,15 +703,12 @@ function ProtocolosView() {
     }
   };
 
-  const handleExportPDF = () => {
-    if (!workoutData || !workoutData.days) return;
-
+  const createPDFDoc = () => {
     const doc = new jsPDF();
-    
     doc.setFont("helvetica", "bold");
     doc.setFontSize(20);
-    doc.setTextColor(212, 175, 55); // Primary Gold
-    doc.text("JAIRA LEAL - PROTOCOLO DE TREINO", 14, 22);
+    doc.setTextColor(212, 175, 55);
+    doc.text("ELITE COACH - PROTOCOLO DE TREINO", 14, 22);
     
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
@@ -759,12 +756,61 @@ function ProtocolosView() {
        }
     });
 
+    return doc;
+  };
+
+  const handleExportPDF = () => {
+    if (!workoutData || !workoutData.days) return;
+    const doc = createPDFDoc();
     doc.save(`Protocolo_${student.replace(/ /g, '_')}.pdf`);
   };
 
-  const shareWhatsApp = () => {
-    const text = `*PLANILHA DE TREINO (Jaira Leal High Performance)*\nAluno: ${student}\n\nAcesse seu PDF anexo ou via app Elite Coach.`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  const shareWorkout = async () => {
+    let workoutText = `*PLANILHA DE TREINO (Elite Coach Premium)*\n👤 Aluno: ${student}\n🎯 Objetivo: ${objective}\n\n`;
+    
+    if (workoutData && workoutData.days) {
+      workoutData.days.forEach((day: any) => {
+         workoutText += `*${day.dayName}*\n`;
+         day.exercises.forEach((ex: any) => {
+            workoutText += `• ${ex.name} | ${ex.sets}x${ex.reps} | ⏱️ ${ex.rest}\n`;
+            if (ex.notes) workoutText += `   _${ex.notes}_\n`;
+         });
+         workoutText += `\n`;
+      });
+    }
+
+    let filesArray: File[] = [];
+    if (workoutData && workoutData.days) {
+       try {
+           const doc = createPDFDoc();
+           const pdfBlob = doc.output('blob');
+           const file = new File([pdfBlob], `Protocolo_${student.replace(/ /g, '_')}.pdf`, { type: 'application/pdf' });
+           filesArray.push(file);
+       } catch (e) {
+           console.error("Could not generate PDF for sharing:", e);
+       }
+    }
+    
+    if (navigator.share) {
+      try {
+        if (navigator.canShare && navigator.canShare({ files: filesArray })) {
+          await navigator.share({
+            title: 'Planilha de Treino',
+            text: workoutText,
+            files: filesArray
+          });
+        } else {
+          await navigator.share({
+            title: 'Planilha de Treino',
+            text: workoutText,
+          });
+        }
+      } catch (err) {
+        console.error('Error sharing:', err);
+      }
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(workoutText)}`, '_blank');
+    }
   };
 
   return (
@@ -833,7 +879,7 @@ function ProtocolosView() {
                 <button onClick={handleExportPDF} disabled={!workoutData} className="disabled:opacity-50 px-3 py-1.5 bg-surface border border-surface-highest rounded text-zinc-300 hover:text-white transition-colors text-xs font-bold uppercase flex items-center gap-1 group">
                    <Download className="w-3 h-3 group-hover:text-primary transition-colors"/> PDF
                 </button>
-                <button onClick={shareWhatsApp} disabled={!workoutData} className="disabled:opacity-50 px-3 py-1.5 bg-surface border border-surface-highest rounded text-zinc-300 hover:text-white transition-colors text-xs font-bold uppercase flex items-center gap-1 group">
+                <button onClick={shareWorkout} disabled={!workoutData} className="disabled:opacity-50 px-3 py-1.5 bg-surface border border-surface-highest rounded text-zinc-300 hover:text-white transition-colors text-xs font-bold uppercase flex items-center gap-1 group">
                    <Share2 className="w-3 h-3 group-hover:text-primary transition-colors"/> Compartilhar
                 </button>
              </div>
@@ -998,6 +1044,26 @@ function ConfigView() {
 
   const [theme, setTheme] = useState(() => typeof window !== 'undefined' ? (localStorage.getItem('elite_coach_theme') || 'dark') : 'dark');
 
+  const [botToken, setBotToken] = useState('123456789:AABBCCDDEEFFGGHHIIJJKKLLMMNNOOPPQQRR');
+  const [showToken, setShowToken] = useState(false);
+  
+  const [profile, setProfile] = useState({
+    name: 'Coach Miller',
+    email: 'miller@elitecoach.com',
+    specialty: 'Strength & Conditioning'
+  });
+
+  const [history, setHistory] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('elite_coach_protocols_history');
+      if (saved) {
+        setHistory(JSON.parse(saved));
+      }
+    }
+  }, []);
+
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
@@ -1040,14 +1106,68 @@ function ConfigView() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-heading font-bold text-white">Configurações & Equipe</h2>
-        <button onClick={() => setAdding(!adding)} className="px-4 py-2 bg-surface text-primary border border-surface-highest font-bold uppercase tracking-wider rounded flex items-center gap-2 hover:border-primary transition-colors text-sm">
-          {adding ? <X className="w-4 h-4"/> : <Plus className="w-4 h-4" />} {adding ? 'Cancelar' : 'Adicionar Membro'}
-        </button>
+        <h2 className="text-2xl font-heading font-bold text-white">Configurações e Histórico</h2>
+        <div className="flex items-center gap-4 text-zinc-400">
+           <button className="hover:text-white transition-colors"><Zap className="w-5 h-5"/></button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-surface-container border border-surface-highest rounded-xl p-8 col-span-1 md:col-span-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Profile Settings */}
+        <div className="bg-surface-container border border-surface-highest rounded-xl p-8">
+           <h3 className="font-heading font-semibold text-lg text-white mb-6 border-b border-surface-highest pb-2 flex items-center gap-2">
+             <Users className="w-5 h-5 text-primary"/> Configurações do Perfil
+           </h3>
+           <div className="space-y-4">
+              <div>
+                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Nome Completo</label>
+                <input type="text" value={profile.name} onChange={e=>setProfile({...profile, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">E-mail</label>
+                <input type="email" value={profile.email} onChange={e=>setProfile({...profile, email: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Especialidade</label>
+                <input type="text" value={profile.specialty} onChange={e=>setProfile({...profile, specialty: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
+              </div>
+              <button className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)]">Salvar Perfil</button>
+           </div>
+        </div>
+
+        {/* Bot Integration */}
+        <div className="bg-surface-container border border-surface-highest rounded-xl p-8">
+           <h3 className="font-heading font-semibold text-lg text-white mb-6 border-b border-surface-highest pb-2 flex items-center gap-2">
+             <Zap className="w-5 h-5 text-primary"/> Integração de Bot
+           </h3>
+           <p className="text-sm text-zinc-400 mb-6">Conecte seu bot do Telegram para automatizar notificações para clientes, lembretes de treinos e check-ins de progresso.</p>
+           <div className="space-y-6">
+              <div>
+                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Token do Bot do Telegram</label>
+                <div className="relative mt-1">
+                  <input type={showToken ? "text" : "password"} value={botToken} onChange={e=>setBotToken(e.target.value)} className="w-full bg-surface-high border border-surface-highest rounded p-3 pr-10 text-white text-sm outline-none focus:border-primary transition-colors font-mono" />
+                  <button onClick={() => setShowToken(!showToken)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
+                     <Settings className="w-4 h-4"/>
+                  </button>
+                </div>
+              </div>
+              
+              <div className="flex items-center justify-between p-4 bg-surface-high border border-surface-highest rounded">
+                 <div>
+                    <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-1">Status</div>
+                    <div className="text-sm font-medium text-[#00ff41]">Conectado e Ativo</div>
+                 </div>
+                 <div className="w-8 h-8 rounded-full bg-[#00ff41]/20 border border-[#00ff41]/40 flex items-center justify-center">
+                    <CheckCircle2 className="w-5 h-5 text-[#00ff41]" />
+                 </div>
+              </div>
+
+              <button className="w-full py-3 bg-surface border border-surface-highest text-zinc-300 hover:text-white font-bold uppercase tracking-wider rounded hover:border-primary/50 transition-colors">Testar Conexão</button>
+           </div>
+        </div>
+
+        {/* Team & Appearance (Existing stuff) */}
+        <div className="bg-surface-container border border-surface-highest rounded-xl p-8 col-span-1 md:col-span-2">
           <h3 className="font-heading font-semibold text-lg text-white mb-6 border-b border-surface-highest pb-2">Aparência do Sistema</h3>
           <div className="flex items-center justify-between bg-surface-high p-4 rounded-lg border border-surface-highest">
             <div>
@@ -1063,8 +1183,13 @@ function ConfigView() {
           </div>
         </div>
 
-        <div className="bg-surface-container border border-surface-highest rounded-xl p-8 col-span-1 md:col-span-3 max-w-4xl">
-           <h3 className="font-heading font-semibold text-lg text-white mb-6 border-b border-surface-highest pb-2">Usuários do Sistema</h3>
+        <div className="bg-surface-container border border-surface-highest rounded-xl p-8 col-span-1 md:col-span-2">
+           <div className="flex items-center justify-between border-b border-surface-highest pb-2 mb-6">
+             <h3 className="font-heading font-semibold text-lg text-white">Usuários do Sistema</h3>
+             <button onClick={() => setAdding(!adding)} className="text-xs py-1 px-3 bg-surface border border-surface-highest text-primary hover:border-primary rounded font-bold uppercase transition-colors">
+               {adding ? 'Cancelar' : '+ Adicionar Membro'}
+             </button>
+           </div>
          
          <AnimatePresence>
             {adding && (
@@ -1142,6 +1267,45 @@ function ConfigView() {
            </tbody>
          </table>
       </div>
+
+      <div className="bg-surface-container border border-surface-highest rounded-xl p-8 col-span-1 md:col-span-2">
+         <div className="flex items-center gap-2 border-b border-surface-highest pb-2 mb-6">
+            <RotateCcw className="w-5 h-5 text-primary" />
+            <h3 className="font-heading font-semibold text-lg text-white">Histórico de Treinos Salvos</h3>
+         </div>
+
+         {history.length === 0 ? (
+           <p className="text-zinc-500 text-sm italic py-4">Nenhum protocolo gerado ainda.</p>
+         ) : (
+           <table className="w-full text-left text-sm text-zinc-300">
+             <thead className="bg-surface-high uppercase text-xs font-bold text-zinc-500">
+               <tr>
+                 <th className="p-3 rounded-tl">Data</th>
+                 <th className="p-3">Nome do Aluno</th>
+                 <th className="p-3">Tipo de Treino</th>
+                 <th className="p-3">Status</th>
+                 <th className="p-3 text-right rounded-tr">Ações</th>
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-surface-highest">
+               {history.map(item => (
+                 <tr key={item.id} className="hover:bg-surface-high/30">
+                   <td className="p-3 font-medium text-white">{new Date(item.date).toISOString().split('T')[0]}</td>
+                   <td className="p-3 text-zinc-100">{item.student}</td>
+                   <td className="p-3 text-zinc-400 capitalize">{item.objective} {item.split}</td>
+                   <td className="p-3">
+                     <span className="px-2 py-1 bg-[#00ff41]/10 text-[#00ff41] border border-[#00ff41]/20 rounded text-[10px] font-bold uppercase tracking-widest">Concluído</span>
+                   </td>
+                   <td className="p-3 text-right text-zinc-500">
+                     <button className="hover:text-primary transition-colors inline-block"><Share2 className="w-4 h-4"/></button>
+                   </td>
+                 </tr>
+               ))}
+             </tbody>
+           </table>
+         )}
+      </div>
+
       </div>
     </div>
   );
