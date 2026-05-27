@@ -84,6 +84,12 @@ export default function App() {
   const [showSupportBtn, setShowSupportBtn] = useState(true);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedTheme = localStorage.getItem('elite_coach_theme');
+      if (savedTheme === 'light') {
+        document.documentElement.classList.add('light-theme');
+      }
+    }
     const sessionStr = localStorage.getItem('elite_coach_session');
     if (sessionStr) {
       try {
@@ -180,7 +186,7 @@ export default function App() {
            
            <div className="flex flex-col items-center mb-6 mt-[-10px]">
               <div className="w-[360px] h-[240px] sm:w-[380px] sm:h-[260px] mb-2 flex items-center justify-center">
-                 <img src="https://i.ibb.co/Ld1WcP1t/NEW-LOGO-JAIRA-LEAL.png" alt="Logo Jaira Leal" className="w-full h-full object-contain" style={{ filter: 'drop-shadow(20px 7px 7px rgba(255, 255, 255, 0.5))' }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                 <img src="https://i.ibb.co/Ld1WcP1t/NEW-LOGO-JAIRA-LEAL.png" alt="Logo Jaira Leal" className="w-full h-full object-contain" style={{ filter: 'drop-shadow(20px 7px 7px white)' }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
                  <div className="hidden flex-col items-center justify-center">
                      <span className="text-4xl drop-shadow-sm">💃</span>
                  </div>
@@ -630,6 +636,40 @@ function ProtocolosView() {
   const [workoutData, setWorkoutData] = useState<any>(null);
   const [activeDayIdx, setActiveDayIdx] = useState(0);
 
+  const [history, setHistory] = useState<any[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('elite_coach_protocols_history');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
+
+  const saveToHistory = (data: any, params: any) => {
+    setHistory(prev => {
+      const newEntry = { id: Date.now(), ...params, workoutData: data, date: new Date().toISOString() };
+      // Keep only last 3 for this student
+      const studentHistory = prev.filter(h => h.student.toLowerCase() === params.student.toLowerCase());
+      const others = prev.filter(h => h.student.toLowerCase() !== params.student.toLowerCase());
+      
+      const newStudentHistory = [newEntry, ...studentHistory].slice(0, 3);
+      const updatedHistory = [...newStudentHistory, ...others];
+      
+      localStorage.setItem('elite_coach_protocols_history', JSON.stringify(updatedHistory));
+      return updatedHistory;
+    });
+  };
+
+  const loadFromHistory = (item: any) => {
+    setStudent(item.student);
+    setObjective(item.objective);
+    setSplit(item.split);
+    setDays(item.days);
+    setNeeds(item.needs);
+    setDurationWeeks(item.durationWeeks);
+    setWorkoutData(item.workoutData);
+    setActiveDayIdx(0);
+  };
+
   const handleGenerate = async () => {
     if(!student || !objective) return alert("Preencha Aluno e Objetivo");
     setIsGenerating(true);
@@ -655,6 +695,7 @@ function ProtocolosView() {
       
       setWorkoutData(data);
       setActiveDayIdx(0);
+      saveToHistory(data, { student, objective, split, days, needs, durationWeeks });
     } catch (error: any) {
       alert(`Erro ao gerar protocolo: ${error.message}\nTente novamente em alguns instantes.`);
     } finally {
@@ -855,6 +896,27 @@ function ProtocolosView() {
            )}
         </div>
       </div>
+
+      <div className="mt-8 bg-surface-container border border-surface-highest rounded-xl p-6">
+          <h3 className="font-heading font-semibold text-lg text-white mb-4 border-b border-surface-highest pb-2">Histórico de Protocolos Recentes</h3>
+          {history.length === 0 ? (
+            <p className="text-zinc-500 text-sm italic">Nenhum protocolo gerado ainda.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {history.map((item: any) => (
+                <div key={item.id} className="bg-surface-high border border-surface-highest p-4 rounded-lg hover:border-primary/50 transition-colors">
+                   <div className="flex justify-between items-start mb-2">
+                     <span className="text-sm font-bold text-white truncate max-w-[150px]">{item.student}</span>
+                     <span className="text-[10px] text-zinc-500 whitespace-nowrap">{new Date(item.date).toLocaleDateString()}</span>
+                   </div>
+                   <p className="text-xs text-primary mb-3 truncate" title={item.objective}>{item.objective}</p>
+                   <button onClick={() => loadFromHistory(item)} className="w-full py-1.5 bg-surface border border-surface-highest text-xs font-bold text-zinc-300 hover:text-white hover:border-primary/50 hover:bg-surface-highest rounded transition-colors uppercase tracking-wider">Carregar / Editar</button>
+                </div>
+              ))}
+            </div>
+          )}
+      </div>
+
     </div>
   );
 }
@@ -934,6 +996,19 @@ function ConfigView() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<any>(null);
 
+  const [theme, setTheme] = useState(() => typeof window !== 'undefined' ? (localStorage.getItem('elite_coach_theme') || 'dark') : 'dark');
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    localStorage.setItem('elite_coach_theme', newTheme);
+    if (newTheme === 'light') {
+      document.documentElement.classList.add('light-theme');
+    } else {
+      document.documentElement.classList.remove('light-theme');
+    }
+  };
+
   const handleAdd = () => {
     if(newUser.name && newUser.email) {
       setUsers([...users, { id: Date.now(), ...newUser, unremovable: false }]);
@@ -971,8 +1046,25 @@ function ConfigView() {
         </button>
       </div>
 
-      <div className="bg-surface-container border border-surface-highest rounded-xl p-8 max-w-4xl">
-         <h3 className="font-heading font-semibold text-lg text-white mb-6 border-b border-surface-highest pb-2">Usuários do Sistema</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-surface-container border border-surface-highest rounded-xl p-8 col-span-1 md:col-span-3">
+          <h3 className="font-heading font-semibold text-lg text-white mb-6 border-b border-surface-highest pb-2">Aparência do Sistema</h3>
+          <div className="flex items-center justify-between bg-surface-high p-4 rounded-lg border border-surface-highest">
+            <div>
+              <p className="text-white font-medium">Tema Visual</p>
+              <p className="text-zinc-400 text-sm">Alterne entre Dark Gold e Light Profissional</p>
+            </div>
+            <button 
+              onClick={toggleTheme} 
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${theme === 'light' ? 'bg-primary' : 'bg-surface-highest'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${theme === 'light' ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-surface-container border border-surface-highest rounded-xl p-8 col-span-1 md:col-span-3 max-w-4xl">
+           <h3 className="font-heading font-semibold text-lg text-white mb-6 border-b border-surface-highest pb-2">Usuários do Sistema</h3>
          
          <AnimatePresence>
             {adding && (
@@ -1049,6 +1141,7 @@ function ConfigView() {
              ))}
            </tbody>
          </table>
+      </div>
       </div>
     </div>
   );
