@@ -1,0 +1,8 @@
+{
+  "name": "Jaira Leal CRM",
+  "description": "Sistema de gestão e criação de treinos para personal trainers e coaches.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
