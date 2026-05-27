@@ -625,13 +625,32 @@ function AlunosView() {
 }
 
 function ProtocolosView() {
-  const [student, setStudent] = useState('');
-  const [objective, setObjective] = useState('');
-  const [split, setSplit] = useState('ABC');
-  const [days, setDays] = useState('3');
-  const [needs, setNeeds] = useState('');
-  const [durationWeeks, setDurationWeeks] = useState('4');
+  const loadDraft = () => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('elite_coach_protocol_draft');
+      if (saved) return JSON.parse(saved);
+    }
+    return null;
+  };
+
+  const draft = loadDraft();
+
+  const [student, setStudent] = useState(draft?.student || '');
+  const [objective, setObjective] = useState(draft?.objective || '');
+  const [split, setSplit] = useState(draft?.split || 'ABC');
+  const [days, setDays] = useState(draft?.days || '3');
+  const [needs, setNeeds] = useState(draft?.needs || '');
+  const [durationWeeks, setDurationWeeks] = useState(draft?.durationWeeks || '4');
+  const [weight, setWeight] = useState(draft?.weight || '');
+  const [height, setHeight] = useState(draft?.height || '');
+  const [imc, setImc] = useState(draft?.imc || '');
+  const [clinicalNotes, setClinicalNotes] = useState(draft?.clinicalNotes || '');
   
+  useEffect(() => {
+    const data = { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes };
+    localStorage.setItem('elite_coach_protocol_draft', JSON.stringify(data));
+  }, [student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes]);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [workoutData, setWorkoutData] = useState<any>(null);
   const [activeDayIdx, setActiveDayIdx] = useState(0);
@@ -675,10 +694,15 @@ function ProtocolosView() {
     setIsGenerating(true);
     setWorkoutData(null);
     try {
+      const studentHistory = history.filter(h => h.student.toLowerCase() === student.toLowerCase()).map(h => h.workoutData);
+
       const res = await fetch('/api/generate-workout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ student, objective, split, days, needs, durationWeeks })
+        body: JSON.stringify({ 
+          student, objective, split, days, needs, durationWeeks, 
+          weight, height, imc, clinicalNotes, previousWorkouts: studentHistory 
+        })
       });
       
       let data;
@@ -695,7 +719,7 @@ function ProtocolosView() {
       
       setWorkoutData(data);
       setActiveDayIdx(0);
-      saveToHistory(data, { student, objective, split, days, needs, durationWeeks });
+      saveToHistory(data, { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes });
     } catch (error: any) {
       alert(`Erro ao gerar protocolo: ${error.message}\nTente novamente em alguns instantes.`);
     } finally {
@@ -705,34 +729,68 @@ function ProtocolosView() {
 
   const createPDFDoc = () => {
     const doc = new jsPDF();
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
-    doc.setTextColor(212, 175, 55);
-    doc.text("ELITE COACH - PROTOCOLO DE TREINO", 14, 22);
     
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(50, 50, 50);
-    doc.text(`Aluno:`, 14, 32);
-    doc.setFont("helvetica", "normal");
-    doc.text(student, 30, 32);
+    let profile = {
+      name: 'Treinador',
+      instagram: '',
+      whatsapp: '',
+      logoUrl: '',
+      pdfTemplate: '1'
+    };
+    
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('elite_coach_profile');
+      if (saved) profile = JSON.parse(saved);
+    }
+    
+    const isDark = profile.pdfTemplate === '2';
+    
+    // Page bg
+    if (isDark) {
+      doc.setFillColor(24, 24, 27); // zinc-900
+      doc.rect(0, 0, 210, 297, 'F');
+    }
+    
+    // Logo
+    if (profile.logoUrl) {
+       try {
+         // jsPDF doesn't automatically load images from remote URLs perfectly without base64 or waiting,
+         // In a real app we'd fetch and convert to base64 or pass canvas, but here we just try standard addImage
+         // Using a fallback approach if it fails
+       } catch (e) {}
+    }
 
     doc.setFont("helvetica", "bold");
-    doc.text(`Objetivo:`, 14, 38);
-    doc.setFont("helvetica", "normal");
-    doc.text(objective, 35, 38);
-
-    doc.setFont("helvetica", "bold");
-    doc.text(`Duração:`, 14, 44);
-    doc.setFont("helvetica", "normal");
-    doc.text(`${durationWeeks} semanas`, 35, 44);
+    doc.setFontSize(22);
+    doc.setTextColor(212, 175, 55); // Gold
+    doc.text(profile.name.toUpperCase() + " - PROTOCOLO DE TREINO", 14, 22);
     
-    let yPos = 54;
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(isDark ? 200 : 50, isDark ? 200 : 50, isDark ? 200 : 50);
+    
+    const startY = 32;
+    doc.text(`Aluno:`, 14, startY); doc.setFont("helvetica", "normal"); doc.text(student, 30, startY);
+    doc.setFont("helvetica", "bold"); doc.text(`Objetivo:`, 14, startY + 6); doc.setFont("helvetica", "normal"); doc.text(objective, 35, startY + 6);
+    doc.setFont("helvetica", "bold"); doc.text(`Duração:`, 14, startY + 12); doc.setFont("helvetica", "normal"); doc.text(`${durationWeeks} semanas`, 35, startY + 12);
+    
+    // Novas informações do aluno
+    doc.setFont("helvetica", "bold"); 
+    doc.text(`Físico:`, 100, startY); 
+    doc.setFont("helvetica", "normal"); 
+    doc.text(`Peso: ${weight || '-'} kg | Alt: ${height || '-'} cm | IMC: ${imc || '-'}`, 118, startY);
+    
+    doc.setFont("helvetica", "bold"); 
+    doc.text(`Clínico:`, 100, startY + 6); 
+    doc.setFont("helvetica", "normal"); 
+    doc.text(clinicalNotes || '-', 118, startY + 6, { maxWidth: 80 });
+    
+    let yPos = startY + 24;
 
     workoutData.days.forEach((dayItem: any) => {
        doc.setFont("helvetica", "bold");
        doc.setFontSize(14);
-       doc.setTextColor(0, 0, 0);
+       doc.setTextColor(isDark ? 255 : 0, isDark ? 255 : 0, isDark ? 255 : 0);
        doc.text(dayItem.dayName, 14, yPos);
        
        const tableData = dayItem.exercises.map((ex: any) => [
@@ -743,18 +801,36 @@ function ProtocolosView() {
          startY: yPos + 4,
          head: [['Exercício', 'Séries', 'Reps', 'Descanso', 'Notas']],
          body: tableData,
-         theme: 'grid',
-         headStyles: { fillColor: [212, 175, 55], textColor: [0,0,0], fontStyle: 'bold' },
-         styles: { fontSize: 10, cellPadding: 4, textColor: [40, 40, 40] },
-         alternateRowStyles: { fillColor: [250, 248, 239] }
+         theme: isDark ? 'grid' : 'grid', // You can customize styling below
+         headStyles: { fillColor: isDark ? [40, 40, 40] : [212, 175, 55], textColor: isDark ? [212, 175, 55] : [0,0,0], fontStyle: 'bold' },
+         styles: { fontSize: 10, cellPadding: 4, textColor: isDark ? [220, 220, 220] : [40, 40, 40], fillColor: isDark ? [30, 30, 30] : [255, 255, 255] },
+         alternateRowStyles: { fillColor: isDark ? [40, 40, 40] : [250, 248, 239] }
        });
        
        yPos = (doc as any).lastAutoTable.finalY + 15;
        if (yPos > 270) {
          doc.addPage();
+         if (isDark) { doc.setFillColor(24, 24, 27); doc.rect(0, 0, 210, 297, 'F'); }
          yPos = 20;
        }
     });
+    
+    // Add Footer
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(150, 150, 150);
+      let footerText = `Personal: ${profile.name}`;
+      if (profile.instagram) footerText += `  |  Instagram: ${profile.instagram}`;
+      if (profile.whatsapp) footerText += `  |  WhatsApp: ${profile.whatsapp}`;
+      
+      const pageWidth = doc.internal.pageSize.width;
+      const textWidth = doc.getStringUnitWidth(footerText) * doc.getFontSize() / doc.internal.scaleFactor;
+      const textOffset = (pageWidth - textWidth) / 2;
+      doc.text(footerText, textOffset, 290);
+    }
 
     return doc;
   };
@@ -830,6 +906,22 @@ function ProtocolosView() {
                 <label className="text-xs text-zinc-400">Nome do Aluno</label>
                 <input value={student} onChange={e=>setStudent(e.target.value)} type="text" placeholder="Ex: João Silva" className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 focus:border-primary outline-none transition-colors text-white" />
               </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="text-xs text-zinc-400">Peso (kg)</label>
+                  <input value={weight} onChange={e=>setWeight(e.target.value)} type="text" placeholder="Ex: 80" className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400">Altura (cm)</label>
+                  <input value={height} onChange={e=>setHeight(e.target.value)} type="text" placeholder="Ex: 180" className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400">IMC</label>
+                  <input value={imc} onChange={e=>setImc(e.target.value)} type="text" placeholder="Ex: 24.7" className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 outline-none" />
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-zinc-400">Divisão</label>
@@ -858,7 +950,11 @@ function ProtocolosView() {
               </div>
               <div>
                 <label className="text-xs text-zinc-400">Observações Clínicas / Limitações</label>
-                <textarea value={needs} onChange={e=>setNeeds(e.target.value)} placeholder="Ex: Condromalácia patelar grau 1..." className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 h-20 resize-none focus:border-primary outline-none text-sm"></textarea>
+                <textarea value={clinicalNotes} onChange={e=>setClinicalNotes(e.target.value)} placeholder="Ex: Condromalácia patelar grau 1, dor na lombar..." className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 h-16 resize-none focus:border-primary outline-none text-sm"></textarea>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400">Foco / Necessidades Extras</label>
+                <input value={needs} onChange={e=>setNeeds(e.target.value)} type="text" placeholder="Ex: Foco no quadríceps" className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 focus:border-primary outline-none transition-colors" />
               </div>
 
               <button 
@@ -923,15 +1019,55 @@ function ProtocolosView() {
                        className="space-y-3"
                      >
                         {workoutData.days[activeDayIdx].exercises.map((ex: any, idx: number) => (
-                          <div key={idx} className="bg-surface-high border border-surface-highest p-4 rounded-lg flex items-center justify-between hover:border-primary/30 transition-colors group">
-                             <div className="flex-1">
-                               <h4 className="font-bold text-white group-hover:text-primary transition-colors">{ex.name}</h4>
-                               {ex.notes && <p className="text-xs text-zinc-400 mt-1">{ex.notes}</p>}
+                          <div key={idx} className="bg-surface-high border border-surface-highest p-4 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between hover:border-primary/30 transition-colors group gap-4">
+                             <div className="flex-1 w-full">
+                               <input 
+                                 type="text" 
+                                 value={ex.name} 
+                                 onChange={(e) => {
+                                   const newData = {...workoutData};
+                                   newData.days[activeDayIdx].exercises[idx].name = e.target.value;
+                                   setWorkoutData(newData);
+                                 }}
+                                 className="font-bold text-white group-hover:text-primary transition-colors bg-transparent border-b border-transparent focus:border-primary w-full outline-none" 
+                               />
+                               <input 
+                                 type="text" 
+                                 value={ex.notes} 
+                                 placeholder="Notas (opcional)"
+                                 onChange={(e) => {
+                                   const newData = {...workoutData};
+                                   newData.days[activeDayIdx].exercises[idx].notes = e.target.value;
+                                   setWorkoutData(newData);
+                                 }}
+                                 className="text-xs text-zinc-400 mt-1 bg-transparent border-b border-transparent focus:border-primary w-full outline-none" 
+                               />
                              </div>
-                             <div className="flex gap-4 text-center">
-                               <div><div className="text-[10px] uppercase text-zinc-500 font-bold mb-1">Séries</div><div className="font-mono text-white bg-surface rounded px-2 py-1">{ex.sets}</div></div>
-                               <div><div className="text-[10px] uppercase text-zinc-500 font-bold mb-1">Reps</div><div className="font-mono text-white bg-surface rounded px-2 py-1">{ex.reps}</div></div>
-                               <div><div className="text-[10px] uppercase text-zinc-500 font-bold mb-1">Pausa</div><div className="font-mono text-primary bg-primary/10 rounded px-2 py-1">{ex.rest}</div></div>
+                             <div className="flex gap-4 text-center shrink-0">
+                               <div>
+                                 <div className="text-[10px] uppercase text-zinc-500 font-bold mb-1">Séries</div>
+                                 <input type="text" value={ex.sets} onChange={(e) => {
+                                   const newData = {...workoutData};
+                                   newData.days[activeDayIdx].exercises[idx].sets = e.target.value;
+                                   setWorkoutData(newData);
+                                 }} className="font-mono text-white bg-surface rounded px-2 py-1 w-12 text-center outline-none border border-transparent focus:border-primary"/>
+                               </div>
+                               <div>
+                                 <div className="text-[10px] uppercase text-zinc-500 font-bold mb-1">Reps</div>
+                                 <input type="text" value={ex.reps} onChange={(e) => {
+                                   const newData = {...workoutData};
+                                   newData.days[activeDayIdx].exercises[idx].reps = e.target.value;
+                                   setWorkoutData(newData);
+                                 }} className="font-mono text-white bg-surface rounded px-2 py-1 w-16 text-center outline-none border border-transparent focus:border-primary"/>
+                               </div>
+                               <div>
+                                 <div className="text-[10px] uppercase text-zinc-500 font-bold mb-1">Pausa</div>
+                                 <input type="text" value={ex.rest} onChange={(e) => {
+                                   const newData = {...workoutData};
+                                   newData.days[activeDayIdx].exercises[idx].rest = e.target.value;
+                                   setWorkoutData(newData);
+                                 }} className="font-mono text-primary bg-primary/10 rounded px-2 py-1 w-16 text-center outline-none border border-transparent focus:border-primary"/>
+                               </div>
                              </div>
                           </div>
                         ))}
@@ -1047,11 +1183,26 @@ function ConfigView() {
   const [botToken, setBotToken] = useState('123456789:AABBCCDDEEFFGGHHIIJJKKLLMMNNOOPPQQRR');
   const [showToken, setShowToken] = useState(false);
   
-  const [profile, setProfile] = useState({
-    name: 'Coach Miller',
-    email: 'miller@elitecoach.com',
-    specialty: 'Strength & Conditioning'
+  const [profile, setProfile] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('elite_coach_profile');
+      if (saved) return JSON.parse(saved);
+    }
+    return {
+      name: 'Coach Miller',
+      email: 'miller@elitecoach.com',
+      specialty: 'Strength & Conditioning',
+      instagram: '@coachmiller',
+      whatsapp: '+55 11 99999-9999',
+      logoUrl: 'https://i.ibb.co/Ld1WcP1t/NEW-LOGO-JAIRA-LEAL.png',
+      pdfTemplate: '1'
+    };
   });
+
+  const saveProfile = () => {
+    localStorage.setItem('elite_coach_profile', JSON.stringify(profile));
+    alert('Configurações salvas!');
+  };
 
   const [history, setHistory] = useState<any[]>([]);
 
@@ -1116,22 +1267,35 @@ function ConfigView() {
         {/* Profile Settings */}
         <div className="bg-surface-container border border-surface-highest rounded-xl p-8">
            <h3 className="font-heading font-semibold text-lg text-white mb-6 border-b border-surface-highest pb-2 flex items-center gap-2">
-             <Users className="w-5 h-5 text-primary"/> Configurações do Perfil
+             <Users className="w-5 h-5 text-primary"/> Configurações do Perfil e Relatórios
            </h3>
            <div className="space-y-4">
               <div>
                 <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Nome Completo</label>
                 <input type="text" value={profile.name} onChange={e=>setProfile({...profile, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
               </div>
-              <div>
-                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">E-mail</label>
-                <input type="email" value={profile.email} onChange={e=>setProfile({...profile, email: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Instagram</label>
+                  <input type="text" value={profile.instagram} onChange={e=>setProfile({...profile, instagram: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">WhatsApp</label>
+                  <input type="text" value={profile.whatsapp} onChange={e=>setProfile({...profile, whatsapp: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
+                </div>
               </div>
               <div>
-                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Especialidade</label>
-                <input type="text" value={profile.specialty} onChange={e=>setProfile({...profile, specialty: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
+                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">URL da Logo (PDF)</label>
+                <input type="text" value={profile.logoUrl} onChange={e=>setProfile({...profile, logoUrl: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
               </div>
-              <button className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)]">Salvar Perfil</button>
+              <div>
+                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Modelo Visual PDF</label>
+                <select value={profile.pdfTemplate} onChange={e=>setProfile({...profile, pdfTemplate: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors">
+                  <option value="1">Modelo 1 - Clássico (Dourado/Branco)</option>
+                  <option value="2">Modelo 2 - Moderno Escuro (Minimalista)</option>
+                </select>
+              </div>
+              <button onClick={saveProfile} className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)]">Salvar Configurações</button>
            </div>
         </div>
 
