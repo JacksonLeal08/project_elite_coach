@@ -81,3 +81,14 @@ export interface ActivityEntry {
   time: string;
   user: string;
 }
+
+export interface Payment {
+  id: string;
+  student_id: string;
+  amount: number;
+  due_date: string;
+  payment_date?: string | null;
+  status: 'Pago' | 'Pendente' | 'Atrasado';
+  plan_name: string;
+  created_at: string;
+}

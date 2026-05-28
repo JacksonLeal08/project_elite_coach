@@ -5,7 +5,7 @@ const ai = new GoogleGenAI({});
 
 export async function POST(req: Request) {
   try {
-    const { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes, previousWorkouts } = await req.json();
+    const { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes, previousWorkouts, exerciseCatalog } = await req.json();
 
     const prompt = `Gere um protocolo de treino personalizado de alto rendimento.
     Retorne APENAS um objeto JSON válido (sem \`\`\`json) com esta estrutura:
@@ -30,6 +30,8 @@ export async function POST(req: Request) {
     
     ${previousWorkouts && previousWorkouts.length > 0 ? `HISTÓRICO RECENTE (Evite repetir os exercícios principais da mesma forma para não gerar platô):\n${JSON.stringify(previousWorkouts)}` : ''}
     
+    ${exerciseCatalog && exerciseCatalog.length > 0 ? `CATÁLOGO DE EXERCÍCIOS DISPONÍVEIS NA SUA BIBLIOTECA (Selecione exercícios deste catálogo preferencialmente para montar o treino. Se necessário, você pode sugerir outros fora dele, mas dê prioridade a estes):\n- ${exerciseCatalog.join('\n- ')}` : ''}
+
     DIRETRIZES CLÍNICAS E DE SEGURANÇA OBRIGATÓRIAS (AI CLINICAL GUARD):
     Se houver observações clínicas (limitações ou dores relatadas), você deve seguir rigidamente estas regras na seleção dos exercícios:
     1. JOELHO / CONDROMALÁCIA / PATELA: Evite agachamento profundo clássico, cadeira extensora pesada com grande amplitude de extensão, passadas/avanços profundos. Prefira variações como leg press com amplitude controlada, agachamento búlgaro controlado, flexora em pé/deitada, ou exercícios isométricos. Adicione notas de precaução.

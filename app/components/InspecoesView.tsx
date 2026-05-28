@@ -2,12 +2,44 @@ import React, { useState, useEffect } from 'react';
 import { Save, CheckCircle2 } from 'lucide-react';
 import ParticleEffect from './ParticleEffect';
 import { supabase } from '../utils/supabase';
-import { Student } from '../types';
+import { Student, User } from '../types';
+import CustomAlertModal from './CustomAlertModal';
 
-export default function InspecoesView() {
+interface InspecoesViewProps {
+  currentUser: User | null;
+}
+
+export default function InspecoesView({ currentUser }: InspecoesViewProps) {
   const [success, setSuccess] = useState<boolean>(false);
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Custom Alert Modal State
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message?: string;
+    type: 'success' | 'error' | 'warning' | 'info' | 'confirm';
+    recordName?: string;
+    onConfirm?: () => void;
+  }>({ isOpen: false, title: '', message: '', type: 'info' });
+
+  const showCustomAlert = (
+    title: string, 
+    message: string, 
+    type: 'success' | 'error' | 'warning' | 'info' | 'confirm', 
+    recordName?: string,
+    onConfirm?: () => void
+  ) => {
+    setAlertModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+      recordName,
+      onConfirm
+    });
+  };
 
   // Form states
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
@@ -47,12 +79,12 @@ export default function InspecoesView() {
 
   const handleSave = async () => {
     if (!selectedStudentId) {
-      return alert('Selecione um aluno para salvar a avaliação!');
+      return showCustomAlert('Aviso', 'Selecione um aluno para salvar a avaliação!', 'warning');
     }
 
     const student = students.find(s => s.id.toString() === selectedStudentId);
     if (!student) {
-      return alert('Aluno selecionado não encontrado.');
+      return showCustomAlert('Erro', 'Aluno selecionado não encontrado.', 'error');
     }
 
     try {
@@ -69,9 +101,10 @@ export default function InspecoesView() {
         }]);
 
       if (error) {
-        alert('Erro ao salvar avaliação: ' + error.message);
+        showCustomAlert('Erro', 'Erro ao salvar avaliação: ' + error.message, 'error');
       } else {
         setSuccess(true);
+        showCustomAlert('Sucesso', 'Avaliação física registrada com sucesso!', 'success');
 
         // Disparar notificações
         if (sendNotification) {
@@ -131,7 +164,7 @@ export default function InspecoesView() {
       }
     } catch (err: any) {
       console.error(err);
-      alert('Erro inesperado: ' + err.message);
+      showCustomAlert('Erro', 'Erro inesperado: ' + err.message, 'error');
     }
   };
 
@@ -248,6 +281,17 @@ export default function InspecoesView() {
           </div>
         </div>
       )}
+      
+      <CustomAlertModal
+        isOpen={alertModal.isOpen}
+        type={alertModal.type}
+        title={alertModal.title}
+        message={alertModal.message}
+        recordName={alertModal.recordName}
+        currentUser={currentUser}
+        onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={alertModal.onConfirm}
+      />
     </div>
   );
 }

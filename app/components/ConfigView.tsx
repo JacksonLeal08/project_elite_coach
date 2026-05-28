@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, Users, Settings, CheckCircle2, X, RotateCcw, Share2 } from 'lucide-react';
-import ConfirmModal from './ConfirmModal';
+import CustomAlertModal from './CustomAlertModal';
 import { generatePDFAndShare } from '../utils/pdf';
 import { User, ProfileConfig, HistoryEntry } from '../types';
 import { supabase } from '../utils/supabase';
@@ -15,8 +15,33 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
   const [loadingUsers, setLoadingUsers] = useState<boolean>(true);
   const [newUser, setNewUser] = useState<Pick<User, 'name' | 'email' | 'role'>>({ name: '', email: '', role: 'Treinador' });
   const [adding, setAdding] = useState<boolean>(false);
-  
-  const [confirmModal, setConfirmModal] = useState<{isOpen: boolean, id: string | number | null, userTarget: User | null}>({isOpen: false, id: null, userTarget: null});
+
+  // Custom Alert Modal State
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message?: string;
+    type: 'success' | 'error' | 'warning' | 'info' | 'confirm';
+    recordName?: string;
+    onConfirm?: () => void;
+  }>({ isOpen: false, title: '', message: '', type: 'info' });
+
+  const showCustomAlert = (
+    title: string, 
+    message: string, 
+    type: 'success' | 'error' | 'warning' | 'info' | 'confirm', 
+    recordName?: string,
+    onConfirm?: () => void
+  ) => {
+    setAlertModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+      recordName,
+      onConfirm
+    });
+  };
 
   const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editForm, setEditForm] = useState<User | null>(null);
@@ -151,7 +176,7 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
 
   const saveProfile = () => {
     localStorage.setItem('elite_coach_profile', JSON.stringify(profile));
-    alert('Configurações salvas!');
+    showCustomAlert('Sucesso', 'Configurações salvas com sucesso!', 'success');
   };
 
   const toggleTheme = () => {
@@ -181,7 +206,7 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
         });
 
         if (error) {
-          return alert('Erro ao registrar usuário: ' + error.message);
+          return showCustomAlert('Erro', 'Erro ao registrar usuário: ' + error.message, 'error');
         }
 
         if (data.user) {
@@ -201,12 +226,12 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
           }
         }
 
-        alert('Membro registrado com sucesso! Um e-mail de confirmação foi disparado.');
+        showCustomAlert('Sucesso', 'Membro registrado com sucesso! Um e-mail de confirmação foi disparado.', 'success');
         setNewUser({ name: '', email: '', role: 'Treinador' });
         setAdding(false);
         fetchUsers();
       } catch (err: any) {
-        alert('Erro ao registrar: ' + err.message);
+        showCustomAlert('Erro', 'Erro ao registrar: ' + err.message, 'error');
       }
     }
   };
@@ -230,14 +255,16 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
           .eq('id', editingId);
 
         if (error) {
-          alert('Erro ao atualizar perfil: ' + error.message);
+          showCustomAlert('Erro', 'Erro ao atualizar perfil: ' + error.message, 'error');
         } else {
           setEditingId(null);
           setEditForm(null);
           fetchUsers();
+          showCustomAlert('Sucesso', 'Perfil atualizado com sucesso!', 'success');
         }
       } catch (err: any) {
         console.error(err);
+        showCustomAlert('Erro', 'Erro inesperado ao atualizar perfil.', 'error');
       }
     }
   };
@@ -250,17 +277,25 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
         .eq('id', id);
 
       if (error) {
-        alert('Erro ao remover usuário: ' + error.message);
+        showCustomAlert('Erro', 'Erro ao remover usuário: ' + error.message, 'error');
       } else {
         fetchUsers();
+        showCustomAlert('Sucesso', 'Usuário removido com sucesso!', 'success');
       }
     } catch (e) {
       console.error(e);
+      showCustomAlert('Erro', 'Erro inesperado ao remover usuário.', 'error');
     }
   };
 
   const tryRemoveUser = (u: User) => {
-    setConfirmModal({ isOpen: true, id: u.id, userTarget: u });
+    showCustomAlert(
+      'Confirmar Exclusão',
+      '',
+      'confirm',
+      u.name,
+      () => removeUser(u.id)
+    );
   };
 
   const handleSaveToken = async () => {
@@ -275,22 +310,26 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
         if (error.code === 'PGRST205' || error.message?.includes('relation "public.system_settings" does not exist')) {
           setDbWarning('Erro ao salvar: a tabela public.system_settings não existe no banco.');
         } else {
-          alert('Erro ao salvar token: ' + error.message);
+          showCustomAlert('Erro', 'Erro ao salvar token: ' + error.message, 'error');
         }
       } else {
-        alert('Token do Telegram salvo com sucesso!');
+        showCustomAlert('Sucesso', 'Token do Telegram salvo com sucesso!', 'success');
       }
     } catch (e: any) {
       console.error(e);
-      alert('Erro inesperado ao salvar.');
+      showCustomAlert('Erro', 'Erro inesperado ao salvar token.', 'error');
     } finally {
       setSavingToken(false);
     }
   };
 
+  const handleSaveTelegramTokenResult = (err?: any) => {
+     // placeholder
+  };
+
   const handleTestConnection = async () => {
     if (!botToken) {
-      alert('Digite o token do bot para testar.');
+      showCustomAlert('Aviso', 'Digite o token do bot para testar.', 'warning');
       return;
     }
     setTestStatus('testing');
@@ -666,16 +705,15 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
        </div>
       </div>
 
-      <ConfirmModal 
-        isOpen={confirmModal.isOpen} 
-        onClose={() => setConfirmModal({isOpen: false, id: null, userTarget: null})}
-        onConfirm={() => {
-          if (confirmModal.id !== null) {
-            removeUser(confirmModal.id);
-          }
-        }}
-        userTarget={confirmModal.userTarget}
+      <CustomAlertModal
+        isOpen={alertModal.isOpen}
+        type={alertModal.type}
+        title={alertModal.title}
+        message={alertModal.message}
+        recordName={alertModal.recordName}
         currentUser={currentUser}
+        onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={alertModal.onConfirm}
       />
     </div>
   );

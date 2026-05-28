@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut } from 'lucide-react';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
 import ProtocolosView from './components/ProtocolosView';
@@ -316,9 +316,13 @@ function MainApp({ currentUser, showSupportBtn, setShowSupportBtn, handleLogout 
                 <p className="text-xs text-primary">{currentUser?.role}</p>
               </div>
             </div>
-            <button onClick={handleLogout} className="text-zinc-500 hover:text-red-400 transition-colors p-2" title="Sair">
-              <X className="w-4 h-4" />
-            </button>
+             <button 
+               onClick={handleLogout} 
+               className="text-zinc-500 hover:text-red-400 hover:scale-110 active:scale-95 transition-all p-2 bg-surface rounded-lg border border-surface-highest/40 hover:border-red-500/20 hover:bg-red-500/5 flex items-center justify-center group" 
+               title="Sair da Conta"
+             >
+               <LogOut className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+             </button>
           </div>
         </div>
       </aside>
@@ -341,15 +345,15 @@ function MainApp({ currentUser, showSupportBtn, setShowSupportBtn, handleLogout 
             <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5">{item.label.split(' ')[0]}</span>
           </button>
         ))}
-        <button
-          onClick={handleLogout}
-          className="flex flex-col items-center justify-center flex-1 h-full py-1 text-center text-zinc-500 hover:text-red-400 transition-all"
-        >
-          <div className="p-1">
-            <X className="w-5 h-5" />
-          </div>
-          <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5">Sair</span>
-        </button>
+         <button
+           onClick={handleLogout}
+           className="flex flex-col items-center justify-center flex-1 h-full py-1 text-center text-zinc-500 hover:text-red-400 active:scale-95 transition-all group"
+         >
+           <div className="p-1 rounded-lg group-hover:bg-red-500/10 transition-colors">
+             <LogOut className="w-5 h-5 transition-transform group-hover:translate-x-0.5" />
+           </div>
+           <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5">Sair</span>
+         </button>
       </nav>
 
       {/* Main Content */}
@@ -374,11 +378,11 @@ function MainApp({ currentUser, showSupportBtn, setShowSupportBtn, handleLogout 
            <AnimatePresence mode="wait">
              <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
                 {activeTab === 'dashboard' && <DashboardView />}
-                {activeTab === 'alunos' && <AlunosView />}
+                {activeTab === 'alunos' && <AlunosView currentUser={currentUser} />}
                 {activeTab === 'protocolos' && <ProtocolosView />}
-                {activeTab === 'biblioteca' && <BibliotecaView />}
+                {activeTab === 'biblioteca' && <BibliotecaView currentUser={currentUser} />}
                 {activeTab === 'config' && <ConfigView currentUser={currentUser} />}
-                {activeTab === 'inspecoes' && <InspecoesView />}
+                {activeTab === 'inspecoes' && <InspecoesView currentUser={currentUser} />}
              </motion.div>
            </AnimatePresence>
         </div>

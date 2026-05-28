@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Zap, Settings, Download, Share2, Dumbbell } from 'lucide-react';
+import { X, Search, Zap, Settings, Download, Share2, Dumbbell, Plus, Trash2 } from 'lucide-react';
 import { generatePDFAndShare } from '../utils/pdf';
 import { HistoryEntry, WorkoutData } from '../types';
 import { supabase } from '../utils/supabase';
@@ -33,6 +33,32 @@ export default function ProtocolosView() {
   const [imc, setImc] = useState<string>(draft?.imc || '');
   const [clinicalNotes, setClinicalNotes] = useState<string>(draft?.clinicalNotes || '');
   
+  // Creation Mode & Autocomplete States
+  const [creationMode, setCreationMode] = useState<'ia' | 'manual'>('ia');
+  const [focusedInput, setFocusedInput] = useState<{ dayIdx: number, exIdx: number } | null>(null);
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+
+  // Custom Alert Modal State
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type: 'success' | 'error' | 'warning' | 'info';
+  }>({ isOpen: false, title: '', message: '', type: 'info' });
+
+  const showCustomAlert = (
+    title: string, 
+    message: string, 
+    type: 'success' | 'error' | 'warning' | 'info'
+  ) => {
+    setAlertModal({
+      isOpen: true,
+      title,
+      message,
+      type
+    });
+  };
+
   useEffect(() => {
     const data = { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes };
     localStorage.setItem('elite_coach_protocol_draft', JSON.stringify(data));
@@ -47,12 +73,30 @@ export default function ProtocolosView() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(true);
   const [exerciseLibrary, setExerciseLibrary] = useState<any[]>([]);
+  const [studentsList, setStudentsList] = useState<any[]>([]);
+  const [filteredStudents, setFilteredStudents] = useState<any[]>([]);
+  const [showStudentSuggestions, setShowStudentSuggestions] = useState<boolean>(false);
+
+  const fetchStudentsList = async () => {
+    try {
+      const { data } = await supabase
+        .from('students')
+        .select('id, name')
+        .order('name', { ascending: true });
+      if (data) {
+        setStudentsList(data);
+      }
+    } catch (e) {
+      console.error('Error fetching students list:', e);
+    }
+  };
 
   const fetchExerciseLibrary = async () => {
     try {
       const { data } = await supabase
         .from('exercise_library')
-        .select('*');
+        .select('*')
+        .order('name', { ascending: true });
       if (data) {
         setExerciseLibrary(data);
       }
@@ -72,7 +116,6 @@ export default function ProtocolosView() {
       if (error) {
         console.error('Error fetching protocols history:', error);
       } else if (data) {
-        // Map database fields to our HistoryEntry format
         const mapped = data.map((item: any) => ({
           id: item.id,
           student: item.student_name,
@@ -100,11 +143,110 @@ export default function ProtocolosView() {
   useEffect(() => {
     fetchHistory();
     fetchExerciseLibrary();
+    fetchStudentsList();
   }, []);
+
+  const handleModeChange = (mode: 'ia' | 'manual') => {
+    setCreationMode(mode);
+    if (mode === 'manual' && !workoutData) {
+      setWorkoutData({
+        days: [
+          { dayName: 'TREINO A', exercises: [{ name: '', sets: '4', reps: '10', rest: '60s', notes: '' }] }
+        ]
+      });
+      setActiveDayIdx(0);
+    }
+  };
+
+  // Workspace Actions
+  const addExercise = () => {
+    if (!workoutData) return;
+    const newData = { ...workoutData };
+    newData.days[activeDayIdx].exercises.push({
+      name: '',
+      sets: '4',
+      reps: '10',
+      rest: '60s',
+      notes: ''
+    });
+    setWorkoutData(newData);
+  };
+
+  const removeExercise = (idx: number) => {
+    if (!workoutData) return;
+    const newData = { ...workoutData };
+    newData.days[activeDayIdx].exercises.splice(idx, 1);
+    setWorkoutData(newData);
+  };
+
+  const addDay = () => {
+    if (!workoutData) return;
+    const newData = { ...workoutData };
+    const nextLetter = String.fromCharCode(65 + newData.days.length); // A, B, C, D...
+    newData.days.push({
+      dayName: `TREINO ${nextLetter}`,
+      exercises: [{ name: '', sets: '4', reps: '10', rest: '60s', notes: '' }]
+    });
+    setWorkoutData(newData);
+    setActiveDayIdx(newData.days.length - 1);
+  };
+
+  const removeDay = (idx: number) => {
+    if (!workoutData || workoutData.days.length <= 1) return;
+    const newData = { ...workoutData };
+    newData.days.splice(idx, 1);
+    
+    // Rename remaining days sequentially
+    newData.days.forEach((day, i) => {
+      day.dayName = `TREINO ${String.fromCharCode(65 + i)}`;
+    });
+    
+    setWorkoutData(newData);
+    setActiveDayIdx(Math.max(0, idx - 1));
+  };
+
+  const handleStudentNameChange = (val: string) => {
+    setStudent(val);
+    if (val.trim()) {
+      const filtered = studentsList.filter(s => 
+        s.name.toLowerCase().includes(val.toLowerCase())
+      );
+      setFilteredStudents(filtered);
+      setShowStudentSuggestions(true);
+    } else {
+      setFilteredStudents(studentsList);
+      setShowStudentSuggestions(true);
+    }
+  };
+
+  // Autocomplete Handlers
+  const handleExerciseNameChange = (exIdx: number, val: string) => {
+    if (!workoutData) return;
+    const newData = { ...workoutData };
+    newData.days[activeDayIdx].exercises[exIdx].name = val;
+    setWorkoutData(newData);
+
+    if (val.trim()) {
+      const filtered = exerciseLibrary.filter(ex => 
+        ex.name.toLowerCase().includes(val.toLowerCase())
+      ).slice(0, 5);
+      setSuggestions(filtered);
+    } else {
+      setSuggestions([]);
+    }
+  };
+
+  const handleSelectSuggestion = (exIdx: number, exerciseName: string) => {
+    if (!workoutData) return;
+    const newData = { ...workoutData };
+    newData.days[activeDayIdx].exercises[exIdx].name = exerciseName;
+    setWorkoutData(newData);
+    setSuggestions([]);
+    setFocusedInput(null);
+  };
 
   const saveToHistory = async (data: WorkoutData, params: any, shouldNotify: boolean) => {
     try {
-      // Look up student record to link ID and get notification settings if possible
       let studentId: string | null = null;
       const { data: st } = await supabase
         .from('students')
@@ -139,9 +281,7 @@ export default function ProtocolosView() {
       } else {
         fetchHistory();
 
-        // Disparar notificações se configurado
         if (shouldNotify && st) {
-          // 1. Telegram
           if (st.telegram_chat_id) {
             let msg = `<b>Elite Coach - Novo Treino Disponível!</b>\n\n`;
             msg += `Olá, <b>${params.student}</b>! Seu treinador acabou de publicar a sua nova planilha de treinos no Elite Coach CRM.\n\n`;
@@ -166,7 +306,6 @@ export default function ProtocolosView() {
             }
           }
 
-          // 2. WhatsApp click-to-chat setup
           if (st.phone_number) {
             let waMsg = `*Elite Coach - Novo Treino Disponível!*\n\n`;
             waMsg += `Olá, *${params.student}*! Seu treinador acabou de publicar a sua nova planilha de treinos no Elite Coach CRM.\n\n`;
@@ -204,7 +343,9 @@ export default function ProtocolosView() {
   };
 
   const handleGenerate = async () => {
-    if(!student || !objective) return alert("Preencha Aluno e Objetivo");
+    if(!student || !objective) {
+      return showCustomAlert("Parâmetros Incompletos", "Por favor, preencha o Nome do Aluno e o Objetivo Principal para gerar o treino.", "warning");
+    }
     setIsGenerating(true);
     setWorkoutData(null);
     try {
@@ -215,7 +356,8 @@ export default function ProtocolosView() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           student, objective, split, days, needs, durationWeeks, 
-          weight, height, imc, clinicalNotes, previousWorkouts: studentHistory 
+          weight, height, imc, clinicalNotes, previousWorkouts: studentHistory,
+          exerciseCatalog: exerciseLibrary.map((ex: any) => ex.name)
         })
       });
       
@@ -235,7 +377,26 @@ export default function ProtocolosView() {
       setActiveDayIdx(0);
       await saveToHistory(data, { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes }, sendNotification);
     } catch (error: any) {
-      alert(`Erro ao gerar protocolo: ${error.message}\nTente novamente em alguns instantes.`);
+      showCustomAlert("Erro", `Erro ao gerar protocolo: ${error.message}\nTente novamente em alguns instantes.`, "error");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleManualSave = async () => {
+    if(!student || !objective) {
+      return showCustomAlert("Parâmetros Incompletos", "Preencha o Nome do Aluno e o Objetivo para salvar o protocolo!", "warning");
+    }
+    if(!workoutData || workoutData.days.length === 0) {
+      return showCustomAlert("Planilha Vazia", "Adicione pelo menos um dia e um exercício à planilha antes de salvar!", "warning");
+    }
+    
+    setIsGenerating(true);
+    try {
+      await saveToHistory(workoutData, { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes }, sendNotification);
+      showCustomAlert("Sucesso", "Treino manual salvo com sucesso no histórico!", "success");
+    } catch (err: any) {
+      showCustomAlert("Erro", "Erro ao salvar protocolo manual: " + err.message, "error");
     } finally {
       setIsGenerating(false);
     }
@@ -277,9 +438,65 @@ export default function ProtocolosView() {
         <div className="bg-surface-container border border-surface-highest rounded-xl p-6">
            <h3 className="font-heading font-semibold text-lg text-white mb-4 border-b border-surface-highest pb-2">Parâmetros</h3>
            <div className="space-y-4">
+              
+              {/* Method Switcher */}
+              <div>
+                 <label className="text-xs text-zinc-400 uppercase font-bold block mb-1">Método de Criação</label>
+                 <div className="flex gap-2 bg-surface-high p-1 rounded border border-surface-highest">
+                   <button
+                     type="button"
+                     onClick={() => handleModeChange('ia')}
+                     className={`flex-1 py-1.5 rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors ${
+                       creationMode === 'ia' ? 'bg-primary text-black shadow' : 'text-zinc-400 hover:text-zinc-200'
+                     }`}
+                   >
+                     <Zap className="w-3.5 h-3.5" /> Auxílio Total IA
+                   </button>
+                   <button
+                     type="button"
+                     onClick={() => handleModeChange('manual')}
+                     className={`flex-1 py-1.5 rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-colors ${
+                       creationMode === 'manual' ? 'bg-primary text-black shadow' : 'text-zinc-400 hover:text-zinc-200'
+                     }`}
+                   >
+                     <Dumbbell className="w-3.5 h-3.5" /> Montagem Manual
+                   </button>
+                 </div>
+              </div>
+
               <div>
                 <label className="text-xs text-zinc-400">Nome do Aluno</label>
-                <input value={student} onChange={e=>setStudent(e.target.value)} type="text" placeholder="Ex: João Silva" className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 focus:border-primary outline-none transition-colors text-white" />
+                <div className="relative">
+                  <input 
+                    value={student} 
+                    onChange={e => handleStudentNameChange(e.target.value)} 
+                    onFocus={() => {
+                      setFilteredStudents(student.trim() ? studentsList.filter(s => s.name.toLowerCase().includes(student.toLowerCase())) : studentsList);
+                      setShowStudentSuggestions(true);
+                    }}
+                    onBlur={() => setTimeout(() => setShowStudentSuggestions(false), 250)}
+                    type="text" 
+                    placeholder="Ex: João Silva" 
+                    className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 focus:border-primary outline-none transition-colors text-white" 
+                  />
+                  {showStudentSuggestions && filteredStudents.length > 0 && (
+                    <div className="absolute left-0 right-0 mt-1 bg-surface-high border border-surface-highest rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto divide-y divide-surface-highest/40 scrollbar-none">
+                      {filteredStudents.map(s => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            setStudent(s.name);
+                            setShowStudentSuggestions(false);
+                          }}
+                          className="w-full text-left px-3.5 py-2.5 hover:bg-primary/10 hover:text-primary transition-colors text-xs text-zinc-200 font-bold"
+                        >
+                          {s.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
@@ -313,20 +530,24 @@ export default function ProtocolosView() {
                   <input value={days} onChange={e=>setDays(e.target.value)} type="number" min="1" max="7" className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 outline-none" />
                 </div>
               </div>
+              
               <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                      <label className="text-xs text-zinc-400">Duração (Semanas)</label>
                      <input value={durationWeeks} onChange={e=>setDurationWeeks(e.target.value)} type="number" min="1" max="16" className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 focus:border-primary outline-none transition-colors" />
                   </div>
               </div>
+
               <div>
                 <label className="text-xs text-zinc-400">Objetivo Principal</label>
                 <input value={objective} onChange={e=>setObjective(e.target.value)} type="text" placeholder="Ex: Hipertrofia máxima" className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 focus:border-primary outline-none transition-colors" />
               </div>
+
               <div>
                 <label className="text-xs text-zinc-400">Observações Clínicas / Limitações</label>
                 <textarea value={clinicalNotes} onChange={e=>setClinicalNotes(e.target.value)} placeholder="Ex: Condromalácia patelar grau 1, dor na lombar..." className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 h-16 resize-none focus:border-primary outline-none text-sm"></textarea>
               </div>
+
               <div>
                 <label className="text-xs text-zinc-400">Foco / Necessidades Extras</label>
                 <input value={needs} onChange={e=>setNeeds(e.target.value)} type="text" placeholder="Ex: Foco no quadríceps" className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 focus:border-primary outline-none transition-colors" />
@@ -345,14 +566,25 @@ export default function ProtocolosView() {
                 </label>
               </div>
 
-              <button 
-                onClick={handleGenerate} 
-                disabled={isGenerating}
-                className="w-full py-3 bg-gradient-to-r from-primary to-primary-dim text-black font-bold uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50 mt-4 shadow-[0_0_15px_rgba(212,175,55,0.3)]"
-              >
-                {isGenerating ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}><Settings className="w-5 h-5"/></motion.div> : <Zap className="w-5 h-5"/>}
-                {isGenerating ? 'Processando Inteligência...' : 'Gerar Protocolo'}
-              </button>
+              {creationMode === 'ia' ? (
+                <button 
+                  onClick={handleGenerate} 
+                  disabled={isGenerating}
+                  className="w-full py-3 bg-gradient-to-r from-primary to-primary-dim text-black font-bold uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50 mt-4 shadow-[0_0_15px_rgba(212,175,55,0.3)]"
+                >
+                  {isGenerating ? <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}><Settings className="w-5 h-5"/></motion.div> : <Zap className="w-5 h-5"/>}
+                  {isGenerating ? 'Processando Inteligência...' : 'Gerar Protocolo com IA'}
+                </button>
+              ) : (
+                <button 
+                  onClick={handleManualSave} 
+                  disabled={isGenerating || !workoutData}
+                  className="w-full py-3 bg-primary text-black font-bold uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 hover:bg-primary-dim transition-colors disabled:opacity-50 mt-4 shadow-[0_0_15px_rgba(212,175,55,0.3)]"
+                >
+                  <Download className="w-5 h-5"/>
+                  {isGenerating ? 'Salvando...' : 'Salvar Protocolo Manual'}
+                </button>
+              )}
            </div>
         </div>
 
@@ -369,15 +601,15 @@ export default function ProtocolosView() {
               </div>
            </div>
 
-           {!workoutData && !isGenerating && (
-             <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 bg-surface-high/30 rounded-lg border border-dashed border-surface-highest">
+           {!workoutData && !isGenerating && creationMode === 'ia' && (
+             <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 bg-surface-high/30 rounded-lg border border-dashed border-surface-highest py-16">
                 <Dumbbell className="w-12 h-12 mb-3 opacity-20" />
-                <p>Preencha os parâmetros e clique em Gerar.</p>
+                <p>Preencha os parâmetros e clique em Gerar com IA.</p>
              </div>
            )}
 
            {isGenerating && (
-             <div className="flex-1 flex flex-col items-center justify-center text-primary bg-surface-high/30 rounded-lg border border-surface-highest">
+             <div className="flex-1 flex flex-col items-center justify-center text-primary bg-surface-high/30 rounded-lg border border-surface-highest py-16">
                 <motion.div animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }} transition={{ repeat: Infinity, duration: 1.5 }}>
                   <Zap className="w-12 h-12 mb-4 drop-shadow-[0_0_15px_rgba(212,175,55,0.8)]" />
                 </motion.div>
@@ -387,19 +619,36 @@ export default function ProtocolosView() {
 
            {workoutData && workoutData.days && !isGenerating && (
              <div className="flex-1 flex flex-col">
-                <div className="flex gap-2 border-b border-surface-highest pb-4 overflow-x-auto">
+                <div className="flex items-center gap-2 border-b border-surface-highest pb-4 overflow-x-auto scrollbar-none">
                    {workoutData.days.map((d, i) => (
-                     <button 
-                       key={i} 
-                       onClick={() => setActiveDayIdx(i)}
-                       className={`px-4 py-2 rounded font-bold uppercase tracking-wider text-xs whitespace-nowrap transition-colors ${activeDayIdx === i ? 'bg-primary text-black shadow-[0_0_10px_rgba(212,175,55,0.4)]' : 'bg-surface-high text-zinc-400 hover:text-zinc-100'}`}
-                     >
-                       {d.dayName}
-                     </button>
+                     <div key={i} className="relative group flex items-center">
+                       <button 
+                         onClick={() => { setActiveDayIdx(i); setSuggestions([]); }}
+                         className={`px-4 py-2 rounded font-bold uppercase tracking-wider text-xs whitespace-nowrap transition-colors ${activeDayIdx === i ? 'bg-primary text-black shadow-[0_0_10px_rgba(212,175,55,0.4)]' : 'bg-surface-high text-zinc-400 hover:text-zinc-100'}`}
+                       >
+                         {d.dayName}
+                       </button>
+                       {workoutData.days.length > 1 && (
+                         <button 
+                           onClick={(e) => { e.stopPropagation(); removeDay(i); }} 
+                           className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-10"
+                           title="Excluir Dia"
+                         >
+                           <X className="w-2.5 h-2.5" />
+                         </button>
+                       )}
+                     </div>
                    ))}
+                   <button 
+                     onClick={addDay}
+                     className="px-3 py-2 bg-surface-high border border-dashed border-surface-highest text-zinc-400 hover:text-white rounded text-xs font-bold uppercase flex items-center gap-1 transition-colors whitespace-nowrap shrink-0"
+                     title="Adicionar Dia"
+                   >
+                     <Plus className="w-3.5 h-3.5" /> Adicionar Dia
+                   </button>
                 </div>
 
-                <div className="mt-4 flex-1 overflow-y-auto">
+                <div className="mt-4 flex-1 overflow-y-auto max-h-[500px] pr-1">
                    <AnimatePresence mode="popLayout">
                      <motion.div
                        key={activeDayIdx}
@@ -407,33 +656,72 @@ export default function ProtocolosView() {
                        className="space-y-3"
                      >
                         {workoutData.days[activeDayIdx].exercises.map((ex, idx) => (
-                          <div key={idx} className="bg-surface-high border border-surface-highest p-4 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between hover:border-primary/30 transition-colors group gap-4">
-                             <div className="flex-1 w-full">
+                          <div key={idx} className="bg-surface-high border border-surface-highest p-4 rounded-lg flex flex-col md:flex-row items-start md:items-center justify-between hover:border-primary/30 transition-colors group gap-4 relative">
+                             <div className="flex-1 w-full relative">
+                               <label className="text-[10px] text-zinc-500 uppercase font-bold">Nome do Exercício</label>
                                <input 
                                  type="text" 
                                  value={ex.name} 
-                                 onChange={(e) => {
-                                   if (!workoutData) return;
-                                   const newData = {...workoutData};
-                                   newData.days[activeDayIdx].exercises[idx].name = e.target.value;
-                                   setWorkoutData(newData);
+                                 placeholder="Digite para buscar..."
+                                 onFocus={() => {
+                                   setFocusedInput({ dayIdx: activeDayIdx, exIdx: idx });
+                                   if (ex.name.trim()) {
+                                     const filtered = exerciseLibrary.filter(item => 
+                                       item.name.toLowerCase().includes(ex.name.toLowerCase())
+                                     ).slice(0, 5);
+                                     setSuggestions(filtered);
+                                   } else {
+                                     setSuggestions(exerciseLibrary.slice(0, 5));
+                                   }
                                  }}
-                                 className="font-bold text-white group-hover:text-primary transition-colors bg-transparent border-b border-transparent focus:border-primary w-full outline-none" 
-                               />
-                               <input 
-                                 type="text" 
-                                 value={ex.notes || ''} 
-                                 placeholder="Notas (opcional)"
-                                 onChange={(e) => {
-                                   if (!workoutData) return;
-                                   const newData = {...workoutData};
-                                   newData.days[activeDayIdx].exercises[idx].notes = e.target.value;
-                                   setWorkoutData(newData);
+                                 onBlur={() => {
+                                   setTimeout(() => setFocusedInput(null), 200);
                                  }}
-                                 className="text-xs text-zinc-400 mt-1 bg-transparent border-b border-transparent focus:border-primary w-full outline-none" 
+                                 onChange={(e) => {
+                                   handleExerciseNameChange(idx, e.target.value);
+                                 }}
+                                 className="font-bold text-white group-hover:text-primary transition-colors bg-transparent border-b border-surface-highest focus:border-primary w-full outline-none py-1 text-sm" 
                                />
+                               {ex.name && exerciseLibrary.some(l => l.name.toLowerCase().trim() === ex.name.toLowerCase().trim()) && (
+                                 <span className="text-[10px] text-primary flex items-center gap-1 mt-1 font-bold">
+                                   🎥 Vídeo cadastrado na biblioteca
+                                 </span>
+                                )}
+
+                                {/* Autocomplete Suggestions Box */}
+                                {focusedInput?.dayIdx === activeDayIdx && focusedInput?.exIdx === idx && suggestions.length > 0 && (
+                                  <div className="absolute left-0 top-full mt-1 w-full bg-surface-container border border-surface-highest rounded-lg shadow-2xl z-50 max-h-48 overflow-y-auto">
+                                    {suggestions.map((s, sIdx) => (
+                                      <button
+                                        key={sIdx}
+                                        type="button"
+                                        onMouseDown={() => handleSelectSuggestion(idx, s.name)}
+                                        className="w-full text-left px-3 py-2 text-xs text-zinc-300 hover:bg-primary/10 hover:text-primary transition-colors border-b border-surface-highest/40 last:border-none font-medium flex justify-between items-center"
+                                      >
+                                        <span>{s.name}</span>
+                                        <span className="text-[9px] uppercase tracking-wider text-zinc-500 bg-surface px-1.5 py-0.5 rounded">
+                                          {s.category}
+                                        </span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <input 
+                                  type="text" 
+                                  value={ex.notes || ''} 
+                                  placeholder="Notas de execução (opcional)"
+                                  onChange={(e) => {
+                                    if (!workoutData) return;
+                                    const newData = {...workoutData};
+                                    newData.days[activeDayIdx].exercises[idx].notes = e.target.value;
+                                    setWorkoutData(newData);
+                                  }}
+                                  className="text-xs text-zinc-400 mt-2 bg-transparent border-b border-transparent focus:border-primary w-full outline-none" 
+                                />
                              </div>
-                             <div className="flex gap-4 text-center shrink-0">
+                             
+                             <div className="flex gap-3 text-center shrink-0 items-end w-full md:w-auto justify-between md:justify-start">
                                <div>
                                  <div className="text-[10px] uppercase text-zinc-500 font-bold mb-1">Séries</div>
                                  <input type="text" value={ex.sets} onChange={(e) => {
@@ -441,7 +729,7 @@ export default function ProtocolosView() {
                                    const newData = {...workoutData};
                                    newData.days[activeDayIdx].exercises[idx].sets = e.target.value;
                                    setWorkoutData(newData);
-                                 }} className="font-mono text-white bg-surface rounded px-2 py-1 w-12 text-center outline-none border border-transparent focus:border-primary"/>
+                                 }} className="font-mono text-white bg-surface rounded px-2 py-1.5 w-12 text-center outline-none border border-surface-highest focus:border-primary text-sm"/>
                                </div>
                                <div>
                                  <div className="text-[10px] uppercase text-zinc-500 font-bold mb-1">Reps</div>
@@ -450,7 +738,7 @@ export default function ProtocolosView() {
                                    const newData = {...workoutData};
                                    newData.days[activeDayIdx].exercises[idx].reps = e.target.value;
                                    setWorkoutData(newData);
-                                 }} className="font-mono text-white bg-surface rounded px-2 py-1 w-16 text-center outline-none border border-transparent focus:border-primary"/>
+                                 }} className="font-mono text-white bg-surface rounded px-2 py-1.5 w-16 text-center outline-none border border-surface-highest focus:border-primary text-sm"/>
                                </div>
                                <div>
                                  <div className="text-[10px] uppercase text-zinc-500 font-bold mb-1">Pausa</div>
@@ -459,11 +747,25 @@ export default function ProtocolosView() {
                                    const newData = {...workoutData};
                                    newData.days[activeDayIdx].exercises[idx].rest = e.target.value;
                                    setWorkoutData(newData);
-                                 }} className="font-mono text-primary bg-primary/10 rounded px-2 py-1 w-16 text-center outline-none border border-transparent focus:border-primary"/>
+                                 }} className="font-mono text-primary bg-primary/10 rounded px-2 py-1.5 w-16 text-center outline-none border border-surface-highest focus:border-primary text-sm"/>
                                </div>
+                               <button 
+                                 onClick={() => removeExercise(idx)} 
+                                 className="text-zinc-500 hover:text-red-400 p-2 transition-colors self-center mt-4"
+                                 title="Remover Exercício"
+                               >
+                                 <Trash2 className="w-4.5 h-4.5" />
+                               </button>
                              </div>
                           </div>
                         ))}
+                        
+                        <button 
+                          onClick={addExercise}
+                          className="w-full py-3 bg-surface-high border border-dashed border-surface-highest text-zinc-400 hover:text-white rounded-lg text-xs font-bold uppercase flex items-center justify-center gap-1.5 transition-colors mt-2"
+                        >
+                          <Plus className="w-4 h-4" /> Adicionar Exercício
+                        </button>
                      </motion.div>
                    </AnimatePresence>
                 </div>
@@ -519,6 +821,39 @@ export default function ProtocolosView() {
           </div>
         </div>
       )}
+
+      {/* Custom Reusable Alert Modal */}
+      <AnimatePresence>
+        {alertModal.isOpen && (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 20 }} 
+              className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-sm w-full shadow-2xl relative overflow-hidden"
+            >
+              <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${
+                alertModal.type === 'success' ? 'from-green-500 to-emerald-400' :
+                alertModal.type === 'error' ? 'from-red-600 to-rose-500' :
+                alertModal.type === 'warning' ? 'from-amber-500 to-yellow-400' :
+                'from-primary to-primary-dim'
+              }`} />
+              
+              <h3 className="text-lg font-heading font-bold text-white mb-2">{alertModal.title}</h3>
+              <p className="text-zinc-300 text-xs leading-relaxed mb-6">{alertModal.message}</p>
+              
+              <div className="flex justify-end gap-2">
+                <button 
+                  onClick={() => setAlertModal({ ...alertModal, isOpen: false })} 
+                  className="px-5 py-2 bg-primary text-black font-bold uppercase tracking-wider text-[10px] rounded hover:bg-primary-dim transition-colors"
+                >
+                  OK
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

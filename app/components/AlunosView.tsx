@@ -1,14 +1,46 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Award, CheckCircle2, Camera, Plus, X, MessageSquare } from 'lucide-react';
+import { ChevronRight, Award, CheckCircle2, Camera, Plus, X, MessageSquare, CreditCard, Trash2, History } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Student } from '../types';
+import { Student, User } from '../types';
 import { supabase } from '../utils/supabase';
+import CustomAlertModal from './CustomAlertModal';
 
-export default function AlunosView() {
+interface AlunosViewProps {
+  currentUser: User | null;
+}
+
+export default function AlunosView({ currentUser }: AlunosViewProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  // Custom Alert Modal State
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    type: 'success' | 'error' | 'warning' | 'info' | 'confirm';
+    title: string;
+    message?: string;
+    recordName?: string;
+    onConfirm?: () => void;
+  }>({ isOpen: false, type: 'info', title: '' });
+
+  const showCustomAlert = (
+    title: string,
+    message: string,
+    type: 'success' | 'error' | 'warning' | 'info' | 'confirm',
+    recordName?: string,
+    onConfirm?: () => void
+  ) => {
+    setAlertModal({
+      isOpen: true,
+      type,
+      title,
+      message,
+      recordName,
+      onConfirm
+    });
+  };
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -34,6 +66,161 @@ export default function AlunosView() {
   const [evaluations, setEvaluations] = useState<any[]>([]);
   const [loadingEvals, setLoadingEvals] = useState<boolean>(false);
   const [activeMetric, setActiveMetric] = useState<'weight' | 'body_fat' | 'heart_rate'>('weight');
+
+  // Payments State
+  const [allPayments, setAllPayments] = useState<any[]>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
+  const [newPayment, setNewPayment] = useState({
+    amount: '150',
+    dueDate: '',
+    planName: 'Mensal'
+  });
+  const [savingPayment, setSavingPayment] = useState<boolean>(false);
+
+  const fetchPayments = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('*')
+        .order('due_date', { ascending: false });
+      if (data) {
+        setAllPayments(data);
+      }
+    } catch (e) {
+      console.error('Error fetching payments:', e);
+    }
+  };
+
+  const getStudentFinancialStatus = (studentId: string | number) => {
+    const studentBills = allPayments.filter(p => p.student_id.toString() === studentId.toString());
+    if (studentBills.length === 0) return { label: 'Sem Plano', color: 'text-zinc-500 bg-zinc-500/10 border-zinc-500/20' };
+
+    let hasOverdue = false;
+    let hasPending = false;
+    const today = new Date().toISOString().split('T')[0];
+
+    studentBills.forEach(p => {
+      const status = p.status === 'Pago' ? 'Pago' : (p.due_date < today ? 'Atrasado' : 'Pendente');
+      if (status === 'Atrasado') hasOverdue = true;
+      if (status === 'Pendente') hasPending = true;
+    });
+
+    if (hasOverdue) {
+      return { label: '⚠️ Atrasado', color: 'text-red-400 bg-red-500/10 border-red-500/20 animate-pulse' };
+    }
+
+    if (hasPending) {
+      return { label: '⏳ Pendente', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+    }
+
+    return { label: '✅ Em Dia', color: 'text-[#00ff41] bg-[#00ff41]/10 border-[#00ff41]/20' };
+  };
+
+  const handleMarkAsPaid = (paymentId: string) => {
+    const payment = allPayments.find(p => p.id === paymentId);
+    const planDesc = payment ? `${payment.plan_name} - R$ ${payment.amount}` : 'esta cobrança';
+    showCustomAlert(
+      'Confirmar Recebimento',
+      `Deseja realmente marcar a cobrança "${planDesc}" como paga?`,
+      'confirm',
+      planDesc,
+      async () => {
+        try {
+          const todayStr = new Date().toISOString().split('T')[0];
+          const { error } = await supabase
+            .from('payments')
+            .update({ status: 'Pago', payment_date: todayStr })
+            .eq('id', paymentId);
+          if (error) {
+            showCustomAlert('Erro', 'Erro ao atualizar pagamento: ' + error.message, 'error');
+          } else {
+            showCustomAlert('Sucesso', 'Pagamento registrado com sucesso!', 'success');
+            fetchPayments();
+          }
+        } catch (e: any) {
+          console.error(e);
+          showCustomAlert('Erro', 'Erro inesperado ao atualizar pagamento.', 'error');
+        }
+      }
+    );
+  };
+
+  const handleDeletePayment = (paymentId: string) => {
+    const payment = allPayments.find(p => p.id === paymentId);
+    const planDesc = payment ? `${payment.plan_name} - R$ ${payment.amount}` : 'Fatura';
+    showCustomAlert(
+      'Confirmar Exclusão',
+      '',
+      'confirm',
+      planDesc,
+      async () => {
+        try {
+          const { error } = await supabase
+            .from('payments')
+            .delete()
+            .eq('id', paymentId);
+          if (error) {
+            showCustomAlert('Erro', 'Erro ao excluir cobrança: ' + error.message, 'error');
+          } else {
+            showCustomAlert('Sucesso', 'Cobrança excluída com sucesso!', 'success');
+            fetchPayments();
+          }
+        } catch (e: any) {
+          console.error(e);
+          showCustomAlert('Erro', 'Erro inesperado ao excluir cobrança.', 'error');
+        }
+      }
+    );
+  };
+
+  const handleAddPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+    if (!newPayment.amount || !newPayment.dueDate) {
+      return showCustomAlert('Aviso', 'Preencha o valor e a data de vencimento!', 'warning');
+    }
+    const amt = parseFloat(newPayment.amount);
+    if (isNaN(amt) || amt <= 0) {
+      return showCustomAlert('Aviso', 'O valor deve ser um número maior que zero!', 'warning');
+    }
+
+    setSavingPayment(true);
+    try {
+      const { error } = await supabase
+        .from('payments')
+        .insert([{
+          student_id: selectedStudent.id,
+          amount: amt,
+          due_date: newPayment.dueDate,
+          plan_name: newPayment.planName,
+          status: new Date(newPayment.dueDate) < new Date(new Date().toISOString().split('T')[0]) ? 'Atrasado' : 'Pendente'
+        }]);
+
+      if (error) {
+        showCustomAlert('Erro', 'Erro ao adicionar cobrança: ' + error.message, 'error');
+      } else {
+        showCustomAlert('Sucesso', 'Nova cobrança gerada com sucesso!', 'success');
+        setShowPaymentModal(false);
+        setNewPayment({ amount: '150', dueDate: '', planName: 'Mensal' });
+        fetchPayments();
+      }
+    } catch (err: any) {
+      console.error(err);
+      showCustomAlert('Erro', 'Erro inesperado ao gerar cobrança.', 'error');
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  const handlePlanPresetChange = (preset: string) => {
+    let amt = '150';
+    if (preset === 'Mensal') amt = '150';
+    else if (preset === 'Trimestral') amt = '400';
+    else if (preset === 'Semestral') amt = '750';
+    else if (preset === 'Anual') amt = '1300';
+    setNewPayment(prev => ({ ...prev, planName: preset, amount: amt }));
+  };
+
 
   const fetchStudentEvaluations = async (studentId: string | number) => {
     setLoadingEvals(true);
@@ -138,6 +325,7 @@ export default function AlunosView() {
 
   useEffect(() => {
     fetchStudents();
+    fetchPayments();
   }, []);
 
   useEffect(() => {
@@ -162,7 +350,7 @@ export default function AlunosView() {
       if (videoRef.current) videoRef.current.srcObject = ms;
     } catch (e) {
       console.error(e);
-      alert("Câmera não acessível no ambiente atual ou sem permissão.");
+      showCustomAlert('Câmera Indisponível', 'Câmera não acessível no ambiente atual ou sem permissão.', 'warning');
     }
   };
 
@@ -182,35 +370,46 @@ export default function AlunosView() {
         .eq('id', selectedStudent.id);
 
       if (error) {
-        alert('Erro ao salvar foto de evolução: ' + error.message);
+        showCustomAlert('Erro', 'Erro ao salvar foto de evolução: ' + error.message, 'error');
       } else {
         setSelectedStudent({ ...selectedStudent, photo_url: photoData });
         fetchStudents();
       }
     } catch (err: any) {
       console.error('Error updating photo:', err);
+      showCustomAlert('Erro', 'Erro inesperado ao salvar foto.', 'error');
     }
   };
 
-  const deletePhoto = async () => {
+  const deletePhoto = () => {
     if (!selectedStudent) return;
-    if (!confirm('Deseja remover esta foto do histórico?')) return;
-    try {
-      const { error } = await supabase
-        .from('students')
-        .update({ photo_url: null })
-        .eq('id', selectedStudent.id);
+    const photoDesc = `Foto de evolução do aluno ${selectedStudent.name}`;
+    showCustomAlert(
+      'Confirmar Exclusão',
+      '',
+      'confirm',
+      photoDesc,
+      async () => {
+        try {
+          const { error } = await supabase
+            .from('students')
+            .update({ photo_url: null })
+            .eq('id', selectedStudent.id);
 
-      if (error) {
-        alert('Erro ao excluir foto: ' + error.message);
-      } else {
-        setPhoto(null);
-        setSelectedStudent({ ...selectedStudent, photo_url: undefined });
-        fetchStudents();
+          if (error) {
+            showCustomAlert('Erro', 'Erro ao excluir foto: ' + error.message, 'error');
+          } else {
+            setPhoto(null);
+            setSelectedStudent({ ...selectedStudent, photo_url: undefined });
+            fetchStudents();
+            showCustomAlert('Sucesso', 'Foto de evolução excluída com sucesso!', 'success');
+          }
+        } catch (err: any) {
+          console.error(err);
+          showCustomAlert('Erro', 'Erro ao excluir foto: ' + err.message, 'error');
+        }
       }
-    } catch (err: any) {
-      console.error(err);
-    }
+    );
   };
 
   const capturePhoto = () => {
@@ -229,12 +428,12 @@ export default function AlunosView() {
   const handleAddStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStudent.name || !newStudent.age || !newStudent.goal) {
-      return alert('Preencha os campos obrigatórios!');
+      return showCustomAlert('Aviso', 'Preencha os campos obrigatórios!', 'warning');
     }
 
     const ageNum = parseInt(newStudent.age);
-    if (isNaN(ageNum)) {
-      return alert('Idade precisa ser um número válido!');
+    if (isNaN(ageNum) || ageNum <= 0) {
+      return showCustomAlert('Aviso', 'Idade precisa ser um número válido!', 'warning');
     }
 
     try {
@@ -253,15 +452,16 @@ export default function AlunosView() {
         }]);
 
       if (error) {
-        alert('Erro ao cadastrar aluno: ' + error.message);
+        showCustomAlert('Erro', 'Erro ao cadastrar aluno: ' + error.message, 'error');
       } else {
-        alert('Aluno cadastrado com sucesso!');
+        showCustomAlert('Sucesso', 'Aluno cadastrado com sucesso!', 'success');
         setShowNewStudentModal(false);
         setNewStudent({ name: '', age: '', goal: '', biotype: 'Mesomorfo', status: 'Ativo', phone_number: '', telegram_chat_id: '' });
         fetchStudents();
       }
     } catch (err: any) {
       console.error(err);
+      showCustomAlert('Erro', 'Erro inesperado ao cadastrar aluno.', 'error');
     }
   };
 
@@ -278,9 +478,9 @@ export default function AlunosView() {
         .eq('id', selectedStudent.id);
 
       if (error) {
-        alert('Erro ao salvar contatos: ' + error.message);
+        showCustomAlert('Erro', 'Erro ao salvar contatos: ' + error.message, 'error');
       } else {
-        alert('Contatos atualizados com sucesso!');
+        showCustomAlert('Sucesso', 'Contatos atualizados com sucesso!', 'success');
         setSelectedStudent({
           ...selectedStudent,
           phone_number: studentPhone || undefined,
@@ -290,7 +490,7 @@ export default function AlunosView() {
       }
     } catch (e: any) {
       console.error(e);
-      alert('Erro inesperado ao salvar contatos.');
+      showCustomAlert('Erro', 'Erro inesperado ao salvar contatos.', 'error');
     } finally {
       setSavingContacts(false);
     }
@@ -425,6 +625,89 @@ export default function AlunosView() {
                        </button>
                     </div>
                  </div>
+
+                 {/* Histórico Financeiro & Planos Card */}
+                 <div className="space-y-4 bg-surface-high p-4 rounded-xl border border-surface-highest/60">
+                    <div className="flex items-center justify-between border-b border-surface-highest pb-2">
+                       <h3 className="font-heading font-semibold text-lg text-white flex items-center gap-2">
+                          <CreditCard className="w-5 h-5 text-primary"/> Histórico Financeiro & Planos
+                       </h3>
+                       {(() => {
+                          const finStatus = getStudentFinancialStatus(selectedStudent.id);
+                          return (
+                             <span className={`px-2 py-0.5 border rounded text-[10px] font-bold uppercase tracking-wider ${finStatus.color}`}>
+                                {finStatus.label}
+                             </span>
+                          );
+                       })()}
+                    </div>
+
+                    {/* Payments List */}
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                       {(() => {
+                          const bills = allPayments.filter(p => p.student_id.toString() === selectedStudent.id.toString());
+                          const today = new Date().toISOString().split('T')[0];
+                          if (bills.length === 0) {
+                             return <p className="text-zinc-500 text-xs italic text-center py-4">Nenhuma cobrança registrada.</p>;
+                          }
+                          return bills.map(p => {
+                             const calculatedStatus = p.status === 'Pago' ? 'Pago' : (p.due_date < today ? 'Atrasado' : 'Pendente');
+                             return (
+                                <div key={p.id} className="bg-surface border border-surface-highest/60 p-2.5 rounded-lg flex items-center justify-between gap-3 text-xs">
+                                   <div className="flex flex-col gap-0.5 overflow-hidden">
+                                      <div className="flex items-center gap-1.5">
+                                         <span className="font-bold text-white uppercase tracking-wide">{p.plan_name}</span>
+                                         <span className="text-zinc-500">•</span>
+                                         <span className="font-mono text-primary font-bold">R$ {parseFloat(p.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                      </div>
+                                      <div className="text-[10px] text-zinc-400 space-y-0.5">
+                                         <p>Vencimento: <span className="font-mono font-medium">{p.due_date ? new Date(p.due_date + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</span></p>
+                                         {p.status === 'Pago' && p.payment_date && (
+                                            <p className="text-[#00ff41]">Pago em: <span className="font-mono font-medium">{new Date(p.payment_date + 'T00:00:00').toLocaleDateString('pt-BR')}</span></p>
+                                         )}
+                                      </div>
+                                   </div>
+
+                                   <div className="flex items-center gap-2 shrink-0">
+                                      <span className={`px-2 py-0.5 border rounded text-[9px] font-bold uppercase tracking-widest ${
+                                         calculatedStatus === 'Pago' ? 'text-[#00ff41] bg-[#00ff41]/10 border-[#00ff41]/20' :
+                                         calculatedStatus === 'Atrasado' ? 'text-red-400 bg-red-500/10 border-red-500/20' :
+                                         'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                                      }`}>
+                                         {calculatedStatus}
+                                      </span>
+
+                                      {calculatedStatus !== 'Pago' && (
+                                         <button 
+                                            onClick={() => handleMarkAsPaid(p.id)}
+                                            className="px-2 py-1 bg-primary text-black font-bold uppercase tracking-wider text-[9px] rounded hover:bg-primary-dim transition-colors"
+                                            title="Marcar como Pago"
+                                         >
+                                            Pagar
+                                         </button>
+                                      )}
+                                      
+                                      <button 
+                                         onClick={() => handleDeletePayment(p.id)}
+                                         className="text-zinc-600 hover:text-red-400 transition-colors p-1"
+                                         title="Excluir fatura"
+                                      >
+                                         <X className="w-4 h-4" />
+                                      </button>
+                                   </div>
+                                </div>
+                             );
+                          });
+                       })()}
+                    </div>
+
+                    <button
+                       onClick={() => setShowPaymentModal(true)}
+                       className="w-full mt-2 py-2 bg-primary text-black font-bold uppercase tracking-wider text-xs rounded hover:bg-primary-dim transition-all shadow-[0_0_10px_rgba(212,175,55,0.15)] flex items-center justify-center gap-1.5"
+                    >
+                       <Plus className="w-3.5 h-3.5" /> Adicionar Cobrança
+                    </button>
+                 </div>
               </div>
 
               <div className="space-y-8">
@@ -537,8 +820,102 @@ export default function AlunosView() {
                     )}
                  </div>
               </div>
+            </div>
+         </div>
+
+         {/* New Payment Modal Dialog */}
+         {showPaymentModal && selectedStudent && (
+           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+             <motion.div 
+               initial={{ opacity: 0, y: 20 }} 
+               animate={{ opacity: 1, y: 0 }} 
+               className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-md w-full relative"
+             >
+               <button onClick={() => setShowPaymentModal(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
+                 <X className="w-5 h-5"/>
+               </button>
+               <h3 className="text-xl font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2">Lançar Nova Cobrança</h3>
+               
+               <form onSubmit={handleAddPaymentSubmit} className="space-y-4">
+                 <div>
+                   <label className="text-xs text-zinc-400 uppercase font-bold block mb-1">Plano / Descrição</label>
+                   <div className="flex flex-wrap gap-2 mt-1">
+                     {['Mensal', 'Trimestral', 'Semestral', 'Anual', 'Personalizado'].map(preset => (
+                       <button
+                         type="button"
+                         key={preset}
+                         onClick={() => handlePlanPresetChange(preset)}
+                         className={`px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider border transition-colors ${
+                           newPayment.planName === preset
+                             ? 'bg-primary text-black border-primary'
+                             : 'bg-surface-high border-surface-highest text-zinc-400 hover:text-white'
+                         }`}
+                       >
+                         {preset}
+                       </button>
+                     ))}
+                   </div>
+                 </div>
+
+                 {newPayment.planName === 'Personalizado' && (
+                   <div>
+                     <label className="text-xs text-zinc-400 uppercase font-bold">Nome do Plano Personalizado</label>
+                     <input
+                       required
+                       type="text"
+                       value={newPayment.planName === 'Personalizado' ? '' : newPayment.planName}
+                       onChange={e => setNewPayment({ ...newPayment, planName: e.target.value })}
+                       className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary"
+                       placeholder="Ex: Plano Extra"
+                     />
+                   </div>
+                 )}
+
+                 <div>
+                   <label className="text-xs text-zinc-400 uppercase font-bold">Valor (R$)</label>
+                   <input 
+                     required 
+                     type="number" 
+                     value={newPayment.amount} 
+                     onChange={e => setNewPayment({ ...newPayment, amount: e.target.value })} 
+                     className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary font-mono" 
+                     placeholder="Ex: 150"
+                   />
+                 </div>
+
+                 <div>
+                   <label className="text-xs text-zinc-400 uppercase font-bold">Data de Vencimento</label>
+                   <input 
+                     required 
+                     type="date" 
+                     value={newPayment.dueDate} 
+                     onChange={e => setNewPayment({ ...newPayment, dueDate: e.target.value })} 
+                     className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary font-mono" 
+                   />
+                 </div>
+
+                 <button 
+                   type="submit" 
+                   disabled={savingPayment}
+                   className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)] disabled:opacity-50"
+                 >
+                   {savingPayment ? 'Processando...' : 'Lançar Cobrança'}
+                 </button>
+               </form>
+             </motion.div>
            </div>
-        </div>
+         )}
+
+         <CustomAlertModal
+           isOpen={alertModal.isOpen}
+           type={alertModal.type}
+           title={alertModal.title}
+           message={alertModal.message}
+           recordName={alertModal.recordName}
+           currentUser={currentUser}
+           onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+           onConfirm={alertModal.onConfirm}
+         />
       </div>
     );
   }
@@ -566,6 +943,7 @@ export default function AlunosView() {
                   <th className="p-4 rounded-tl-xl">Aluno</th>
                   <th className="p-4">Idade</th>
                   <th className="p-4">Objetivo</th>
+                  <th className="p-4">Financeiro</th>
                   <th className="p-4">Badges</th>
                   <th className="p-4 text-right rounded-tr-xl">Ações</th>
                 </tr>
@@ -579,6 +957,16 @@ export default function AlunosView() {
                     </td>
                     <td className="p-4 font-mono text-zinc-400">{s.age}</td>
                     <td className="p-4"><span className="px-2 py-1 bg-surface rounded border border-surface-highest text-xs">{s.goal}</span></td>
+                    <td className="p-4">
+                       {(() => {
+                          const finStatus = getStudentFinancialStatus(s.id);
+                          return (
+                             <span className={`px-2 py-0.5 border rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${finStatus.color}`}>
+                                {finStatus.label}
+                             </span>
+                          );
+                       })()}
+                    </td>
                     <td className="p-4">
                       <div className="flex -space-x-1">
                         {s.badges && s.badges.slice(0,3).map((b, i) => (
@@ -606,7 +994,17 @@ export default function AlunosView() {
               >
                 <div className="flex justify-between items-start">
                   <div>
-                    <h4 className="font-bold text-white text-base leading-tight">{s.name}</h4>
+                    <h4 className="font-bold text-white text-base leading-tight flex flex-wrap items-center gap-2">
+                      {s.name}
+                      {(() => {
+                          const finStatus = getStudentFinancialStatus(s.id);
+                          return (
+                             <span className={`px-1.5 py-0.5 border rounded text-[8px] font-bold uppercase tracking-wider whitespace-nowrap ${finStatus.color}`}>
+                                {finStatus.label}
+                             </span>
+                          );
+                      })()}
+                    </h4>
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${s.status === 'Ativo' ? 'text-primary' : 'text-red-400'}`}>{s.status}</span>
                   </div>
                   <span className="text-xs bg-surface-high border border-surface-highest px-2 py-1 rounded text-zinc-400 font-medium">{s.age} anos</span>
@@ -694,6 +1092,17 @@ export default function AlunosView() {
           </motion.div>
         </div>
       )}
+
+      <CustomAlertModal
+        isOpen={alertModal.isOpen}
+        type={alertModal.type}
+        title={alertModal.title}
+        message={alertModal.message}
+        recordName={alertModal.recordName}
+        currentUser={currentUser}
+        onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={alertModal.onConfirm}
+      />
     </div>
   );
 }

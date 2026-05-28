@@ -1,23 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, X, Video, FileText, Trash2, ArrowRight } from 'lucide-react';
+import { Search, Plus, X, Video, FileText, Trash2, ArrowRight, Edit3, Upload, Link } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import { User } from '../types';
+import CustomAlertModal from './CustomAlertModal';
 
-export default function BibliotecaView() {
+interface BibliotecaViewProps {
+  currentUser: User | null;
+}
+
+export default function BibliotecaView({ currentUser }: BibliotecaViewProps) {
   const [exercises, setExercises] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
 
-  // Modal form states
-  const [showAddModal, setShowAddModal] = useState<boolean>(false);
-  const [newEx, setNewEx] = useState({
-    name: '',
-    category: 'Pernas',
-    video_url: '',
-    description: ''
-  });
+  // Modal states
+  const [showModal, setShowModal] = useState<boolean>(false);
+  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
+  const [selectedExId, setSelectedExId] = useState<string | null>(null);
+
+  // Form states
+  const [formName, setFormName] = useState<string>('');
+  const [formCategory, setFormCategory] = useState<string>('Pernas');
+  const [formDescription, setFormDescription] = useState<string>('');
+  const [formVideoUrl, setFormVideoUrl] = useState<string>('');
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [existingFileUrl, setExistingFileUrl] = useState<string | null>(null);
+  
   const [saving, setSaving] = useState<boolean>(false);
+  const [uploadProgress, setUploadProgress] = useState<string>('');
+
+  // Custom Alert Modal State
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message?: string;
+    type: 'success' | 'error' | 'warning' | 'info' | 'confirm';
+    recordName?: string;
+    onConfirm?: () => void;
+  }>({ isOpen: false, title: '', message: '', type: 'info' });
+
+  const showCustomAlert = (
+    title: string, 
+    message: string, 
+    type: 'success' | 'error' | 'warning' | 'info' | 'confirm', 
+    recordName?: string,
+    onConfirm?: () => void
+  ) => {
+    setAlertModal({
+      isOpen: true,
+      title,
+      message,
+      type,
+      recordName,
+      onConfirm
+    });
+  };
 
   const categories = ['Todos', 'Pernas', 'Peito', 'Costas', 'Ombros', 'Braços', 'Abdômen', 'Cardio', 'Outros'];
 
@@ -45,40 +84,117 @@ export default function BibliotecaView() {
     fetchExercises();
   }, []);
 
-  const handleAddSubmit = async (e: React.FormEvent) => {
+  const openAddModal = () => {
+    setModalMode('add');
+    setSelectedExId(null);
+    setFormName('');
+    setFormCategory('Pernas');
+    setFormDescription('');
+    setFormVideoUrl('');
+    setVideoFile(null);
+    setExistingFileUrl(null);
+    setUploadProgress('');
+    setShowModal(true);
+  };
+
+  const openEditModal = (ex: any) => {
+    setModalMode('edit');
+    setSelectedExId(ex.id);
+    setFormName(ex.name);
+    setFormCategory(ex.category);
+    setFormDescription(ex.description || '');
+    setFormVideoUrl(ex.video_url || '');
+    setExistingFileUrl(ex.video_file_url || null);
+    setVideoFile(null);
+    setUploadProgress('');
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEx.name || !newEx.category) {
-      return alert('Nome e categoria são obrigatórios!');
+    if (!formName.trim() || !formCategory) {
+      return showCustomAlert('Aviso', 'Nome e categoria são obrigatórios!', 'warning');
     }
 
     setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('exercise_library')
-        .insert([{
-          name: newEx.name.trim(),
-          category: newEx.category,
-          video_url: newEx.video_url.trim() || null,
-          description: newEx.description.trim() || null
-        }]);
+    setUploadProgress('');
 
-      if (error) {
-        alert('Erro ao cadastrar exercício: ' + error.message);
-      } else {
-        alert('Exercício cadastrado com sucesso!');
-        setShowAddModal(false);
-        setNewEx({ name: '', category: 'Pernas', video_url: '', description: '' });
-        fetchExercises();
+    try {
+      let finalVideoFileUrl = existingFileUrl;
+
+      // Handle video file upload to Supabase Storage if file is selected
+      if (videoFile) {
+        setUploadProgress('Fazendo upload do arquivo de vídeo...');
+        const fileExt = videoFile.name.split('.').pop();
+        const cleanName = formName.trim().replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        const fileName = `${cleanName}_${Date.now()}.${fileExt}`;
+        const filePath = `videos/${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('exercise-videos')
+          .upload(filePath, videoFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (uploadError) {
+          throw new Error('Falha no upload do vídeo: ' + uploadError.message + '\n\nCertifique-se de que executou o script SQL no Supabase para habilitar o RLS do Storage.');
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from('exercise-videos')
+          .getPublicUrl(filePath);
+
+        finalVideoFileUrl = publicUrlData?.publicUrl || null;
       }
+
+      const exerciseData: any = {
+        name: formName.trim(),
+        category: formCategory,
+        description: formDescription.trim() || null,
+        video_url: formVideoUrl.trim() || null,
+        video_file_url: finalVideoFileUrl
+      };
+
+      if (modalMode === 'add') {
+        const { error } = await supabase
+          .from('exercise_library')
+          .insert([exerciseData]);
+
+        if (error) throw error;
+        showCustomAlert('Sucesso', 'Exercício cadastrado com sucesso!', 'success');
+      } else {
+        const { error } = await supabase
+          .from('exercise_library')
+          .update(exerciseData)
+          .eq('id', selectedExId);
+
+        if (error) throw error;
+        showCustomAlert('Sucesso', 'Exercício atualizado com sucesso!', 'success');
+      }
+
+      setShowModal(false);
+      fetchExercises();
     } catch (err: any) {
       console.error(err);
+      showCustomAlert('Erro', err.message || 'Falha ao salvar as informações.', 'error');
     } finally {
       setSaving(false);
+      setUploadProgress('');
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Deseja realmente excluir o exercício "${name}" da biblioteca?`)) return;
+  const handleDeleteClick = (id: string, name: string) => {
+    showCustomAlert(
+      'Confirmar Exclusão',
+      '',
+      'confirm',
+      name,
+      () => executeDelete(id)
+    );
+  };
+
+  const executeDelete = async (id: string) => {
     try {
       const { error } = await supabase
         .from('exercise_library')
@@ -86,13 +202,18 @@ export default function BibliotecaView() {
         .eq('id', id);
 
       if (error) {
-        alert('Erro ao excluir exercício: ' + error.message);
+        showCustomAlert('Erro', 'Erro ao excluir exercício: ' + error.message, 'error');
       } else {
         fetchExercises();
       }
     } catch (err: any) {
       console.error(err);
     }
+  };
+
+  const handleRemoveUploadedFile = () => {
+    setExistingFileUrl(null);
+    setVideoFile(null);
   };
 
   const filteredExercises = exercises.filter(ex => {
@@ -109,7 +230,7 @@ export default function BibliotecaView() {
           <h2 className="text-2xl font-heading font-bold text-white">Biblioteca de Exercícios</h2>
           <p className="text-zinc-400 text-sm mt-1">Gerencie os vídeos e instruções de execução para os treinos de seus alunos.</p>
         </div>
-        <button onClick={() => setShowAddModal(true)} className="px-4 py-2 bg-primary text-black font-bold rounded flex items-center gap-2 hover:bg-primary-dim transition-colors text-sm shadow-[0_0_10px_rgba(212,175,55,0.3)] w-full sm:w-auto justify-center">
+        <button onClick={openAddModal} className="px-4 py-2 bg-primary text-black font-bold rounded flex items-center gap-2 hover:bg-primary-dim transition-colors text-sm shadow-[0_0_10px_rgba(212,175,55,0.3)] w-full sm:w-auto justify-center">
           <Plus className="w-4 h-4" /> Cadastrar Exercício
         </button>
       </div>
@@ -165,13 +286,22 @@ export default function BibliotecaView() {
                   <span className="px-2 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[9px] font-bold uppercase tracking-widest">
                     {ex.category}
                   </span>
-                  <button 
-                    onClick={() => handleDelete(ex.id, ex.name)}
-                    className="text-zinc-600 hover:text-red-400 transition-colors p-1"
-                    title="Excluir exercício"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => openEditModal(ex)}
+                      className="text-zinc-600 hover:text-primary transition-colors p-1"
+                      title="Editar exercício"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteClick(ex.id, ex.name)}
+                      className="text-zinc-600 hover:text-red-400 transition-colors p-1"
+                      title="Excluir exercício"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 
                 <h4 className="font-heading font-semibold text-lg text-white group-hover:text-primary transition-colors mb-2">
@@ -179,26 +309,58 @@ export default function BibliotecaView() {
                 </h4>
                 
                 {ex.description ? (
-                  <p className="text-zinc-400 text-xs leading-relaxed mb-4 line-clamp-3" title={ex.description}>
+                  <p className="text-zinc-400 text-xs leading-relaxed mb-3 line-clamp-3" title={ex.description}>
                     {ex.description}
                   </p>
                 ) : (
-                  <p className="text-zinc-600 text-xs italic mb-4">Sem instruções cadastradas.</p>
+                  <p className="text-zinc-600 text-xs italic mb-3">Sem instruções cadastradas.</p>
                 )}
+
+                {/* Availability status layout */}
+                <div className="flex flex-col gap-1.5 text-[10px] text-zinc-400 bg-surface-high/40 p-2.5 rounded-lg border border-surface-highest/40 mb-4 mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1"><Link className="w-3 h-3 text-zinc-500" /> Link Externo:</span>
+                    {ex.video_url ? (
+                      <span className="text-[#00ff41] font-bold">✅ Vinculado</span>
+                    ) : (
+                      <span className="text-zinc-600 italic">❌ Sem Vínculo</span>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1"><Upload className="w-3 h-3 text-zinc-500" /> Vídeo Físico:</span>
+                    {ex.video_file_url ? (
+                      <span className="text-primary font-bold">✅ Vinculado</span>
+                    ) : (
+                      <span className="text-zinc-600 italic">❌ Sem Vínculo</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="border-t border-surface-highest/40 pt-4 mt-2">
-                {ex.video_url ? (
+              {/* Dynamic bottom action buttons */}
+              <div className="border-t border-surface-highest/40 pt-4 flex gap-2">
+                {ex.video_file_url && (
+                  <a 
+                    href={ex.video_file_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex-1 py-1.5 bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold uppercase rounded flex items-center justify-center gap-1 hover:bg-primary/20 transition-all shadow-sm"
+                  >
+                    <Video className="w-3.5 h-3.5" /> Vídeo Local
+                  </a>
+                )}
+                {ex.video_url && (
                   <a 
                     href={ex.video_url} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-xs font-bold text-primary hover:text-white transition-colors"
+                    className="flex-1 py-1.5 bg-surface border border-surface-highest text-[10px] font-bold uppercase rounded flex items-center justify-center gap-1 hover:text-white transition-all text-zinc-300"
                   >
-                    <Video className="w-4 h-4" /> Assistir Execução <ArrowRight className="w-3 h-3" />
+                    <Video className="w-3.5 h-3.5 text-[#dfbf80]" /> Link Externo
                   </a>
-                ) : (
-                  <span className="text-zinc-600 text-xs italic">Nenhum vídeo anexado.</span>
+                )}
+                {!ex.video_file_url && !ex.video_url && (
+                  <span className="text-zinc-600 text-[10px] italic text-center w-full py-1">Nenhum vídeo disponível.</span>
                 )}
               </div>
             </motion.div>
@@ -206,30 +368,32 @@ export default function BibliotecaView() {
         </div>
       )}
 
-      {/* Add Modal */}
+      {/* Add / Edit Modal */}
       <AnimatePresence>
-        {showAddModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        {showModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
             <motion.div 
               initial={{ opacity: 0, y: 20 }} 
               animate={{ opacity: 1, y: 0 }} 
               exit={{ opacity: 0, y: 20 }}
-              className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-md w-full relative"
+              className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-md w-full relative my-8"
             >
-              <button onClick={() => setShowAddModal(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
+              <button onClick={() => setShowModal(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
                 <X className="w-5 h-5"/>
               </button>
               
-              <h3 className="text-xl font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2">Cadastrar Novo Exercício</h3>
+              <h3 className="text-xl font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2">
+                {modalMode === 'add' ? 'Cadastrar Novo Exercício' : 'Editar Exercício'}
+              </h3>
               
-              <form onSubmit={handleAddSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="text-xs text-zinc-400 uppercase font-bold">Nome do Exercício *</label>
                   <input 
                     required 
                     type="text" 
-                    value={newEx.name} 
-                    onChange={e => setNewEx({...newEx, name: e.target.value})} 
+                    value={formName} 
+                    onChange={e => setFormName(e.target.value)} 
                     className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" 
                     placeholder="Ex: Supino Inclinado com Halteres"
                   />
@@ -238,8 +402,8 @@ export default function BibliotecaView() {
                 <div>
                   <label className="text-xs text-zinc-400 uppercase font-bold">Categoria *</label>
                   <select 
-                    value={newEx.category} 
-                    onChange={e => setNewEx({...newEx, category: e.target.value})} 
+                    value={formCategory} 
+                    onChange={e => setFormCategory(e.target.value)} 
                     className="w-full bg-surface-high border border-surface-highest text-white rounded p-2.5 mt-1 text-sm outline-none focus:border-primary"
                   >
                     {categories.filter(c => c !== 'Todos').map(c => (
@@ -249,38 +413,153 @@ export default function BibliotecaView() {
                 </div>
 
                 <div>
-                  <label className="text-xs text-zinc-400 uppercase font-bold">URL do Vídeo de Execução (YouTube / Vimeo)</label>
-                  <input 
-                    type="url" 
-                    value={newEx.video_url} 
-                    onChange={e => setNewEx({...newEx, video_url: e.target.value})} 
-                    className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" 
-                    placeholder="Ex: https://www.youtube.com/watch?..."
-                  />
-                </div>
-
-                <div>
                   <label className="text-xs text-zinc-400 uppercase font-bold">Instruções / Descrição</label>
                   <textarea 
-                    value={newEx.description} 
-                    onChange={e => setNewEx({...newEx, description: e.target.value})} 
-                    className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary h-24 resize-none" 
+                    value={formDescription} 
+                    onChange={e => setFormDescription(e.target.value)} 
+                    className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary h-20 resize-none" 
                     placeholder="Dicas de execução, postura e segurança..."
                   />
                 </div>
+
+                {/* Coexisting Media Configuration Fields */}
+                <div className="space-y-3 pt-2 border-t border-surface-highest/40">
+                  <span className="text-xs text-zinc-300 font-bold block mb-1">Mídias Vinculadas</span>
+                  
+                  {/* External Link Input Block */}
+                  <div className="bg-surface-high border border-surface-highest/60 p-3 rounded-lg space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] text-zinc-400 uppercase font-bold flex items-center gap-1.5">
+                        <Link className="w-3.5 h-3.5 text-zinc-500" /> Link de Vídeo Externo
+                      </label>
+                      {formVideoUrl.trim() && (
+                        <span className="text-[9px] text-[#00ff41] font-bold bg-[#00ff41]/10 border border-[#00ff41]/20 px-1.5 py-0.5 rounded">
+                          Ativo
+                        </span>
+                      )}
+                    </div>
+                    <input 
+                      type="url" 
+                      value={formVideoUrl} 
+                      onChange={e => setFormVideoUrl(e.target.value)} 
+                      className="w-full bg-surface-container border border-surface-highest rounded p-2 text-white text-xs outline-none focus:border-primary" 
+                      placeholder="Ex: https://www.youtube.com/watch?..."
+                    />
+                    {formVideoUrl.trim() && (
+                      <div className="text-[10px] text-zinc-500 flex justify-between items-center px-1">
+                        <span className="truncate max-w-[250px]">{formVideoUrl}</span>
+                        <button 
+                          type="button" 
+                          onClick={() => setFormVideoUrl('')} 
+                          className="text-red-400 hover:underline font-bold"
+                        >
+                          Limpar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* MP4 File Upload Input Block */}
+                  <div className="bg-surface-high border border-surface-highest/60 p-3 rounded-lg space-y-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] text-zinc-400 uppercase font-bold flex items-center gap-1.5">
+                        <Upload className="w-3.5 h-3.5 text-zinc-500" /> Upload de Vídeo MP4
+                      </label>
+                      {existingFileUrl && (
+                        <span className="text-[9px] text-primary font-bold bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded">
+                          Salvo em Nuvem
+                        </span>
+                      )}
+                    </div>
+
+                    {existingFileUrl ? (
+                      <div className="bg-surface-container border border-surface-highest rounded p-2.5 flex items-center justify-between gap-3 shadow-inner">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <Video className="w-8 h-8 text-primary shrink-0 opacity-80" />
+                          <div className="flex flex-col overflow-hidden">
+                            <span className="text-xs font-bold text-zinc-200 truncate">video_exercicio.mp4</span>
+                            <a 
+                              href={existingFileUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-[10px] text-primary hover:underline font-medium text-left"
+                            >
+                              Ver Vídeo Salvo
+                            </a>
+                          </div>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={handleRemoveUploadedFile} 
+                          className="text-zinc-500 hover:text-red-400 p-1.5 hover:bg-surface rounded transition-colors"
+                          title="Remover vídeo em nuvem"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="border border-dashed border-surface-highest rounded p-3 flex flex-col items-center justify-center bg-surface-container/50 hover:border-primary/40 transition-colors">
+                        <input 
+                          type="file" 
+                          accept="video/mp4,video/quicktime,video/webm" 
+                          onChange={e => setVideoFile(e.target.files?.[0] || null)}
+                          className="hidden" 
+                          id="video-upload-input"
+                        />
+                        <label htmlFor="video-upload-input" className="cursor-pointer flex flex-col items-center gap-1.5 w-full text-center">
+                          <Upload className="w-6 h-6 text-primary opacity-80" />
+                          <span className="text-xs font-bold text-zinc-300">
+                            {videoFile ? videoFile.name : 'Selecionar arquivo de vídeo'}
+                          </span>
+                          <span className="text-[9px] text-zinc-500">
+                            Formatos MP4, MOV. Máximo 10MB.
+                          </span>
+                        </label>
+                      </div>
+                    )}
+                    
+                    {videoFile && (
+                      <div className="text-[10px] text-zinc-400 bg-surface-container p-2 rounded flex items-center justify-between border border-surface-highest">
+                        <span className="truncate max-w-[200px]">Selecionado: {videoFile.name}</span>
+                        <button 
+                          type="button" 
+                          onClick={() => setVideoFile(null)} 
+                          className="text-red-400 hover:underline font-bold"
+                        >
+                          Limpar
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {uploadProgress && (
+                  <p className="text-xs font-mono text-primary animate-pulse">{uploadProgress}</p>
+                )}
 
                 <button 
                   type="submit" 
                   disabled={saving}
                   className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)] disabled:opacity-50"
                 >
-                  {saving ? 'Salvando...' : 'Salvar Exercício'}
+                  {saving ? 'Processando...' : modalMode === 'add' ? 'Salvar Exercício' : 'Atualizar Exercício'}
                 </button>
               </form>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
+      <CustomAlertModal
+        isOpen={alertModal.isOpen}
+        type={alertModal.type}
+        title={alertModal.title}
+        message={alertModal.message}
+        recordName={alertModal.recordName}
+        currentUser={currentUser}
+        onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={alertModal.onConfirm}
+      />
     </div>
   );
 }
