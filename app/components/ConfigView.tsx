@@ -268,7 +268,16 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
         });
 
         if (error) {
-          return showCustomAlert('Erro', 'Erro ao registrar usuário: ' + error.message, 'error');
+          let errorMsg = error.message;
+          const lowerMsg = error.message.toLowerCase();
+          if (lowerMsg.includes('already registered') || 
+              lowerMsg.includes('already exists') || 
+              lowerMsg.includes('registered') || 
+              lowerMsg.includes('user-already-exists') || 
+              error.status === 422) {
+            errorMsg = 'Este e-mail já está cadastrado no sistema! Use outro e-mail ou remova o membro anterior.';
+          }
+          return showCustomAlert('Erro', 'Erro ao registrar usuário: ' + errorMsg, 'error');
         }
 
         if (data.user) {

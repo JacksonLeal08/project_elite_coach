@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff } from 'lucide-react';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
 import ProtocolosView from './components/ProtocolosView';
@@ -13,12 +13,13 @@ import { supabase } from './utils/supabase';
 import { User } from './types';
 
 export default function App() {
-  const [authState, setAuthState] = useState<'loading' | 'login' | 'app'>('loading');
+  const [authState, setAuthState] = useState<'loading' | 'login' | 'app' | 'goodbye'>('loading');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   // Login Logic
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   const [loginError, setLoginError] = useState<string>('');
   const [rememberMe, setRememberMe] = useState<boolean>(false);
 
@@ -185,14 +186,16 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-     setAuthState('loading');
-     try {
-       await supabase.auth.signOut();
-     } catch (e) {
-       console.error('Logout error:', e);
-     }
-     setCurrentUser(null);
-     setAuthState('login');
+     setAuthState('goodbye');
+     setTimeout(async () => {
+       try {
+         await supabase.auth.signOut();
+       } catch (e) {
+         console.error('Logout error:', e);
+       }
+       setCurrentUser(null);
+       setAuthState('login');
+     }, 2000);
   };
 
   const handleLogoutWithMsg = async (msg?: string) => {
@@ -206,6 +209,37 @@ export default function App() {
      if (msg) setLoginError(msg);
      setAuthState('login');
   };
+
+  if (authState === 'goodbye') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-black">
+        <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: 'url("https://i.ibb.co/jk8KJxCz/personal-trainer-loading-screen.png")' }}></div>
+        <div className="absolute inset-0 bg-black/40 z-0 backdrop-blur-[2px]"></div>
+
+        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.8 }} className="flex flex-col items-center z-10 w-full max-w-[420px] px-4">
+            <motion.div 
+               animate={{ scale: [1, 1.05, 1] }} 
+               transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+               className="w-[360px] h-[360px] sm:w-[400px] sm:h-[400px] mb-2 flex items-center justify-center"
+            >
+               <img src="/logo.png" alt="Logo Jaira Leal" className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+            </motion.div>
+            
+            <div className="mt-2 w-full h-5 rounded-full p-[2px] relative border border-[#dfbf80]/40 shadow-lg" style={{ backgroundColor: '#0a1a10' }}>
+               <motion.div 
+                 initial={{ width: "100%" }} 
+                 animate={{ width: 0 }} 
+                 transition={{ duration: 2.0, ease: "easeInOut" }} 
+                 className="h-full rounded-full relative overflow-hidden"
+                 style={{ background: 'linear-gradient(90deg, #dfbf80 0%, #18462b 100%)', boxShadow: '0 0 12px rgba(223,191,128,0.3)' }}
+               />
+               <div className="absolute inset-0 rounded-full border border-white/10 pointer-events-none"></div>
+            </div>
+            <p className="mt-5 text-[#dfbf80] text-sm sm:text-base font-semibold tracking-wide drop-shadow-md">Até breve, Coach! Saindo do sistema...</p>
+        </motion.div>
+      </div>
+    );
+  }
 
   if (authState === 'loading') {
     return (
@@ -269,8 +303,23 @@ export default function App() {
               <div>
                 <input type="email" placeholder="E-mail" value={email} onChange={e=>setEmail(e.target.value)} className="w-full px-5 py-3.5 bg-white/60 border border-[#8fa498]/60 rounded-xl text-[#0b2817] placeholder-[#5a6c60] font-medium focus:outline-none focus:border-[#0b2817] focus:bg-white transition-all shadow-sm" required />
               </div>
-              <div>
-                <input type="password" placeholder="Senha" value={password} onChange={e=>setPassword(e.target.value)} className="w-full px-5 py-3.5 bg-white/60 border border-[#8fa498]/60 rounded-xl text-[#0b2817] placeholder-[#5a6c60] font-medium focus:outline-none focus:border-[#0b2817] focus:bg-white transition-all shadow-sm" required />
+              <div className="relative">
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  placeholder="Senha" 
+                  value={password} 
+                  onChange={e=>setPassword(e.target.value)} 
+                  className="w-full px-5 pr-12 py-3.5 bg-white/60 border border-[#8fa498]/60 rounded-xl text-[#0b2817] placeholder-[#5a6c60] font-medium focus:outline-none focus:border-[#0b2817] focus:bg-white transition-all shadow-sm" 
+                  required 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(prev => !prev)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#5a6c60] hover:text-[#0b2817] transition-colors p-1 flex items-center justify-center"
+                  title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
               </div>
               <div className="flex items-center gap-3 mt-3 ml-1">
                 <input type="checkbox" id="remember" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} className="w-4 h-4 accent-[#0b2817] cursor-pointer" />
@@ -303,6 +352,7 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
   const [showMobileMoreMenu, setShowMobileMoreMenu] = useState<boolean>(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallBtn, setShowInstallBtn] = useState<boolean>(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
 
   useEffect(() => {
     const handlePrompt = (e: any) => {
@@ -552,7 +602,7 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
                 <button
                   onClick={() => {
                     setShowMobileMoreMenu(false);
-                    handleLogout();
+                    setShowLogoutConfirm(true);
                   }}
                   className="flex flex-col items-center justify-center p-4 rounded-xl border bg-red-500/5 border-red-500/20 text-red-400 hover:bg-red-500/10 transition-all gap-2 text-center"
                 >
@@ -610,7 +660,7 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
                   )}
                 </button>
                 <button 
-                  onClick={handleLogout} 
+                  onClick={() => setShowLogoutConfirm(true)} 
                   className="text-zinc-500 hover:text-red-400 hover:scale-110 active:scale-95 transition-all p-2 bg-surface rounded-lg border border-surface-highest/40 hover:border-red-500/20 hover:bg-red-500/5 flex items-center justify-center group shrink-0 ml-1" 
                   title="Sair da Conta"
                 >
@@ -705,6 +755,58 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
               >
                 <X className="w-4 h-4" />
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Logout Confirmation Modal */}
+      <AnimatePresence>
+        {showLogoutConfirm && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            onClick={() => setShowLogoutConfirm(false)}
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 cursor-pointer"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative max-w-sm w-full bg-surface-container border border-surface-highest rounded-2xl p-6 shadow-2xl cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Icon */}
+              <div className="mx-auto w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 mb-4 animate-pulse">
+                <LogOut className="w-5 h-5" />
+              </div>
+
+              {/* Title & Desc */}
+              <div className="text-center mb-6">
+                <h3 className="text-lg font-bold text-white mb-2 tracking-wide uppercase font-heading">Encerrar Sessão</h3>
+                <p className="text-sm text-zinc-400 font-medium">Deseja realmente sair do Elite Coach?</p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 py-3 bg-surface hover:bg-surface-high text-zinc-300 font-bold uppercase tracking-wider text-[11px] rounded-xl border border-surface-highest transition-all duration-200 active:scale-95"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    setShowLogoutConfirm(false);
+                    handleLogout();
+                  }}
+                  className="flex-1 py-3 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-bold uppercase tracking-wider text-[11px] rounded-xl shadow-[0_0_15px_rgba(239,68,68,0.2)] transition-all duration-200 active:scale-95"
+                >
+                  Confirmar
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
