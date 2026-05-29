@@ -219,7 +219,7 @@ export default function App() {
                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                className="w-[360px] h-[360px] sm:w-[400px] sm:h-[400px] mb-2 flex items-center justify-center"
             >
-               <img src="https://i.ibb.co/Ld1WcP1t/NEW-LOGO-JAIRA-LEAL.png" alt="Logo Jaira Leal" className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+               <img src="/logo.png" alt="Logo Jaira Leal" className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
                <div className="hidden flex-col items-center justify-center">
                  <span className="text-6xl mb-2 drop-shadow-md">💃</span>
                </div>
@@ -253,7 +253,7 @@ export default function App() {
            
            <div className="flex flex-col items-center mb-6 mt-[-10px]">
               <div className="w-[360px] h-[240px] sm:w-[380px] sm:h-[260px] mb-2 flex items-center justify-center">
-                 <img src="https://i.ibb.co/Ld1WcP1t/NEW-LOGO-JAIRA-LEAL.png" alt="Logo Jaira Leal" className="w-full h-full object-contain" style={{ filter: 'drop-shadow(20px 7px 7px white)' }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                 <img src="/logo.png" alt="Logo Jaira Leal" className="w-full h-full object-contain" style={{ filter: 'drop-shadow(20px 7px 7px white)' }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
                  <div className="hidden flex-col items-center justify-center">
                      <span className="text-4xl drop-shadow-sm">💃</span>
                  </div>
@@ -346,7 +346,7 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
         <div className="p-5 border-b border-surface-highest flex items-center">
           <div className="w-full flex items-center gap-3">
              <div className="h-[48px] w-[48px] bg-gradient-to-br from-[#dfbf80]/20 to-[#dfbf80]/5 rounded-xl border border-[#dfbf80]/30 shadow-[0_0_15px_rgba(223,191,128,0.15)] flex items-center justify-center p-1.5 backdrop-blur-md shrink-0">
-               <img src="https://i.ibb.co/Ld1WcP1t/NEW-LOGO-JAIRA-LEAL.png" alt="Logo Jaira Leal" className="h-full w-full object-contain" style={{ filter: 'drop-shadow(0 2px 4px rgba(255,255,255,0.2))' }} />
+               <img src="/logo.png" alt="Logo Jaira Leal" className="h-full w-full object-contain" style={{ filter: 'drop-shadow(0 2px 4px rgba(255,255,255,0.2))' }} />
              </div>
              <div className="flex flex-col overflow-hidden">
                 <span className="font-heading font-black text-white text-[13px] tracking-widest uppercase truncate leading-tight drop-shadow-sm">Elite Coach</span>

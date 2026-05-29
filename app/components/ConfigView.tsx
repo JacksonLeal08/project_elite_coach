@@ -73,7 +73,7 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
       specialty: 'Strength & Conditioning',
       instagram: '@coachmiller',
       whatsapp: '+55 11 99999-9999',
-      logoUrl: 'https://i.ibb.co/Ld1WcP1t/NEW-LOGO-JAIRA-LEAL.png',
+      logoUrl: '/logo.png',
       pdfTemplate: '1'
     };
   });

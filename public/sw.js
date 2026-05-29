@@ -2,7 +2,7 @@ const CACHE_NAME = 'elite-coach-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',
-  'https://i.ibb.co/Ld1WcP1t/NEW-LOGO-JAIRA-LEAL.png'
+  '/logo.png'
 ];
 
 self.addEventListener('install', (event) => {
