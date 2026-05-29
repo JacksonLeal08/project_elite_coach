@@ -2,7 +2,9 @@ const CACHE_NAME = 'elite-coach-cache-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',
-  '/logo.png'
+  '/logo.png',
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {

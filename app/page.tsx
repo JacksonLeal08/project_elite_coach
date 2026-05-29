@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu } from 'lucide-react';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
 import ProtocolosView from './components/ProtocolosView';
@@ -300,6 +300,36 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
   const [time, setTime] = useState<string>('');
   const [date, setDate] = useState<string>('');
   const [showZoom, setShowZoom] = useState<boolean>(false);
+  const [showMobileMoreMenu, setShowMobileMoreMenu] = useState<boolean>(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBtn, setShowInstallBtn] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handlePrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBtn(true);
+    };
+    window.addEventListener('beforeinstallprompt', handlePrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handlePrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      console.log('User accepted PWA installation');
+    }
+    setDeferredPrompt(null);
+    setShowInstallBtn(false);
+  };
+
+  const mobileMainItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5"/> },
+    { id: 'alunos', label: 'Alunos', icon: <Users className="w-5 h-5"/> },
+    { id: 'protocolos', label: 'Criar', icon: <Dumbbell className="w-5 h-5"/> },
+  ];
 
   useEffect(() => {
     const updateTime = () => {
@@ -389,33 +419,160 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
       </aside>
 
       {/* Bottom Navigation for Mobile */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface-container border-t border-surface-highest flex justify-around items-center z-40 px-2 shadow-[0_-4px_20px_rgba(0,0,0,0.5)]">
-        {navItems.map(item => (
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface-container border-t border-surface-highest flex justify-around items-center z-40 px-2 shadow-[0_-4px_20px_rgba(0,0,0,0.5)] animate-fade-in">
+        {mobileMainItems.map(item => (
           <button
             key={item.id}
-            onClick={() => setActiveTab(item.id)}
+            onClick={() => {
+              setActiveTab(item.id);
+              setShowMobileMoreMenu(false);
+            }}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
-              activeTab === item.id 
+              activeTab === item.id && !showMobileMoreMenu
                 ? 'text-primary' 
                 : 'text-zinc-400 hover:text-zinc-100'
             }`}
           >
-            <div className={`p-1 rounded-lg ${activeTab === item.id ? 'bg-primary/10' : ''}`}>
+            <div className={`p-1 rounded-lg ${activeTab === item.id && !showMobileMoreMenu ? 'bg-primary/10' : ''}`}>
               {item.icon}
             </div>
-            <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5">{item.label.split(' ')[0]}</span>
+            <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5">{item.label}</span>
           </button>
         ))}
          <button
-           onClick={handleLogout}
-           className="flex flex-col items-center justify-center flex-1 h-full py-1 text-center text-zinc-500 hover:text-red-400 active:scale-95 transition-all group"
+           onClick={() => setShowMobileMoreMenu(prev => !prev)}
+           className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
+             showMobileMoreMenu 
+               ? 'text-primary' 
+               : 'text-zinc-400 hover:text-zinc-100'
+           }`}
          >
-           <div className="p-1 rounded-lg group-hover:bg-red-500/10 transition-colors">
-             <LogOut className="w-5 h-5 transition-transform group-hover:translate-x-0.5" />
+           <div className={`p-1 rounded-lg ${showMobileMoreMenu ? 'bg-primary/10' : ''}`}>
+             <Menu className="w-5 h-5" />
            </div>
-           <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5">Sair</span>
+           <span className="text-[9px] font-bold uppercase tracking-wider mt-0.5">Mais</span>
          </button>
       </nav>
+
+      {/* Mobile More Menu Bottom Sheet */}
+      <AnimatePresence>
+        {showMobileMoreMenu && (
+          <div className="md:hidden fixed inset-0 z-50 flex items-end justify-center">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMobileMoreMenu(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            {/* Bottom Sheet */}
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="w-full bg-surface-container border-t border-surface-highest rounded-t-2xl p-6 pb-8 relative z-50 max-h-[80vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between border-b border-surface-highest pb-3 mb-4">
+                <h3 className="text-sm font-bold text-[#dfbf80] uppercase tracking-wider">Mais Opções</h3>
+                <button 
+                  onClick={() => setShowMobileMoreMenu(false)}
+                  className="text-zinc-400 hover:text-white p-1.5 rounded-lg bg-surface-high border border-surface-highest"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <button
+                  onClick={() => {
+                    setActiveTab('biblioteca');
+                    setShowMobileMoreMenu(false);
+                  }}
+                  className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all gap-2 text-center ${
+                    activeTab === 'biblioteca'
+                      ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.1)]'
+                      : 'bg-surface border-surface-highest text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <BookOpen className="w-5 h-5 text-primary" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Biblioteca</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setActiveTab('inspecoes');
+                    setShowMobileMoreMenu(false);
+                  }}
+                  className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all gap-2 text-center ${
+                    activeTab === 'inspecoes'
+                      ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.1)]'
+                      : 'bg-surface border-surface-highest text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-5 h-5 text-primary" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Inspeções</span>
+                </button>
+
+                {(currentUser?.role === 'Desenvolvedor' || currentUser?.role === 'Administrador') && (
+                  <>
+                    <button
+                      onClick={() => {
+                        setActiveTab('financeiro');
+                        setShowMobileMoreMenu(false);
+                      }}
+                      className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all gap-2 text-center ${
+                        activeTab === 'financeiro'
+                          ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.1)]'
+                          : 'bg-surface border-surface-highest text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      <CreditCard className="w-5 h-5 text-primary" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Financeiro</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setActiveTab('config');
+                        setShowMobileMoreMenu(false);
+                      }}
+                      className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all gap-2 text-center ${
+                        activeTab === 'config'
+                          ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.1)]'
+                          : 'bg-surface border-surface-highest text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      <Settings className="w-5 h-5 text-primary" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider">Ajustes</span>
+                    </button>
+                  </>
+                )}
+
+                <button
+                  onClick={() => {
+                    setShowMobileMoreMenu(false);
+                    handleLogout();
+                  }}
+                  className="flex flex-col items-center justify-center p-4 rounded-xl border bg-red-500/5 border-red-500/20 text-red-400 hover:bg-red-500/10 transition-all gap-2 text-center"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Sair</span>
+                </button>
+
+                {showInstallBtn && (
+                  <button
+                    onClick={handleInstallClick}
+                    className="col-span-3 py-3 bg-gradient-to-r from-primary to-primary-dim text-black font-bold uppercase tracking-wider text-xs rounded-xl flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(212,175,55,0.2)] animate-pulse mt-2"
+                  >
+                    📲 Instalar no Celular
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-screen overflow-hidden pb-16 md:pb-0">
