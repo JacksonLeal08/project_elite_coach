@@ -5,6 +5,8 @@ export interface User {
   role: string;
   unremovable: boolean;
   pass?: string;
+  avatar_url?: string;
+  expires_at?: string;
 }
 
 export interface Badge {
@@ -22,8 +24,23 @@ export interface Student {
   imc: number;
   badges: Badge[];
   photo_url?: string;
+  photo_front_url?: string;
+  photo_back_url?: string;
+  photo_side_url?: string;
   phone_number?: string;
   telegram_chat_id?: string;
+}
+
+export interface Anamnesis {
+  id?: string;
+  student_id: string;
+  medical_restrictions: string;
+  flexibility_level: string;
+  water_intake: number;
+  dietary_habits: string;
+  surgical_history: string;
+  medications: string;
+  cardio_condition: string;
 }
 
 export interface Exercise {

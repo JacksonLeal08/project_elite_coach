@@ -1,13 +1,14 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard } from 'lucide-react';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
 import ProtocolosView from './components/ProtocolosView';
 import InspecoesView from './components/InspecoesView';
 import ConfigView from './components/ConfigView';
 import BibliotecaView from './components/BibliotecaView';
+import FinanceiroView from './components/FinanceiroView';
 import { supabase } from './utils/supabase';
 import { User } from './types';
 
@@ -43,13 +44,29 @@ export default function App() {
         console.log('Profiles table query completed. profile:', profile, 'error:', error);
 
         if (profile) {
-          console.log('Profile found, setting current user as:', profile.name);
+          console.log('Profile found, checking expiration and setting current user as:', profile.name);
+          
+          if (profile.expires_at) {
+            const expiry = new Date(profile.expires_at);
+            const now = new Date();
+            if (now > expiry) {
+              console.log('Profile has expired. Logging out.');
+              setLoginError('Seu período de acesso contratado expirou. Entre em contato com a JIMMP Info.');
+              setAuthState('login');
+              await supabase.auth.signOut();
+              setCurrentUser(null);
+              return;
+            }
+          }
+
           setCurrentUser({
             id: profile.id,
             name: profile.name,
             email: profile.email,
             role: profile.role,
-            unremovable: profile.unremovable
+            unremovable: profile.unremovable,
+            avatar_url: profile.avatar_url || undefined,
+            expires_at: profile.expires_at || undefined
           });
         } else {
           console.log('Profile not found in profiles table, using fallback user details.');
@@ -79,6 +96,19 @@ export default function App() {
 
     loadProfile();
   }, [sessionUser]);
+
+  // Expiry check interval
+  useEffect(() => {
+    if (!currentUser?.expires_at) return;
+    const interval = setInterval(() => {
+      const expiry = new Date(currentUser.expires_at!);
+      const now = new Date();
+      if (now > expiry) {
+        handleLogoutWithMsg('Seu período de acesso contratado expirou. Entre em contato com a JIMMP Info.');
+      }
+    }, 10000); // Check every 10 seconds
+    return () => clearInterval(interval);
+  }, [currentUser]);
 
   useEffect(() => {
     console.log('App.tsx useEffect mounted');
@@ -162,6 +192,18 @@ export default function App() {
        console.error('Logout error:', e);
      }
      setCurrentUser(null);
+     setAuthState('login');
+  };
+
+  const handleLogoutWithMsg = async (msg?: string) => {
+     setAuthState('loading');
+     try {
+       await supabase.auth.signOut();
+     } catch (e) {
+       console.error('Logout error:', e);
+     }
+     setCurrentUser(null);
+     if (msg) setLoginError(msg);
      setAuthState('login');
   };
 
@@ -249,13 +291,37 @@ export default function App() {
   }
 
   return (
-    <MainApp currentUser={currentUser} setAuthState={setAuthState} showSupportBtn={showSupportBtn} setShowSupportBtn={setShowSupportBtn} handleLogout={handleLogout} />
+    <MainApp currentUser={currentUser} setCurrentUser={setCurrentUser} showSupportBtn={showSupportBtn} setShowSupportBtn={setShowSupportBtn} handleLogout={handleLogout} />
   );
 }
 
-function MainApp({ currentUser, showSupportBtn, setShowSupportBtn, handleLogout }: { currentUser: User | null, setAuthState: any, showSupportBtn: boolean, setShowSupportBtn: any, handleLogout: () => void }) {
+function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBtn, handleLogout }: { currentUser: User | null, setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>, showSupportBtn: boolean, setShowSupportBtn: any, handleLogout: () => void }) {
   const [activeTab, setActiveTab] = useState<string>('dashboard');
-  
+  const [time, setTime] = useState<string>('');
+  const [date, setDate] = useState<string>('');
+  const [showZoom, setShowZoom] = useState<boolean>(false);
+
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setTime(now.toLocaleTimeString('pt-BR'));
+      
+      const options: Intl.DateTimeFormatOptions = {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      };
+      let formattedDate = now.toLocaleDateString('pt-BR', options);
+      formattedDate = formattedDate.replace(/ de (\d{4})$/, ' $1');
+      formattedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
+      setDate(formattedDate);
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleSupportClick = () => {
      window.open("https://wa.me/5511999999999?text=Olá, preciso de suporte no Elite Coach CRM", "_blank");
   };
@@ -269,6 +335,7 @@ function MainApp({ currentUser, showSupportBtn, setShowSupportBtn, handleLogout 
   ];
 
   if (currentUser?.role === 'Desenvolvedor' || currentUser?.role === 'Administrador') {
+     navItems.push({ id: 'financeiro', label: 'Financeiro', icon: <CreditCard className="w-5 h-5"/> });
      navItems.push({ id: 'config', label: 'Configurações', icon: <Settings className="w-5 h-5"/> });
   }
 
@@ -305,24 +372,18 @@ function MainApp({ currentUser, showSupportBtn, setShowSupportBtn, handleLogout 
           ))}
         </nav>
 
-        <div className="p-4 border-t border-surface-highest bg-surface-high/30">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-surface border border-surface-highest flex items-center justify-center text-xs font-bold text-zinc-300">
-                {currentUser?.name.charAt(0)}
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-medium text-white">{currentUser?.name}</p>
-                <p className="text-xs text-primary">{currentUser?.role}</p>
-              </div>
+        <div className="p-4 border-t border-surface-highest bg-surface-high/30 flex flex-col gap-2">
+          {/* Digital Clock & Date */}
+          <div className="text-center py-3 px-2 bg-surface rounded-xl border border-surface-highest/60 font-mono shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]">
+            <div className="text-[9px] font-bold text-[#dfbf80] uppercase tracking-[0.2em] mb-1 select-none">
+              Horário do Sistema
             </div>
-             <button 
-               onClick={handleLogout} 
-               className="text-zinc-500 hover:text-red-400 hover:scale-110 active:scale-95 transition-all p-2 bg-surface rounded-lg border border-surface-highest/40 hover:border-red-500/20 hover:bg-red-500/5 flex items-center justify-center group" 
-               title="Sair da Conta"
-             >
-               <LogOut className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-             </button>
+            <div className="text-xl font-black tracking-widest text-[#00ff41] select-none drop-shadow-[0_0_8px_rgba(0,255,65,0.4)]">
+              {time || '00:00:00'}
+            </div>
+            <div className="text-[10px] text-zinc-400 font-medium mt-1.5 select-none truncate">
+              {date || 'Quinta-feira, 28 de maio 2026'}
+            </div>
           </div>
         </div>
       </aside>
@@ -365,26 +426,64 @@ function MainApp({ currentUser, showSupportBtn, setShowSupportBtn, handleLogout 
               <input type="text" placeholder="Buscar..." className="bg-transparent border-none outline-none text-xs md:text-sm w-full text-white placeholder-zinc-500" />
            </div>
 
-           <div className="flex items-center gap-4 border border-surface-highest rounded-full p-1 border-primary/20 bg-surface-container">
+           <div className="flex items-center gap-4">
+              {/* Notification Bell */}
               <button className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-primary transition-colors hover:bg-surface-high relative">
                  <Bell className="w-4 h-4" />
                  <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full"></span>
               </button>
+
+              {/* Logged in User Profile Info (Top Right) */}
+              <div className="flex items-center gap-3 pl-3 border-l border-surface-highest">
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs font-bold text-white uppercase tracking-wider">{currentUser?.name}</p>
+                  <p className="text-[10px] text-primary font-bold uppercase tracking-widest">{currentUser?.role}</p>
+                </div>
+                <button 
+                  onClick={() => setShowZoom(true)}
+                  className="h-9 w-9 rounded-full border border-primary/40 hover:border-primary transition-all p-0.5 hover:scale-105 active:scale-95 overflow-hidden flex items-center justify-center bg-surface-high relative cursor-pointer mr-1"
+                  title="Ampliar foto de perfil"
+                >
+                  {currentUser?.avatar_url ? (
+                    <img src={currentUser.avatar_url} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                  ) : (
+                    <div className="w-full h-full rounded-full bg-surface border border-surface-highest flex items-center justify-center text-sm font-bold text-zinc-300">
+                      {currentUser?.name.charAt(0)}
+                    </div>
+                  )}
+                </button>
+                <button 
+                  onClick={handleLogout} 
+                  className="text-zinc-500 hover:text-red-400 hover:scale-110 active:scale-95 transition-all p-2 bg-surface rounded-lg border border-surface-highest/40 hover:border-red-500/20 hover:bg-red-500/5 flex items-center justify-center group shrink-0 ml-1" 
+                  title="Sair da Conta"
+                >
+                  <LogOut className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                </button>
+              </div>
            </div>
         </header>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 md:pb-8">
-           <AnimatePresence mode="wait">
-             <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-                {activeTab === 'dashboard' && <DashboardView />}
-                {activeTab === 'alunos' && <AlunosView currentUser={currentUser} />}
-                {activeTab === 'protocolos' && <ProtocolosView />}
-                {activeTab === 'biblioteca' && <BibliotecaView currentUser={currentUser} />}
-                {activeTab === 'config' && <ConfigView currentUser={currentUser} />}
-                {activeTab === 'inspecoes' && <InspecoesView currentUser={currentUser} />}
-             </motion.div>
-           </AnimatePresence>
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 md:pb-8 flex flex-col justify-between">
+           <div className="flex-1">
+              <AnimatePresence mode="wait">
+                <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+                   {activeTab === 'dashboard' && <DashboardView />}
+                   {activeTab === 'alunos' && <AlunosView currentUser={currentUser} />}
+                   {activeTab === 'protocolos' && <ProtocolosView />}
+                   {activeTab === 'biblioteca' && <BibliotecaView currentUser={currentUser} />}
+                   {activeTab === 'financeiro' && <FinanceiroView currentUser={currentUser} />}
+                   {activeTab === 'config' && <ConfigView currentUser={currentUser} onUserUpdate={(updatedUser: any) => setCurrentUser(updatedUser)} />}
+                   {activeTab === 'inspecoes' && <InspecoesView currentUser={currentUser} />}
+                </motion.div>
+              </AnimatePresence>
+           </div>
+
+           {/* Global Page Footer */}
+           <footer className="mt-12 py-6 border-t border-surface-highest/40 text-center space-y-1">
+             <p className="text-[11px] text-zinc-500">© 2026 - Todos os direitos reservados | JIMMP Info</p>
+             <p className="text-[9px] text-[#dfbf80]/70 uppercase tracking-[0.2em] font-mono">Versão 1.2.0</p>
+           </footer>
         </div>
       </main>
 
@@ -412,6 +511,43 @@ function MainApp({ currentUser, showSupportBtn, setShowSupportBtn, handleLogout 
                     Suporte ao Cliente
                  </div>
               </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Zoom Profile Photo Modal */}
+      <AnimatePresence>
+        {showZoom && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            onClick={() => setShowZoom(false)}
+            className="fixed inset-0 bg-black/85 backdrop-blur-md z-[100] flex items-center justify-center cursor-zoom-out p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative max-w-sm w-full aspect-square bg-surface-container border border-surface-highest rounded-2xl overflow-hidden p-2 shadow-2xl animate-fade"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {currentUser?.avatar_url ? (
+                <img src={currentUser.avatar_url} alt="Zoomed Profile" className="w-full h-full object-cover rounded-xl" />
+              ) : (
+                <div className="w-full h-full rounded-xl bg-surface border border-surface-highest flex flex-col items-center justify-center text-7xl font-bold text-zinc-500">
+                  {currentUser?.name ? currentUser.name.charAt(0) : '?'}
+                  <span className="text-xs text-zinc-500 font-bold uppercase tracking-wider mt-4">Sem Foto Cadastrada</span>
+                </div>
+              )}
+              <button 
+                onClick={() => setShowZoom(false)}
+                className="absolute top-4 right-4 bg-black/60 hover:bg-black text-white p-2 rounded-full backdrop-blur-sm transition-colors border border-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

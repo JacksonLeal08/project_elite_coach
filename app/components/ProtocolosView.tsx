@@ -76,6 +76,7 @@ export default function ProtocolosView() {
   const [studentsList, setStudentsList] = useState<any[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<any[]>([]);
   const [showStudentSuggestions, setShowStudentSuggestions] = useState<boolean>(false);
+  const [selectedStudentAnamnesis, setSelectedStudentAnamnesis] = useState<any | null>(null);
 
   const fetchStudentsList = async () => {
     try {
@@ -207,6 +208,7 @@ export default function ProtocolosView() {
 
   const handleStudentNameChange = (val: string) => {
     setStudent(val);
+    setSelectedStudentAnamnesis(null);
     if (val.trim()) {
       const filtered = studentsList.filter(s => 
         s.name.toLowerCase().includes(val.toLowerCase())
@@ -217,6 +219,50 @@ export default function ProtocolosView() {
       setFilteredStudents(studentsList);
       setShowStudentSuggestions(true);
     }
+  };
+
+  const loadStudentDetails = async (studentId: string) => {
+    try {
+      const { data: inspection } = await supabase
+        .from('field_inspections')
+        .select('weight, height, imc')
+        .eq('student_id', studentId)
+        .order('date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (inspection) {
+        if (inspection.weight) setWeight(inspection.weight.toString());
+        if (inspection.height) setHeight(inspection.height.toString());
+        if (inspection.imc) setImc(inspection.imc.toString());
+      }
+
+      const { data: anamnesis } = await supabase
+        .from('anamnesis')
+        .select('*')
+        .eq('student_id', studentId)
+        .maybeSingle();
+
+      if (anamnesis) {
+        setSelectedStudentAnamnesis(anamnesis);
+        if (anamnesis.medical_restrictions) {
+          setClinicalNotes(prev => {
+            const prefix = `Restrições médicas: ${anamnesis.medical_restrictions}`;
+            return prev.includes(prefix) ? prev : prev ? `${prev}\n${prefix}` : prefix;
+          });
+        }
+      } else {
+        setSelectedStudentAnamnesis(null);
+      }
+    } catch (err) {
+      console.error('Error loading student details:', err);
+    }
+  };
+
+  const handleSelectStudent = (id: string, name: string) => {
+    setStudent(name);
+    setShowStudentSuggestions(false);
+    loadStudentDetails(id);
   };
 
   // Autocomplete Handlers
@@ -351,13 +397,33 @@ export default function ProtocolosView() {
     try {
       const studentHistory = history.filter(h => h.student.toLowerCase() === student.toLowerCase()).map(h => h.workoutData);
 
+      let currentAnamnesis = selectedStudentAnamnesis;
+      if (!currentAnamnesis && student) {
+        const match = studentsList.find(s => s.name.toLowerCase().trim() === student.toLowerCase().trim());
+        if (match) {
+          try {
+            const { data } = await supabase
+              .from('anamnesis')
+              .select('*')
+              .eq('student_id', match.id)
+              .maybeSingle();
+            if (data) {
+              currentAnamnesis = data;
+            }
+          } catch (err) {
+            console.error('Error fetching anamnesis during generation:', err);
+          }
+        }
+      }
+
       const res = await fetch('/api/generate-workout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           student, objective, split, days, needs, durationWeeks, 
           weight, height, imc, clinicalNotes, previousWorkouts: studentHistory,
-          exerciseCatalog: exerciseLibrary.map((ex: any) => ex.name)
+          exerciseCatalog: exerciseLibrary.map((ex: any) => ex.name),
+          anamnesis: currentAnamnesis
         })
       });
       
@@ -480,14 +546,13 @@ export default function ProtocolosView() {
                     className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 focus:border-primary outline-none transition-colors text-white" 
                   />
                   {showStudentSuggestions && filteredStudents.length > 0 && (
-                    <div className="absolute left-0 right-0 mt-1 bg-surface-high border border-surface-highest rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto divide-y divide-surface-highest/40 scrollbar-none">
+                    <div className="absolute left-0 right-0 mt-1 bg-surface-high border border-surface-highest rounded-lg shadow-xl z-50 max-h-40 overflow-y-auto divide-y divide-surface-highest/40 scrollbar-none font-sans">
                       {filteredStudents.map(s => (
                         <button
                           key={s.id}
                           type="button"
                           onClick={() => {
-                            setStudent(s.name);
-                            setShowStudentSuggestions(false);
+                            handleSelectStudent(s.id, s.name);
                           }}
                           className="w-full text-left px-3.5 py-2.5 hover:bg-primary/10 hover:text-primary transition-colors text-xs text-zinc-200 font-bold"
                         >

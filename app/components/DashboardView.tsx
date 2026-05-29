@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Users, Dumbbell, Zap, CheckCircle2, Award, ChevronRight, History, ShieldAlert } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { ProgressionData, ActivityEntry } from '../types';
 import { MOCK_PROGRESSION, MOCK_ACTIVITIES } from '../mocks';
 import { supabase } from '../utils/supabase';
@@ -23,6 +23,8 @@ export default function DashboardView() {
     defaultingRate: 0
   });
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
+  const [chartTab, setChartTab] = useState<'loads' | 'billing'>('loads');
+  const [billingData, setBillingData] = useState<any[]>([]);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -59,6 +61,10 @@ export default function DashboardView() {
       let monthlyTotalBilled = 0;
       let monthlyUnpaid = 0;
 
+      // Agrupamento para gráfico de faturamento anual
+      const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      const billingMap = monthNames.map(m => ({ month: m, recebido: 0, pendente: 0 }));
+
       if (payments) {
         payments.forEach((p: any) => {
           const isPaidThisMonth = p.status === 'Pago' && (
@@ -76,8 +82,24 @@ export default function DashboardView() {
               monthlyUnpaid += parseFloat(p.amount) || 0;
             }
           }
+
+          // Agrupamento para gráfico anual
+          if (p.due_date) {
+            const payDate = new Date(p.due_date);
+            if (payDate.getFullYear() === currentYear) {
+              const mIdx = payDate.getMonth();
+              const amt = parseFloat(p.amount) || 0;
+              if (p.status === 'Pago') {
+                billingMap[mIdx].recebido += amt;
+              } else {
+                billingMap[mIdx].pendente += amt;
+              }
+            }
+          }
         });
       }
+
+      setBillingData(billingMap);
 
       const defaultingPercent = monthlyTotalBilled > 0
         ? Math.round((monthlyUnpaid / monthlyTotalBilled) * 100)
@@ -252,23 +274,56 @@ export default function DashboardView() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-surface-container border border-surface-highest rounded-xl p-6">
-           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-heading font-semibold text-lg text-white">Progressão de Carga Média do Time (kg)</h3>
-            <button className="text-xs uppercase font-bold text-primary hover:text-primary-dim flex items-center gap-1">Ver Relatório <ChevronRight className="w-4 h-4"/></button>
+           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+             <div className="flex gap-2 bg-surface p-1 rounded-lg border border-surface-highest/60 w-fit">
+               <button 
+                 onClick={() => setChartTab('loads')}
+                 className={`px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors ${
+                   chartTab === 'loads' ? 'bg-primary text-black' : 'text-zinc-400 hover:text-white'
+                 }`}
+               >
+                 Cargas do Time
+               </button>
+               <button 
+                 onClick={() => setChartTab('billing')}
+                 className={`px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider transition-colors ${
+                   chartTab === 'billing' ? 'bg-primary text-black' : 'text-zinc-400 hover:text-white'
+                 }`}
+               >
+                 Faturamento Anual
+               </button>
+             </div>
+             <h3 className="font-heading font-semibold text-sm text-zinc-400">
+               {chartTab === 'loads' ? 'Progressão de Carga Média (kg)' : 'Balanço Mensal Real (R$)'}
+             </h3>
            </div>
            
            <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                 <LineChart data={MOCK_PROGRESSION}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#224233" vertical={false} />
-                    <XAxis dataKey="week" stroke="#8f9b95" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#8f9b95" fontSize={12} tickLine={false} axisLine={false} width={40} />
-                    <RechartsTooltip 
-                       contentStyle={{ backgroundColor: '#12241C', border: '1px solid #224233', borderRadius: '8px', color: '#e0e8e4' }}
-                       itemStyle={{ color: '#d4af37' }}
-                    />
-                    <Line type="monotone" dataKey="load" stroke="#d4af37" strokeWidth={3} dot={{ r: 4, fill: '#d4af37' }} activeDot={{ r: 6 }} />
-                 </LineChart>
+                {chartTab === 'loads' ? (
+                   <LineChart data={MOCK_PROGRESSION}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#224233" vertical={false} />
+                      <XAxis dataKey="week" stroke="#8f9b95" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#8f9b95" fontSize={12} tickLine={false} axisLine={false} width={40} />
+                      <RechartsTooltip 
+                         contentStyle={{ backgroundColor: '#12241C', border: '1px solid #224233', borderRadius: '8px', color: '#e0e8e4' }}
+                         itemStyle={{ color: '#d4af37' }}
+                      />
+                      <Line type="monotone" dataKey="load" stroke="#d4af37" strokeWidth={3} dot={{ r: 4, fill: '#d4af37' }} activeDot={{ r: 6 }} />
+                   </LineChart>
+                ) : (
+                   <BarChart data={billingData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#224233" vertical={false} />
+                      <XAxis dataKey="month" stroke="#8f9b95" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#8f9b95" fontSize={12} tickLine={false} axisLine={false} width={40} tickFormatter={(v: any) => `R$ ${v}`} />
+                      <RechartsTooltip 
+                         contentStyle={{ backgroundColor: '#12241C', border: '1px solid #224233', borderRadius: '8px', color: '#e0e8e4' }}
+                         formatter={(value: any) => `R$ ${value.toLocaleString('pt-BR')}`}
+                      />
+                      <Bar dataKey="recebido" name="Recebido" fill="#00ff41" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="pendente" name="Pendente/Atrasado" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                   </BarChart>
+                )}
               </ResponsiveContainer>
            </div>
         </div>

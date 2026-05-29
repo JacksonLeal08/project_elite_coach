@@ -8,12 +8,13 @@ import { supabase } from '../utils/supabase';
 
 interface ConfigViewProps {
   currentUser: User | null;
+  onUserUpdate?: (user: User) => void;
 }
 
-export default function ConfigView({ currentUser }: ConfigViewProps) {
+export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState<boolean>(true);
-  const [newUser, setNewUser] = useState<Pick<User, 'name' | 'email' | 'role'>>({ name: '', email: '', role: 'Treinador' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Treinador', password: '', expires_at: '' });
   const [adding, setAdding] = useState<boolean>(false);
 
   // Custom Alert Modal State
@@ -179,6 +180,64 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
     showCustomAlert('Sucesso', 'Configurações salvas com sucesso!', 'success');
   };
 
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!currentUser) return;
+    
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64Data = reader.result as string;
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ avatar_url: base64Data })
+          .eq('id', currentUser.id);
+
+        if (error) {
+          showCustomAlert('Erro', 'Erro ao salvar foto de perfil: ' + error.message, 'error');
+        } else {
+          const updatedUser = { ...currentUser, avatar_url: base64Data };
+          if (onUserUpdate) onUserUpdate(updatedUser);
+          showCustomAlert('Sucesso', 'Foto do perfil atualizada com sucesso!', 'success');
+        }
+      } catch (err: any) {
+        console.error(err);
+        showCustomAlert('Erro', 'Erro inesperado ao salvar foto do perfil.', 'error');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDeleteAvatar = async () => {
+    if (!currentUser) return;
+    showCustomAlert(
+      'Confirmar Remoção',
+      'Tem certeza que deseja remover sua foto de perfil?',
+      'confirm',
+      'Foto de Perfil',
+      async () => {
+        try {
+          const { error } = await supabase
+            .from('profiles')
+            .update({ avatar_url: null })
+            .eq('id', currentUser.id);
+
+          if (error) {
+            showCustomAlert('Erro', 'Erro ao remover foto: ' + error.message, 'error');
+          } else {
+            const updatedUser = { ...currentUser, avatar_url: undefined };
+            if (onUserUpdate) onUserUpdate(updatedUser);
+            showCustomAlert('Sucesso', 'Foto do perfil removida com sucesso!', 'success');
+          }
+        } catch (err: any) {
+          console.error(err);
+          showCustomAlert('Erro', 'Erro inesperado ao remover foto.', 'error');
+        }
+      }
+    );
+  };
+
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
@@ -192,11 +251,14 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
 
   const handleAdd = async () => {
     if(newUser.name && newUser.email) {
+      if(!newUser.password) {
+        return showCustomAlert('Aviso', 'Defina uma senha para o novo membro.', 'warning');
+      }
       try {
         // Sign up user in Supabase auth (it creates a user entry in auth.users)
         const { data, error } = await supabase.auth.signUp({
           email: newUser.email,
-          password: 'ElitePassword798621!', // Temporary password
+          password: newUser.password,
           options: {
             data: {
               name: newUser.name,
@@ -210,24 +272,25 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
         }
 
         if (data.user) {
-          // Explicitly insert into profiles in case the DB trigger is not active
+          // Upsert into profiles to set role, expires_at, etc., even if DB trigger is active
           const { error: profileError } = await supabase
             .from('profiles')
-            .insert([{
+            .upsert({
               id: data.user.id,
               name: newUser.name,
               email: newUser.email,
               role: newUser.role,
-              unremovable: false
-            }]);
+              unremovable: false,
+              expires_at: newUser.expires_at ? new Date(newUser.expires_at).toISOString() : null
+            }, { onConflict: 'id' });
 
           if (profileError) {
-             console.log('Skipping manual insert (DB trigger probably created profile already).');
+             console.error('Error upserting profile details:', profileError.message);
           }
         }
 
         showCustomAlert('Sucesso', 'Membro registrado com sucesso! Um e-mail de confirmação foi disparado.', 'success');
-        setNewUser({ name: '', email: '', role: 'Treinador' });
+        setNewUser({ name: '', email: '', role: 'Treinador', password: '', expires_at: '' });
         setAdding(false);
         fetchUsers();
       } catch (err: any) {
@@ -250,7 +313,8 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
           .update({
             name: editForm.name,
             email: editForm.email,
-            role: editForm.role
+            role: editForm.role,
+            expires_at: editForm.expires_at ? new Date(editForm.expires_at).toISOString() : null
           })
           .eq('id', editingId);
 
@@ -270,6 +334,11 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
   };
 
   const removeUser = async (id: string | number) => {
+    const userObj = users.find(u => u.id === id);
+    if (userObj && userObj.role === 'Desenvolvedor') {
+      showCustomAlert('Acesso Negado', 'Um usuário com perfil de Desenvolvedor não pode ser removido do sistema.', 'error');
+      return;
+    }
     try {
       const { error } = await supabase
         .from('profiles')
@@ -289,6 +358,10 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
   };
 
   const tryRemoveUser = (u: User) => {
+    if (u.role === 'Desenvolvedor') {
+      showCustomAlert('Acesso Negado', 'Um usuário com perfil de Desenvolvedor não pode ser removido do sistema.', 'error');
+      return;
+    }
     showCustomAlert(
       'Confirmar Exclusão',
       '',
@@ -354,6 +427,8 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
     }
   };
 
+  const visibleUsers = users.filter(u => u.role !== 'Desenvolvedor' || currentUser?.role === 'Desenvolvedor');
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -370,6 +445,36 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
              <Users className="w-5 h-5 text-primary"/> Configurações do Perfil e Relatórios
            </h3>
            <div className="space-y-4">
+              {/* Avatar Upload Selection */}
+              <div className="flex items-center gap-4 mb-6 bg-surface-high/30 p-4 rounded-xl border border-surface-highest/60">
+                <div className="h-16 w-16 rounded-full border-2 border-primary/40 overflow-hidden shrink-0 relative bg-surface">
+                  {currentUser?.avatar_url ? (
+                    <img src={currentUser.avatar_url} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                  ) : (
+                    <div className="w-full h-full rounded-full flex items-center justify-center text-2xl font-bold text-zinc-400">
+                      {currentUser?.name ? currentUser.name.charAt(0) : '?'}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider block mb-1">Foto do Perfil (Avatar)</label>
+                  <div className="flex gap-2">
+                    <label className="px-3 py-1.5 bg-surface border border-surface-highest hover:border-primary/50 text-zinc-300 hover:text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors">
+                      Selecionar Foto
+                      <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                    </label>
+                    {currentUser?.avatar_url && (
+                      <button 
+                        onClick={handleDeleteAvatar}
+                        className="px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-xs font-bold uppercase tracking-wider transition-colors"
+                      >
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Nome Completo</label>
                 <input type="text" value={profile.name} onChange={e=>setProfile({...profile, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
@@ -497,19 +602,42 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
           
          <AnimatePresence>
             {adding && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-6 bg-surface-high border border-primary/30 p-4 rounded-lg overflow-hidden relative">
-                 <h4 className="text-sm font-bold text-primary mb-3 uppercase tracking-wider">Novo Usuário</h4>
-                 <div className="flex items-end gap-4">
-                    <div className="flex-1"><label className="text-xs text-zinc-400">Nome</label><input type="text" value={newUser.name} onChange={e=>setNewUser({...newUser, name:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2 mt-1 text-white text-sm outline-none focus:border-primary" /></div>
-                    <div className="flex-1"><label className="text-xs text-zinc-400">E-mail</label><input type="email" value={newUser.email} onChange={e=>setNewUser({...newUser, email:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2 mt-1 text-white text-sm outline-none focus:border-primary" /></div>
-                    <div className="w-48"><label className="text-xs text-zinc-400">Perfil de Acesso</label>
-                      <select value={newUser.role} onChange={e=>setNewUser({...newUser, role:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2 mt-1 text-white text-sm outline-none focus:border-primary">
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mb-6 bg-surface-high border border-primary/30 p-5 rounded-lg overflow-hidden relative">
+                 <h4 className="text-sm font-bold text-primary mb-4 uppercase tracking-wider">Novo Usuário</h4>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+                    <div>
+                      <label className="text-xs text-zinc-400 font-bold block uppercase tracking-wide">Nome</label>
+                      <input type="text" value={newUser.name} onChange={e=>setNewUser({...newUser, name:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Nome do membro" />
+                    </div>
+                    
+                    <div>
+                      <label className="text-xs text-zinc-400 font-bold block uppercase tracking-wide">E-mail</label>
+                      <input type="email" value={newUser.email} onChange={e=>setNewUser({...newUser, email:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="email@exemplo.com" />
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-zinc-400 font-bold block uppercase tracking-wide">Senha de Acesso</label>
+                      <input type="password" value={newUser.password} onChange={e=>setNewUser({...newUser, password:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Senha forte" />
+                    </div>
+
+                    <div>
+                      <label className="text-xs text-zinc-400 font-bold block uppercase tracking-wide">Perfil de Acesso</label>
+                      <select value={newUser.role} onChange={e=>setNewUser({...newUser, role:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary">
                         <option>Treinador</option>
                         <option>Administrador</option>
-                        <option>Desenvolvedor</option>
+                        {currentUser?.role === 'Desenvolvedor' && <option>Desenvolvedor</option>}
                       </select>
                     </div>
-                    <button onClick={handleAdd} className="bg-primary text-black font-bold h-[38px] px-6 py-2 rounded hover:opacity-90">Salvar</button>
+
+                    <div>
+                      <label className="text-xs text-zinc-400 font-bold block uppercase tracking-wide font-sans">Temporizador / Expiração</label>
+                      <input type="datetime-local" value={newUser.expires_at} onChange={e=>setNewUser({...newUser, expires_at:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2 mt-1 text-white text-sm outline-none focus:border-primary font-mono" />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button onClick={handleAdd} className="flex-1 bg-primary text-black font-bold h-[40px] px-6 rounded hover:opacity-90 transition-opacity uppercase tracking-wider text-xs">Salvar</button>
+                      <button onClick={() => setAdding(false)} className="px-4 border border-surface-highest text-zinc-400 hover:text-white rounded h-[40px] text-xs font-bold uppercase tracking-wider transition-colors">Cancelar</button>
+                    </div>
                  </div>
               </motion.div>
             )}
@@ -527,11 +655,12 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
                      <th className="p-3 rounded-tl">Nome</th>
                      <th className="p-3">E-mail</th>
                      <th className="p-3">Acesso</th>
+                     <th className="p-3">Expiração</th>
                      <th className="p-3 text-right rounded-tr">Ações</th>
                    </tr>
                  </thead>
                  <tbody className="divide-y divide-surface-highest">
-                   {users.map(u => (
+                   {visibleUsers.map(u => (
                      <tr key={u.id} className="hover:bg-surface-high/30">
                        <td className="p-3 font-medium text-white">
                           {editingId === u.id && editForm ? <input type="text" value={editForm.name} onChange={e=>setEditForm({...editForm, name:e.target.value})} className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary" /> : u.name}
@@ -544,6 +673,7 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
                             <select value={editForm.role} onChange={e=>setEditForm({...editForm, role:e.target.value})} className="bg-surface border border-surface-highest text-white rounded px-2 py-1 text-xs w-full outline-none focus:border-primary">
                               <option>Treinador</option>
                               <option>Administrador</option>
+                              {currentUser?.role === 'Desenvolvedor' && <option>Desenvolvedor</option>}
                             </select>
                          ) : (
                            <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest border ${
@@ -552,6 +682,18 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
                              'bg-zinc-800 text-zinc-300 border-zinc-700'
                            }`}>{u.role}</span>
                          )}
+                       </td>
+                       <td className="p-3 font-mono text-xs">
+                          {editingId === u.id && editForm ? (
+                            <input 
+                              type="datetime-local" 
+                              value={editForm.expires_at ? new Date(new Date(editForm.expires_at).getTime() - new Date(editForm.expires_at).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} 
+                              onChange={e=>setEditForm({...editForm, expires_at: e.target.value || undefined})} 
+                              className="bg-surface border border-surface-highest text-white rounded px-2 py-1 text-xs outline-none focus:border-primary font-mono" 
+                            />
+                          ) : (
+                            u.expires_at ? new Date(u.expires_at).toLocaleString('pt-BR') : <span className="text-zinc-500 italic">Sem limite</span>
+                          )}
                        </td>
                        <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-4">
@@ -563,7 +705,7 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
                             ) : (
                               <>
                                  <button onClick={() => startEdit(u)} className="text-[#d4af37] hover:text-[#d4af37]/80 transition-colors uppercase text-xs font-bold tracking-wider">Editar</button>
-                                 {u.unremovable ? (
+                                 {u.unremovable || u.role === 'Desenvolvedor' ? (
                                     <span className="text-xs text-zinc-600 italic">Protegido</span>
                                  ) : (
                                     <button onClick={() => tryRemoveUser(u)} className="text-zinc-500 hover:text-red-400 transition-colors uppercase text-xs font-bold tracking-wider flex items-center"><X className="w-3 h-3 mr-1" /> Remover</button>
@@ -580,7 +722,7 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
 
              {/* Mobile Cards View */}
              <div className="grid grid-cols-1 gap-4 sm:hidden">
-               {users.map(u => (
+               {visibleUsers.map(u => (
                  <div key={u.id} className="bg-surface-high border border-surface-highest p-4 rounded-lg flex flex-col gap-3">
                    <div className="flex justify-between items-start">
                      <div>
@@ -590,11 +732,21 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
                            <input type="text" value={editForm.name} onChange={e=>setEditForm({...editForm, name:e.target.value})} className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary text-white" />
                            <label className="text-[10px] text-zinc-500 font-bold block uppercase">E-mail</label>
                            <input type="email" value={editForm.email} onChange={e=>setEditForm({...editForm, email:e.target.value})} className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary text-white" />
+                           <label className="text-[10px] text-zinc-500 font-bold block uppercase">Temporizador / Expiração</label>
+                           <input 
+                             type="datetime-local" 
+                             value={editForm.expires_at ? new Date(new Date(editForm.expires_at).getTime() - new Date(editForm.expires_at).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} 
+                             onChange={e=>setEditForm({...editForm, expires_at: e.target.value || undefined})} 
+                             className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary text-white font-mono" 
+                           />
                          </div>
                        ) : (
                          <>
                            <h4 className="font-bold text-white text-sm">{u.name}</h4>
                            <span className="text-xs text-zinc-400 block mt-0.5">{u.email}</span>
+                           {u.expires_at && (
+                             <span className="text-[10px] text-[#dfbf80] block mt-1 font-mono">Expira: {new Date(u.expires_at).toLocaleString('pt-BR')}</span>
+                           )}
                          </>
                        )}
                      </div>
@@ -611,6 +763,7 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
                        <select value={editForm.role} onChange={e=>setEditForm({...editForm, role:e.target.value})} className="bg-surface border border-surface-highest text-white rounded px-2 py-1.5 text-xs w-full outline-none focus:border-primary">
                          <option>Treinador</option>
                          <option>Administrador</option>
+                         {currentUser?.role === 'Desenvolvedor' && <option>Desenvolvedor</option>}
                        </select>
                      </div>
                    )}
@@ -624,7 +777,7 @@ export default function ConfigView({ currentUser }: ConfigViewProps) {
                      ) : (
                        <>
                           <button onClick={() => startEdit(u)} className="text-[#d4af37] hover:text-[#d4af37]/80 transition-colors uppercase text-xs font-bold tracking-wider">Editar</button>
-                          {u.unremovable ? (
+                          {u.unremovable || u.role === 'Desenvolvedor' ? (
                              <span className="text-xs text-zinc-600 italic">Protegido</span>
                           ) : (
                              <button onClick={() => tryRemoveUser(u)} className="text-zinc-500 hover:text-red-400 transition-colors uppercase text-xs font-bold tracking-wider flex items-center"><X className="w-3 h-3 mr-1" /> Remover</button>
