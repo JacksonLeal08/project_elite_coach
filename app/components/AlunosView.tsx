@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronRight, Award, CheckCircle2, Camera, Plus, X, MessageSquare, CreditCard, Trash2, History } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { Student, User, Anamnesis } from '../types';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
+import { Student, User, Anamnesis, StudentGoal } from '../types';
 import { supabase } from '../utils/supabase';
+import { exportAnamnesisPDF, exportPosturePDF, exportEvolutionPDF } from '../utils/pdf';
 import CustomAlertModal from './CustomAlertModal';
 
 interface AlunosViewProps {
@@ -68,10 +69,19 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
   const [activeMetric, setActiveMetric] = useState<'weight' | 'body_fat' | 'heart_rate'>('weight');
 
   // Tab and Anamnesis State
-  const [activeProfileTab, setActiveProfileTab] = useState<'general' | 'anamnesis'>('general');
+  const [activeProfileTab, setActiveProfileTab] = useState<'general' | 'anamnesis' | 'goals'>('general');
   const [anamnesis, setAnamnesis] = useState<Anamnesis | null>(null);
   const [loadingAnamnesis, setLoadingAnamnesis] = useState<boolean>(false);
   const [savingAnamnesis, setSavingAnamnesis] = useState<boolean>(false);
+
+  // Goals State
+  const [goals, setGoals] = useState<StudentGoal | null>(null);
+  const [loadingGoals, setLoadingGoals] = useState<boolean>(false);
+  const [savingGoals, setSavingGoals] = useState<boolean>(false);
+  const [weightTarget, setWeightTarget] = useState<string>('');
+  const [bodyFatTarget, setBodyFatTarget] = useState<string>('');
+  const [muscleTarget, setMuscleTarget] = useState<string>('');
+  const [freqTarget, setFreqTarget] = useState<string>('');
 
   // Postural Grid State
   const [activeAngle, setActiveAngle] = useState<'front' | 'back' | 'side'>('front');
@@ -348,6 +358,7 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
       setStudentTelegramId(selectedStudent.telegram_chat_id || '');
       fetchStudentEvaluations(selectedStudent.id);
       fetchAnamnesis(selectedStudent.id);
+      fetchStudentGoals(selectedStudent.id);
       setActiveProfileTab('general');
     } else {
       setPhoto(null);
@@ -355,6 +366,11 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
       setStudentTelegramId('');
       setEvaluations([]);
       setAnamnesis(null);
+      setGoals(null);
+      setWeightTarget('');
+      setBodyFatTarget('');
+      setMuscleTarget('');
+      setFreqTarget('');
     }
     return () => stopCamera();
   }, [selectedStudent]);
@@ -391,6 +407,68 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
       setAnamnesis(defaultAnamnesis(studentId));
     } finally {
       setLoadingAnamnesis(false);
+    }
+  };
+
+  const fetchStudentGoals = async (studentId: string | number) => {
+    setLoadingGoals(true);
+    try {
+      const { data, error } = await supabase
+        .from('student_goals')
+        .select('*')
+        .eq('student_id', studentId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching student goals:', error);
+      } else if (data) {
+        setGoals(data);
+        setWeightTarget(data.weight_target ? data.weight_target.toString() : '');
+        setBodyFatTarget(data.body_fat_target ? data.body_fat_target.toString() : '');
+        setMuscleTarget(data.muscle_target ? data.muscle_target.toString() : '');
+        setFreqTarget(data.freq_target ? data.freq_target.toString() : '');
+      } else {
+        setGoals(null);
+        setWeightTarget('');
+        setBodyFatTarget('');
+        setMuscleTarget('');
+        setFreqTarget('');
+      }
+    } catch (e) {
+      console.error('Error in fetchStudentGoals:', e);
+    } finally {
+      setLoadingGoals(false);
+    }
+  };
+
+  const handleSaveGoals = async () => {
+    if (!selectedStudent) return;
+    setSavingGoals(true);
+    try {
+      const payload = {
+        student_id: selectedStudent.id,
+        weight_target: weightTarget ? parseFloat(weightTarget) : null,
+        body_fat_target: bodyFatTarget ? parseFloat(bodyFatTarget) : null,
+        muscle_target: muscleTarget ? parseFloat(muscleTarget) : null,
+        freq_target: freqTarget ? parseInt(freqTarget) : null,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error } = await supabase
+        .from('student_goals')
+        .upsert(payload, { onConflict: 'student_id' });
+
+      if (error) {
+        showCustomAlert('Erro', 'Erro ao salvar metas: ' + error.message, 'error');
+      } else {
+        showCustomAlert('Sucesso', 'Metas corporais salvas com sucesso!', 'success');
+        setGoals(payload as any);
+      }
+    } catch (e: any) {
+      console.error(e);
+      showCustomAlert('Erro', 'Erro inesperado ao salvar metas.', 'error');
+    } finally {
+      setSavingGoals(false);
     }
   };
 
@@ -733,6 +811,19 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
              >
                Anamnese & Avaliação Postural
              </button>
+             <button
+                onClick={() => {
+                  setActiveProfileTab('goals');
+                  stopCamera();
+                }}
+                className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+                  activeProfileTab === 'goals'
+                    ? 'text-primary border-primary bg-primary/5'
+                    : 'text-zinc-400 border-transparent hover:text-white'
+                }`}
+              >
+                Metas & Evolução Corporal
+              </button>
            </div>
 
            {activeProfileTab === 'general' && (
@@ -1308,6 +1399,375 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
 
              </div>
            )}
+
+           {activeProfileTab === 'goals' && (
+              <div className="space-y-8">
+                {/* PDF Export & WhatsApp Sharing Action Panel */}
+                <div className="bg-surface-high border border-surface-highest/60 p-4 rounded-xl flex flex-wrap items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <h3 className="font-heading font-semibold text-sm text-white uppercase tracking-wider">Exportar Relatórios e Compartilhar</h3>
+                    <p className="text-[10px] text-zinc-400">Gere laudos em PDF oficiais e compartilhe direto com o aluno.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button 
+                      onClick={() => exportAnamnesisPDF(selectedStudent, anamnesis)}
+                      className="px-3 py-1.5 bg-surface border border-surface-highest text-zinc-300 hover:text-primary hover:border-primary rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                    >
+                      📄 Anamnese (PDF)
+                    </button>
+                    <button 
+                      onClick={() => exportPosturePDF(selectedStudent)}
+                      className="px-3 py-1.5 bg-surface border border-surface-highest text-zinc-300 hover:text-primary hover:border-primary rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                    >
+                      📸 Laudo Postural (PDF)
+                    </button>
+                    <button 
+                      onClick={() => exportEvolutionPDF(selectedStudent, evaluations, goals)}
+                      className="px-3 py-1.5 bg-surface border border-surface-highest text-zinc-300 hover:text-primary hover:border-primary rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                    >
+                      🏆 Relatório de Evolução (PDF)
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (!selectedStudent) return;
+                        const wTarget = goals?.weight_target ? `${goals.weight_target} kg` : '-';
+                        const fTarget = goals?.body_fat_target ? `${goals.body_fat_target}%` : '-';
+                        const mTarget = goals?.muscle_target ? `${goals.muscle_target} kg` : '-';
+                        const currentWeight = evaluations.length > 0 ? `${evaluations[0].weight} kg` : '-';
+                        const currentFat = evaluations.length > 0 ? `${evaluations[0].body_fat}%` : '-';
+                        const currentMuscle = evaluations.length > 0 ? `${evaluations[0].skeletal_muscle} kg` : '-';
+
+                        const text = `*RELATÓRIO DE EVOLUÇÃO (Elite Coach Premium)*\n\n👤 *Aluno:* ${selectedStudent.name}\n🎯 *Objetivo:* ${selectedStudent.goal}\n\n*METAS CORPORAIS DEFINIDAS:*\n• Peso Alvo: ${wTarget}\n• Gordura Alvo: ${fTarget}\n• Massa Muscular Alvo: ${mTarget}\n\n*STATUS ATUAL:*\n• Peso: ${currentWeight}\n• Gordura: ${currentFat}\n• Massa Muscular: ${currentMuscle}\n\nContinue focado no treinamento de alta performance! 🏆`;
+                        window.open(`https://wa.me/${selectedStudent.phone_number || ''}?text=${encodeURIComponent(text)}`, '_blank');
+                      }}
+                      className="px-3 py-1.5 bg-[#00ff41]/20 border border-[#00ff41]/40 text-[#00ff41] hover:bg-[#00ff41]/30 rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5"
+                    >
+                      💬 Compartilhar WhatsApp
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* Left Column: Form targets */}
+                  <div className="bg-surface-high p-5 rounded-xl border border-surface-highest/60 space-y-6 h-fit">
+                    <h3 className="font-heading font-semibold text-lg text-white border-b border-surface-highest pb-2 flex items-center gap-2">
+                      🎯 Definir Metas Corporais
+                    </h3>
+                    
+                    {loadingGoals ? (
+                      <p className="text-zinc-500 text-xs italic py-6 animate-pulse">Carregando metas do aluno...</p>
+                    ) : (
+                      <div className="space-y-4 text-xs">
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Peso Alvo (kg)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="30"
+                            max="250"
+                            value={weightTarget}
+                            onChange={e => setWeightTarget(e.target.value)}
+                            className="w-full bg-surface border border-surface-highest rounded px-3 py-2 mt-1 text-white font-mono text-sm outline-none focus:border-primary"
+                            placeholder="Ex: 75.0"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">% Gordura Corporal Alvo</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="2"
+                            max="60"
+                            value={bodyFatTarget}
+                            onChange={e => setBodyFatTarget(e.target.value)}
+                            className="w-full bg-surface border border-surface-highest rounded px-3 py-2 mt-1 text-white font-mono text-sm outline-none focus:border-primary"
+                            placeholder="Ex: 12.0"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Massa Muscular Alvo (kg)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="10"
+                            max="150"
+                            value={muscleTarget}
+                            onChange={e => setMuscleTarget(e.target.value)}
+                            className="w-full bg-surface border border-surface-highest rounded px-3 py-2 mt-1 text-white font-mono text-sm outline-none focus:border-primary"
+                            placeholder="Ex: 38.0"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Frequência Semanal Alvo (dias)</label>
+                          <select
+                            value={freqTarget}
+                            onChange={e => setFreqTarget(e.target.value)}
+                            className="w-full bg-surface border border-surface-highest rounded px-3 py-2 mt-1 text-white text-sm outline-none focus:border-primary"
+                          >
+                            <option value="">Selecione...</option>
+                            <option value="1">1 dia / semana</option>
+                            <option value="2">2 dias / semana</option>
+                            <option value="3">3 dias / semana</option>
+                            <option value="4">4 dias / semana</option>
+                            <option value="5">5 dias / semana</option>
+                            <option value="6">6 dias / semana</option>
+                            <option value="7">7 dias / semana</option>
+                          </select>
+                        </div>
+
+                        <button
+                          onClick={handleSaveGoals}
+                          disabled={savingGoals}
+                          className="w-full mt-4 py-3 bg-primary text-black font-bold uppercase tracking-wider text-xs rounded hover:bg-primary-dim transition-all shadow-[0_0_12px_rgba(212,175,55,0.15)] flex items-center justify-center gap-1.5"
+                        >
+                          {savingGoals ? 'Salvando...' : 'Salvar Metas'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Column: Comparative Charts & Progression Cards */}
+                  <div className="lg:col-span-2 space-y-6">
+                    {/* Comparative Cards Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {/* Weight Card */}
+                      <div className="bg-surface-high p-4 rounded-xl border border-surface-highest/60 space-y-2">
+                        <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest block">Peso Corporal</span>
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-xl font-bold font-mono text-white">
+                            {evaluations.length > 0 && evaluations[0].weight ? `${evaluations[0].weight} kg` : '-'}
+                          </span>
+                          <span className="text-xs font-mono text-zinc-400">Meta: {goals?.weight_target ? `${goals.weight_target} kg` : '-'}</span>
+                        </div>
+                        {goals?.weight_target && evaluations.length > 0 && evaluations[0].weight ? (() => {
+                          const diff = goals.weight_target - evaluations[0].weight;
+                          if (Math.abs(diff) < 0.1) return <span className="text-[10px] text-[#00ff41] font-bold">Meta atingida! 🎉</span>;
+                          return (
+                            <span className={`text-[10px] font-bold ${diff < 0 ? 'text-amber-400' : 'text-[#00ff41]'}`}>
+                              {diff < 0 ? `Faltam ${diff.toFixed(1)} kg` : `Meta superada! (${diff > 0 ? '+' : ''}${diff.toFixed(1)} kg)`}
+                            </span>
+                          );
+                        })() : <span className="text-[10px] text-zinc-500 italic">Sem dados de comparação</span>}
+                      </div>
+
+                      {/* Fat Card */}
+                      <div className="bg-surface-high p-4 rounded-xl border border-surface-highest/60 space-y-2">
+                        <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest block">Gordura Corporal</span>
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-xl font-bold font-mono text-white">
+                            {evaluations.length > 0 && evaluations[0].body_fat ? `${evaluations[0].body_fat}%` : '-'}
+                          </span>
+                          <span className="text-xs font-mono text-zinc-400">Meta: {goals?.body_fat_target ? `${goals.body_fat_target}%` : '-'}</span>
+                        </div>
+                        {goals?.body_fat_target && evaluations.length > 0 && evaluations[0].body_fat ? (() => {
+                          const diff = goals.body_fat_target - evaluations[0].body_fat;
+                          if (Math.abs(diff) < 0.1) return <span className="text-[10px] text-[#00ff41] font-bold">Meta atingida! 🎉</span>;
+                          return (
+                            <span className={`text-[10px] font-bold ${diff < 0 ? 'text-amber-400' : 'text-[#00ff41]'}`}>
+                              {diff < 0 ? `Faltam ${diff.toFixed(1)}%` : `Meta superada! (${diff > 0 ? '+' : ''}${diff.toFixed(1)}%)`}
+                            </span>
+                          );
+                        })() : <span className="text-[10px] text-zinc-500 italic">Sem dados de comparação</span>}
+                      </div>
+
+                      {/* Muscle Card */}
+                      <div className="bg-surface-high p-4 rounded-xl border border-surface-highest/60 space-y-2">
+                        <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-widest block">Massa Muscular</span>
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-xl font-bold font-mono text-white">
+                            {evaluations.length > 0 && evaluations[0].skeletal_muscle ? `${evaluations[0].skeletal_muscle} kg` : '-'}
+                          </span>
+                          <span className="text-xs font-mono text-zinc-400">Meta: {goals?.muscle_target ? `${goals.muscle_target} kg` : '-'}</span>
+                        </div>
+                        {goals?.muscle_target && evaluations.length > 0 && evaluations[0].skeletal_muscle ? (() => {
+                          const diff = goals.muscle_target - evaluations[0].skeletal_muscle;
+                          if (Math.abs(diff) < 0.1) return <span className="text-[10px] text-[#00ff41] font-bold">Meta atingida! 🎉</span>;
+                          return (
+                            <span className={`text-[10px] font-bold ${diff > 0 ? 'text-amber-400' : 'text-[#00ff41]'}`}>
+                              {diff > 0 ? `Faltam +${diff.toFixed(1)} kg` : `Meta superada! (${diff.toFixed(1)} kg)`}
+                            </span>
+                          );
+                        })() : <span className="text-[10px] text-zinc-500 italic">Sem dados de comparação</span>}
+                      </div>
+                    </div>
+
+                    {/* Recharts LineCharts showing progression vs target */}
+                    {evaluations.length === 0 ? (
+                      <div className="h-64 flex flex-col items-center justify-center border border-dashed border-surface-highest rounded-xl text-zinc-500 text-xs italic text-center p-4">
+                        Nenhum dado biométrico cadastrado para gerar os gráficos de metas. Registre avaliações físicas em "Inspeção de Campo".
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {/* Chart 1: Weight */}
+                        <div className="bg-surface-high p-4 rounded-xl border border-surface-highest/60 space-y-3">
+                          <h4 className="font-heading font-semibold text-xs text-white uppercase tracking-wider">Evolução do Peso vs Meta</h4>
+                          <div className="h-44 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={[...evaluations].reverse()}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#224233" vertical={false} />
+                                <XAxis 
+                                  dataKey="date" 
+                                  stroke="#8f9b95" 
+                                  fontSize={8} 
+                                  tickLine={false} 
+                                  axisLine={false}
+                                  tickFormatter={(tick) => {
+                                    if (!tick) return '';
+                                    const parts = tick.split('-');
+                                    return parts.length >= 3 ? `${parts[2]}/${parts[1]}` : tick;
+                                  }}
+                                />
+                                <YAxis 
+                                  stroke="#8f9b95" 
+                                  fontSize={8} 
+                                  tickLine={false} 
+                                  axisLine={false} 
+                                  width={20}
+                                  domain={['dataMin - 3', 'dataMax + 3']}
+                                />
+                                <RechartsTooltip 
+                                  contentStyle={{ backgroundColor: '#12241C', border: '1px solid #224233', borderRadius: '8px', color: '#e0e8e4', fontSize: '10px' }}
+                                  itemStyle={{ color: '#d4af37' }}
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="weight" 
+                                  name="Peso Real (kg)"
+                                  stroke="#d4af37" 
+                                  strokeWidth={3} 
+                                  dot={{ r: 4, fill: '#d4af37' }} 
+                                  activeDot={{ r: 6 }} 
+                                />
+                                {goals?.weight_target && (
+                                  <ReferenceLine 
+                                    y={goals.weight_target} 
+                                    stroke="#d4af37" 
+                                    strokeDasharray="4 4" 
+                                    strokeWidth={1.5}
+                                    label={{ value: `Meta: ${goals.weight_target} kg`, fill: '#d4af37', position: 'top', fontSize: 9, fontWeight: 'bold' }} 
+                                  />
+                                )}
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+
+                        {/* Chart 2: Body Fat */}
+                        <div className="bg-surface-high p-4 rounded-xl border border-surface-highest/60 space-y-3">
+                          <h4 className="font-heading font-semibold text-xs text-white uppercase tracking-wider">Evolução do % de Gordura vs Meta</h4>
+                          <div className="h-44 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={[...evaluations].reverse()}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#224233" vertical={false} />
+                                <XAxis 
+                                  dataKey="date" 
+                                  stroke="#8f9b95" 
+                                  fontSize={8} 
+                                  tickLine={false} 
+                                  axisLine={false}
+                                  tickFormatter={(tick) => {
+                                    if (!tick) return '';
+                                    const parts = tick.split('-');
+                                    return parts.length >= 3 ? `${parts[2]}/${parts[1]}` : tick;
+                                  }}
+                                />
+                                <YAxis 
+                                  stroke="#8f9b95" 
+                                  fontSize={8} 
+                                  tickLine={false} 
+                                  axisLine={false} 
+                                  width={20}
+                                  domain={['dataMin - 2', 'dataMax + 2']}
+                                />
+                                <RechartsTooltip 
+                                  contentStyle={{ backgroundColor: '#12241C', border: '1px solid #224233', borderRadius: '8px', color: '#e0e8e4', fontSize: '10px' }}
+                                  itemStyle={{ color: '#00ff41' }}
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="body_fat" 
+                                  name="Gordura Real (%)"
+                                  stroke="#00ff41" 
+                                  strokeWidth={3} 
+                                  dot={{ r: 4, fill: '#00ff41' }} 
+                                  activeDot={{ r: 6 }} 
+                                />
+                                {goals?.body_fat_target && (
+                                  <ReferenceLine 
+                                    y={goals.body_fat_target} 
+                                    stroke="#d4af37" 
+                                    strokeDasharray="4 4" 
+                                    strokeWidth={1.5}
+                                    label={{ value: `Meta: ${goals.body_fat_target}%`, fill: '#d4af37', position: 'top', fontSize: 9, fontWeight: 'bold' }} 
+                                  />
+                                )}
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+
+                        {/* Chart 3: Muscle */}
+                        <div className="bg-surface-high p-4 rounded-xl border border-surface-highest/60 space-y-3">
+                          <h4 className="font-heading font-semibold text-xs text-white uppercase tracking-wider">Evolução de Massa Muscular vs Meta</h4>
+                          <div className="h-44 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={[...evaluations].reverse()}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#224233" vertical={false} />
+                                <XAxis 
+                                  dataKey="date" 
+                                  stroke="#8f9b95" 
+                                  fontSize={8} 
+                                  tickLine={false} 
+                                  axisLine={false}
+                                  tickFormatter={(tick) => {
+                                    if (!tick) return '';
+                                    const parts = tick.split('-');
+                                    return parts.length >= 3 ? `${parts[2]}/${parts[1]}` : tick;
+                                  }}
+                                />
+                                <YAxis 
+                                  stroke="#8f9b95" 
+                                  fontSize={8} 
+                                  tickLine={false} 
+                                  axisLine={false} 
+                                  width={20}
+                                  domain={['dataMin - 2', 'dataMax + 2']}
+                                />
+                                <RechartsTooltip 
+                                  contentStyle={{ backgroundColor: '#12241C', border: '1px solid #224233', borderRadius: '8px', color: '#e0e8e4', fontSize: '10px' }}
+                                  itemStyle={{ color: '#38bdf8' }}
+                                />
+                                <Line 
+                                  type="monotone" 
+                                  dataKey="skeletal_muscle" 
+                                  name="Muscular Real (kg)"
+                                  stroke="#38bdf8" 
+                                  strokeWidth={3} 
+                                  dot={{ r: 4, fill: '#38bdf8' }} 
+                                  activeDot={{ r: 6 }} 
+                                />
+                                {goals?.muscle_target && (
+                                  <ReferenceLine 
+                                    y={goals.muscle_target} 
+                                    stroke="#d4af37" 
+                                    strokeDasharray="4 4" 
+                                    strokeWidth={1.5}
+                                    label={{ value: `Meta: ${goals.muscle_target} kg`, fill: '#d4af37', position: 'top', fontSize: 9, fontWeight: 'bold' }} 
+                                  />
+                                )}
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
          </div>
 
          {/* New Payment Modal Dialog */}

@@ -66,17 +66,12 @@ body {
   border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
+/* Ocultar barras de rolagem em todo o sistema */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  display: none;
 }
-::-webkit-scrollbar-track {
-  background: var(--color-surface);
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
 }
-::-webkit-scrollbar-thumb {
-  background: var(--color-surface-high);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary-dim);
-}
+

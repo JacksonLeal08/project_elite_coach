@@ -45,6 +45,7 @@ export default function InspecoesView({ currentUser }: InspecoesViewProps) {
   const [selectedStudentId, setSelectedStudentId] = useState<string>('');
   const [bodyFat, setBodyFat] = useState<string>('');
   const [weight, setWeight] = useState<string>('');
+  const [skeletalMuscle, setSkeletalMuscle] = useState<string>('');
   const [heartRate, setHeartRate] = useState<string>('');
   const [energy, setEnergy] = useState<string>('');
   const [sleep, setSleep] = useState<string>('');
@@ -94,6 +95,7 @@ export default function InspecoesView({ currentUser }: InspecoesViewProps) {
           student_id: selectedStudentId,
           body_fat: bodyFat ? parseFloat(bodyFat) : null,
           weight: weight ? parseFloat(weight) : null,
+          skeletal_muscle: skeletalMuscle ? parseFloat(skeletalMuscle) : null,
           heart_rate: heartRate ? parseInt(heartRate) : null,
           energy: energy ? parseInt(energy) : null,
           sleep: sleep ? parseInt(sleep) : null,
@@ -114,6 +116,7 @@ export default function InspecoesView({ currentUser }: InspecoesViewProps) {
             msg += `Olá, <b>${student.name}</b>! Sua avaliação física de hoje já foi registrada:\n\n`;
             if (weight) msg += `• <b>Peso:</b> ${weight} kg\n`;
             if (bodyFat) msg += `• <b>Gordura Corporal:</b> ${bodyFat}%\n`;
+            if (skeletalMuscle) msg += `• <b>Massa Muscular:</b> ${skeletalMuscle} kg\n`;
             if (heartRate) msg += `• <b>Frequência Cardíaca:</b> ${heartRate} BPM\n`;
             if (energy) msg += `• <b>Nível de Energia:</b> ${energy}/10\n`;
             if (sleep) msg += `• <b>Qualidade do Sono:</b> ${sleep}/10\n`;
@@ -141,6 +144,7 @@ export default function InspecoesView({ currentUser }: InspecoesViewProps) {
             waMsg += `Olá, *${student.name}*! Sua avaliação física de hoje já foi registrada:\n\n`;
             if (weight) waMsg += `• *Peso:* ${weight} kg\n`;
             if (bodyFat) waMsg += `• *Gordura Corporal:* ${bodyFat}%\n`;
+            if (skeletalMuscle) waMsg += `• *Massa Muscular:* ${skeletalMuscle} kg\n`;
             if (heartRate) waMsg += `• *Frequência Cardíaca:* ${heartRate} BPM\n`;
             if (energy) waMsg += `• *Nível de Energia:* ${energy}/10\n`;
             if (sleep) waMsg += `• *Qualidade do Sono:* ${sleep}/10\n`;
@@ -157,6 +161,7 @@ export default function InspecoesView({ currentUser }: InspecoesViewProps) {
         // Clear fields
         setBodyFat('');
         setWeight('');
+        setSkeletalMuscle('');
         setHeartRate('');
         setEnergy('');
         setSleep('');
@@ -208,6 +213,10 @@ export default function InspecoesView({ currentUser }: InspecoesViewProps) {
                   <div>
                     <label className="text-xs text-zinc-400">Peso Atual (kg)</label>
                     <input type="number" step="0.01" value={weight} onChange={e=>setWeight(e.target.value)} className="w-full bg-surface-high text-white border border-surface-highest rounded p-2 mt-1 outline-none focus:border-primary"/>
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400">Massa Muscular (kg)</label>
+                    <input type="number" step="0.1" value={skeletalMuscle} onChange={e=>setSkeletalMuscle(e.target.value)} className="w-full bg-surface-high text-white border border-surface-highest rounded p-2 mt-1 outline-none focus:border-primary"/>
                   </div>
                   <div>
                     <label className="text-xs text-zinc-400 font-bold text-primary">Frequência Cardíaca de Repouso (BPM)</label>

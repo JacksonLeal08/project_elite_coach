@@ -463,24 +463,25 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
            </div>
         </header>
 
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 md:pb-8 flex flex-col justify-between">
-           <div className="flex-1">
+        {/* Scrollable Content Wrapper (Fixed overall layout, scroll only in center) */}
+        <div className="flex-1 flex flex-col justify-between overflow-hidden p-4 md:p-8 pb-20 md:pb-8">
+           {/* Center Content Panel */}
+           <div className="flex-1 overflow-y-auto pr-0 sm:pr-1">
               <AnimatePresence mode="wait">
-                <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-                   {activeTab === 'dashboard' && <DashboardView />}
-                   {activeTab === 'alunos' && <AlunosView currentUser={currentUser} />}
-                   {activeTab === 'protocolos' && <ProtocolosView />}
-                   {activeTab === 'biblioteca' && <BibliotecaView currentUser={currentUser} />}
-                   {activeTab === 'financeiro' && <FinanceiroView currentUser={currentUser} />}
-                   {activeTab === 'config' && <ConfigView currentUser={currentUser} onUserUpdate={(updatedUser: any) => setCurrentUser(updatedUser)} />}
-                   {activeTab === 'inspecoes' && <InspecoesView currentUser={currentUser} />}
-                </motion.div>
+                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+                    {activeTab === 'dashboard' && <DashboardView />}
+                    {activeTab === 'alunos' && <AlunosView currentUser={currentUser} />}
+                    {activeTab === 'protocolos' && <ProtocolosView />}
+                    {activeTab === 'biblioteca' && <BibliotecaView currentUser={currentUser} />}
+                    {activeTab === 'financeiro' && <FinanceiroView currentUser={currentUser} />}
+                    {activeTab === 'config' && <ConfigView currentUser={currentUser} onUserUpdate={(updatedUser: any) => setCurrentUser(updatedUser)} />}
+                    {activeTab === 'inspecoes' && <InspecoesView currentUser={currentUser} />}
+                 </motion.div>
               </AnimatePresence>
            </div>
 
            {/* Global Page Footer */}
-           <footer className="mt-12 py-6 border-t border-surface-highest/40 text-center space-y-1">
+           <footer className="mt-4 pt-4 border-t border-surface-highest/40 text-center space-y-0.5 shrink-0 z-10 bg-surface/80 backdrop-blur-sm">
              <p className="text-[11px] text-zinc-500">© 2026 - Todos os direitos reservados | JIMMP Info</p>
              <p className="text-[9px] text-[#dfbf80]/70 uppercase tracking-[0.2em] font-mono">Versão 1.2.0</p>
            </footer>

@@ -29,6 +29,10 @@ export interface Student {
   photo_side_url?: string;
   phone_number?: string;
   telegram_chat_id?: string;
+  weight_target?: number;
+  body_fat_target?: number;
+  muscle_target?: number;
+  freq_target?: number;
 }
 
 export interface Anamnesis {
@@ -107,5 +111,25 @@ export interface Payment {
   payment_date?: string | null;
   status: 'Pago' | 'Pendente' | 'Atrasado';
   plan_name: string;
+  created_at: string;
+}
+
+export interface StudentGoal {
+  student_id: string;
+  weight_target: number | null;
+  body_fat_target: number | null;
+  muscle_target: number | null;
+  freq_target: number | null;
+  updated_at?: string;
+}
+
+export interface Cost {
+  id: string;
+  description: string;
+  amount: number;
+  due_date: string;
+  payment_date?: string | null;
+  status: 'Pago' | 'Pendente' | 'Atrasado';
+  category: 'Aluguel' | 'Marketing' | 'Equipamentos' | 'Serviços' | 'Impostos' | 'Outros';
   created_at: string;
 }
