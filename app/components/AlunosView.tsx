@@ -43,10 +43,24 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
     });
   };
   
-  const videoRef = useRef<HTMLVideoElement>(null);
+    const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [photo, setPhoto] = useState<string | null>(null);
+
+  // Callback ref to bind stream as soon as video element mounts in the DOM
+  const bindVideoRef = (el: HTMLVideoElement | null) => {
+    videoRef.current = el;
+    if (el && stream) {
+      el.srcObject = stream;
+    }
+  };
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
 
   // New Student Form Modal States
   const [showNewStudentModal, setShowNewStudentModal] = useState<boolean>(false);
@@ -516,12 +530,11 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
     }
   };
 
-  const startCamera = async (target: 'evolution' | 'front' | 'back' | 'side') => {
+    const startCamera = async (target: 'evolution' | 'front' | 'back' | 'side') => {
     setCaptureTarget(target);
     try {
       const ms = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       setStream(ms);
-      if (videoRef.current) videoRef.current.srcObject = ms;
     } catch (e) {
       console.error(e);
       setCaptureTarget(null);
@@ -1139,10 +1152,14 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
 
                      {stream && captureTarget === 'evolution' && (
                         <div className="space-y-3">
-                           <video ref={videoRef} autoPlay playsInline className="w-full rounded-xl border border-surface-highest bg-black object-cover aspect-[3/4] md:aspect-video"></video>
+                           <video ref={bindVideoRef} autoPlay playsInline className="w-full rounded-xl border border-surface-highest bg-black object-cover aspect-[3/4] md:aspect-video"></video>
                            <canvas ref={canvasRef} width="640" height="480" className="hidden"></canvas>
                            <div className="flex gap-2">
                               <button onClick={capturePhoto} className="flex-1 bg-gradient-to-r from-primary to-primary-dim text-black font-bold py-3 rounded hover:opacity-90 transition-opacity text-xs uppercase tracking-wider">📸 Tirar Foto</button>
+                              <label className="flex-1 bg-surface border border-surface-highest text-zinc-300 rounded hover:text-white transition-colors text-xs uppercase tracking-wider font-bold py-3 text-center cursor-pointer flex items-center justify-center gap-1.5">
+                                <Plus className="w-3.5 h-3.5" /> Escolher Arquivo
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => { stopCamera(); handleFileUpload(e, 'evolution'); }} />
+                              </label>
                               <button onClick={stopCamera} className="px-6 py-3 bg-surface border border-surface-highest text-zinc-400 rounded hover:text-white transition-colors text-xs uppercase tracking-wider">Cancelar</button>
                            </div>
                         </div>
@@ -1382,10 +1399,14 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                    if (stream && captureTarget === activeAngle) {
                      return (
                        <div className="space-y-3">
-                         <video ref={videoRef} autoPlay playsInline className="w-full rounded-xl border border-surface-highest bg-black object-cover aspect-[3/4]"></video>
+                         <video ref={bindVideoRef} autoPlay playsInline className="w-full rounded-xl border border-surface-highest bg-black object-cover aspect-[3/4]"></video>
                          <canvas ref={canvasRef} width="640" height="480" className="hidden"></canvas>
                          <div className="flex gap-2">
                            <button onClick={capturePhoto} className="flex-1 bg-gradient-to-r from-primary to-primary-dim text-black font-bold py-3 rounded hover:opacity-90 transition-opacity text-xs uppercase tracking-wider">📸 Tirar Foto</button>
+                           <label className="flex-1 bg-surface border border-surface-highest text-zinc-300 rounded hover:text-white transition-colors text-xs uppercase tracking-wider font-bold py-3 text-center cursor-pointer flex items-center justify-center gap-1.5">
+                             <Plus className="w-3.5 h-3.5" /> Escolher Arquivo
+                             <input type="file" accept="image/*" className="hidden" onChange={(e) => { stopCamera(); handleFileUpload(e, activeAngle); }} />
+                           </label>
                            <button onClick={stopCamera} className="px-6 py-3 bg-surface border border-surface-highest text-zinc-400 rounded hover:text-white transition-colors text-xs uppercase tracking-wider">Cancelar</button>
                          </div>
                        </div>

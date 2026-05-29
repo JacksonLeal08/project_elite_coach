@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Users, Settings, CheckCircle2, X, RotateCcw, Share2 } from 'lucide-react';
+import { Zap, Users, Settings, CheckCircle2, X, RotateCcw, Share2, Eye, EyeOff } from 'lucide-react';
 import CustomAlertModal from './CustomAlertModal';
 import { generatePDFAndShare } from '../utils/pdf';
 import { User, ProfileConfig, HistoryEntry } from '../types';
@@ -16,6 +16,7 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
   const [loadingUsers, setLoadingUsers] = useState<boolean>(true);
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Treinador', password: '', expires_at: '' });
   const [adding, setAdding] = useState<boolean>(false);
+  const [showNewUserPassword, setShowNewUserPassword] = useState<boolean>(false);
 
   // Custom Alert Modal State
   const [alertModal, setAlertModal] = useState<{
@@ -275,7 +276,36 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
               lowerMsg.includes('registered') || 
               lowerMsg.includes('user-already-exists') || 
               error.status === 422) {
-            errorMsg = 'Este e-mail já está cadastrado no sistema! Use outro e-mail ou remova o membro anterior.';
+            
+            // Check if profile exists in profiles table
+            const { data: existingProfile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('email', newUser.email)
+              .maybeSingle();
+
+            if (!existingProfile) {
+              // The profile is missing! Let's sync it via RPC
+              const { data: rpcData, error: rpcError } = await supabase.rpc('sync_profile_by_email', {
+                p_email: newUser.email,
+                p_name: newUser.name,
+                p_role: newUser.role,
+                p_expires_at: newUser.expires_at ? new Date(newUser.expires_at).toISOString() : null
+              });
+
+              if (!rpcError && rpcData?.success) {
+                showCustomAlert('Sucesso', 'Membro sincronizado e registrado com sucesso!', 'success');
+                setNewUser({ name: '', email: '', role: 'Treinador', password: '', expires_at: '' });
+                setAdding(false);
+                fetchUsers();
+                return;
+              } else {
+                console.error('RPC Error syncing profile:', rpcError || rpcData?.message);
+                errorMsg = 'Este e-mail está cadastrado no Supabase Auth, mas sem perfil correspondente. Execute o script SQL no painel do Supabase para corrigir esta anomalia.';
+              }
+            } else {
+              errorMsg = 'Este e-mail já está cadastrado no sistema! Use outro e-mail ou remova o membro anterior.';
+            }
           }
           return showCustomAlert('Erro', 'Erro ao registrar usuário: ' + errorMsg, 'error');
         }
@@ -626,7 +656,22 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
 
                     <div>
                       <label className="text-xs text-zinc-400 font-bold block uppercase tracking-wide">Senha de Acesso</label>
-                      <input type="password" value={newUser.password} onChange={e=>setNewUser({...newUser, password:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Senha forte" />
+                      <div className="relative mt-1">
+                        <input 
+                          type={showNewUserPassword ? "text" : "password"} 
+                          value={newUser.password} 
+                          onChange={e=>setNewUser({...newUser, password:e.target.value})} 
+                          className="w-full bg-surface border border-surface-highest rounded p-2.5 pr-10 text-white text-sm outline-none focus:border-primary" 
+                          placeholder="Senha forte" 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewUserPassword(!showNewUserPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors"
+                        >
+                          {showNewUserPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
 
                     <div>

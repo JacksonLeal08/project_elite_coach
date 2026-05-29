@@ -13,7 +13,7 @@ import { supabase } from './utils/supabase';
 import { User } from './types';
 
 export default function App() {
-  const [authState, setAuthState] = useState<'loading' | 'login' | 'app' | 'goodbye'>('loading');
+    const [authState, setAuthState] = useState<'loading' | 'login' | 'app' | 'goodbye' | 'reset_password'>('loading');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   
   // Login Logic
@@ -27,6 +27,22 @@ export default function App() {
   const [showSupportBtn, setShowSupportBtn] = useState<boolean>(true);
 
   const [sessionUser, setSessionUser] = useState<any | null>(null);
+
+  // Forgot Password / Recovery States
+  const [showForgotModal, setShowForgotModal] = useState<boolean>(false);
+  const [forgotEmail, setForgotEmail] = useState<string>('');
+  const [forgotLoading, setForgotLoading] = useState<boolean>(false);
+  const [forgotError, setForgotError] = useState<string>('');
+  const [forgotSuccess, setForgotSuccess] = useState<string>('');
+
+  // Reset Password States (For PASSWORD_RECOVERY redirection)
+  const [newPassword, setNewPassword] = useState<string>('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState<string>('');
+  const [showNewPassword, setShowNewPassword] = useState<boolean>(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState<boolean>(false);
+  const [resetError, setResetError] = useState<string>('');
+  const [resetSuccess, setResetSuccess] = useState<string>('');
+  const [resetLoading, setResetLoading] = useState<boolean>(false);
 
   // Separate useEffect to fetch profile when sessionUser is defined, avoiding auth loop deadlock
   useEffect(() => {
@@ -142,10 +158,15 @@ export default function App() {
 
     checkInitialSession();
 
-    // 2. Listen for auth changes
+        // 2. Listen for auth changes
     console.log('Registering onAuthStateChange listener...');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('onAuthStateChange fired! Event:', event, 'Has session:', !!session);
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('PASSWORD_RECOVERY event captured! Directing to reset_password...');
+        setAuthState('reset_password');
+        return;
+      }
       if (session?.user) {
         console.log('Auth change detected user:', session.user.email);
         setSessionUser(session.user);
@@ -163,7 +184,7 @@ export default function App() {
     };
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
+    const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setAuthState('loading');
@@ -182,6 +203,65 @@ export default function App() {
     } catch (err: any) {
       setLoginError(err.message || 'Erro de conexão.');
       setAuthState('login');
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotError('');
+    setForgotSuccess('');
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}` : '',
+      });
+
+      if (error) {
+        setForgotError(error.message);
+      } else {
+        setForgotSuccess('E-mail de recuperação enviado com sucesso! Verifique sua caixa de entrada.');
+        setForgotEmail('');
+      }
+    } catch (err: any) {
+      setForgotError(err.message || 'Erro ao processar solicitação.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetLoading(true);
+    setResetError('');
+    setResetSuccess('');
+
+    if (newPassword !== confirmNewPassword) {
+      setResetError('As senhas não coincidem.');
+      setResetLoading(false);
+      return;
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) {
+        setResetError(error.message);
+      } else {
+        setResetSuccess('Sua senha foi redefinida com sucesso! Redirecionando...');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setTimeout(() => {
+          setAuthState('login');
+          setResetSuccess('');
+        }, 3000);
+      }
+    } catch (err: any) {
+      setResetError(err.message || 'Erro ao redefinir a senha.');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -331,13 +411,138 @@ export default function App() {
               </button>
            </form>
            
-           <div className="mt-8 text-center border-t border-[#8fa498]/20 pt-6">
-             <button className="text-[13px] font-bold text-[#3c5647] hover:text-[#0b2817] transition-colors tracking-wide underline underline-offset-4 decoration-[#8fa498]/50 hover:decoration-[#0b2817]">Esqueci minha senha</button>
+                       <div className="mt-8 text-center border-t border-[#8fa498]/20 pt-6">
+             <button type="button" onClick={() => setShowForgotModal(true)} className="text-[13px] font-bold text-[#3c5647] hover:text-[#0b2817] transition-colors tracking-wide underline underline-offset-4 decoration-[#8fa498]/50 hover:decoration-[#0b2817]">Esqueci minha senha</button>
            </div>
-        </motion.div>
-      </div>
-    );
-  }
+         </motion.div>
+         
+         {/* Forgot Password Modal */}
+         <AnimatePresence>
+           {showForgotModal && (
+             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+               <motion.div 
+                 initial={{ scale: 0.95, opacity: 0 }}
+                 animate={{ scale: 1, opacity: 1 }}
+                 exit={{ scale: 0.95, opacity: 0 }}
+                 className="w-full max-w-[400px] bg-surface border border-surface-highest/60 p-6 sm:p-8 rounded-[24px] relative overflow-hidden"
+                 style={{ boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}
+               >
+                 <button 
+                   type="button"
+                   onClick={() => {
+                     setShowForgotModal(false);
+                     setForgotError('');
+                     setForgotSuccess('');
+                   }}
+                   className="absolute top-4 right-4 text-zinc-400 hover:text-white p-1.5 rounded-lg bg-surface-high border border-surface-highest hover:border-white/20 transition-all"
+                 >
+                   <X className="w-4 h-4" />
+                 </button>
+
+                 <h4 className="text-sm font-bold text-[#dfbf80] mb-2 uppercase tracking-wider flex items-center gap-2">
+                   🔐 Recuperação de Senha
+                 </h4>
+                 <p className="text-zinc-300 text-xs mb-6 leading-relaxed">
+                   Digite seu e-mail cadastrado abaixo. Enviaremos um link seguro para redefinir a sua senha.
+                 </p>
+
+                 <form onSubmit={handleForgotPassword} className="space-y-4">
+                   {forgotError && <div className="p-3 bg-red-500/10 text-red-400 text-xs font-semibold text-center rounded-xl border border-red-500/20">{forgotError}</div>}
+                   {forgotSuccess && <div className="p-3 bg-green-500/10 text-[#00ff41] text-xs font-semibold text-center rounded-xl border border-green-500/20">{forgotSuccess}</div>}
+
+                   <div>
+                     <input 
+                       type="email" 
+                       placeholder="Seu e-mail" 
+                       value={forgotEmail} 
+                       onChange={e => setForgotEmail(e.target.value)} 
+                       className="w-full px-4 py-3 bg-surface-high border border-surface-highest rounded-xl text-white placeholder-zinc-500 text-sm focus:outline-none focus:border-[#dfbf80]/50 transition-all" 
+                       required 
+                     />
+                   </div>
+
+                   <button 
+                     type="submit" 
+                     disabled={forgotLoading}
+                     className="w-full py-3 bg-gradient-to-r from-primary to-primary-dim text-black font-bold uppercase tracking-wider text-xs rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-50"
+                   >
+                     {forgotLoading ? 'Enviando...' : 'Enviar Link'}
+                   </button>
+                 </form>
+               </motion.div>
+             </div>
+           )}
+         </AnimatePresence>
+       </div>
+     );
+   }
+
+   if (authState === 'reset_password') {
+     return (
+        <div className="min-h-screen relative flex items-center justify-center p-4 bg-black">
+          <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: 'url("https://i.ibb.co/HDzs8w0w/personal-trainer-login-screen.png")' }}></div>
+          <div className="absolute inset-0 bg-black/40 z-0 backdrop-blur-[2px]"></div>
+
+          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="relative z-10 w-full max-w-[420px] backdrop-blur-[16px] rounded-[32px] overflow-hidden border border-white/20 p-8 sm:p-10" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 100%)', boxShadow: '0 30px 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.1)' }}>
+             <div className="flex flex-col items-center mb-6 mt-[-10px]">
+                <div className="w-[360px] h-[240px] sm:w-[380px] sm:h-[260px] mb-2 flex items-center justify-center">
+                   <img src="/logo.png" alt="Logo Jaira Leal" className="w-full h-full object-contain" style={{ filter: 'drop-shadow(20px 7px 7px white)' }} />
+                </div>
+             </div>
+
+             <div className="text-center mb-6">
+               <h3 className="text-[#0b2817] text-[15px] font-extrabold tracking-widest uppercase drop-shadow-sm">Redefinir Senha</h3>
+               <p className="text-xs text-zinc-300 mt-1">Defina sua nova senha de acesso abaixo</p>
+             </div>
+
+             <form onSubmit={handleResetPassword} className="space-y-4">
+                {resetError && <div className="p-3 bg-red-500/10 text-red-700 text-sm font-semibold text-center rounded-xl border border-red-500/20">{resetError}</div>}
+                {resetSuccess && <div className="p-3 bg-green-500/10 text-[#00ff41] text-sm font-semibold text-center rounded-xl border border-green-500/20">{resetSuccess}</div>}
+                
+                <div className="relative">
+                  <input 
+                    type={showNewPassword ? "text" : "password"} 
+                    placeholder="Nova Senha" 
+                    value={newPassword} 
+                    onChange={e=>setNewPassword(e.target.value)} 
+                    className="w-full px-5 pr-12 py-3.5 bg-white/60 border border-[#8fa498]/60 rounded-xl text-[#0b2817] placeholder-[#5a6c60] font-medium focus:outline-none focus:border-[#0b2817] focus:bg-white transition-all shadow-sm" 
+                    required 
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(prev => !prev)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#5a6c60] hover:text-[#0b2817] transition-colors p-1 flex items-center justify-center"
+                  >
+                    {showNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <input 
+                    type={showConfirmNewPassword ? "text" : "password"} 
+                    placeholder="Confirmar Nova Senha" 
+                    value={confirmNewPassword} 
+                    onChange={e=>setConfirmNewPassword(e.target.value)} 
+                    className="w-full px-5 pr-12 py-3.5 bg-white/60 border border-[#8fa498]/60 rounded-xl text-[#0b2817] placeholder-[#5a6c60] font-medium focus:outline-none focus:border-[#0b2817] focus:bg-white transition-all shadow-sm" 
+                    required 
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmNewPassword(prev => !prev)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-[#5a6c60] hover:text-[#0b2817] transition-colors p-1 flex items-center justify-center"
+                  >
+                    {showConfirmNewPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+
+                <button type="submit" disabled={resetLoading} className="w-full py-4 mt-6 flex items-center justify-center gap-2 bg-[#0b2817] hover:bg-[#134026] text-white font-bold uppercase tracking-[0.1em] rounded-xl transition-all shadow-[0_8px_20px_rgba(11,40,23,0.3)] disabled:opacity-50">
+                   <span>{resetLoading ? 'Salvando...' : 'Salvar Nova Senha'}</span>
+                </button>
+             </form>
+          </motion.div>
+        </div>
+     );
+   }
 
   return (
     <MainApp currentUser={currentUser} setCurrentUser={setCurrentUser} showSupportBtn={showSupportBtn} setShowSupportBtn={setShowSupportBtn} handleLogout={handleLogout} />
@@ -688,10 +893,14 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
            </div>
 
             {/* Global Page Footer */}
-            <footer className="py-2 mt-2 border-t border-surface-highest/20 text-center shrink-0 z-10 bg-surface/80 backdrop-blur-sm">
-              <p className="text-[9px] text-zinc-500 font-medium tracking-wide">
-                © 2026 - Todos os direitos reservados | JIMMP Info <span className="text-[#dfbf80]/30 mx-1.5">|</span> <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[8px]">Versão 1.2.0</span>
-              </p>
+            <footer className="py-1.5 mt-2 border-t border-surface-highest/20 text-center shrink-0 z-10 bg-surface/80 backdrop-blur-sm">
+              <div className="text-[7.5px] sm:text-[9px] text-zinc-500 font-medium tracking-wide whitespace-nowrap overflow-x-auto scrollbar-none flex items-center justify-center gap-1 sm:gap-1.5 px-2">
+                <span>© 2026 - Todos os direitos reservados</span>
+                <span className="text-[#dfbf80]/30 shrink-0">|</span>
+                <span>JIMMP Info</span>
+                <span className="text-[#dfbf80]/30 shrink-0">|</span>
+                <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.2.0</span>
+              </div>
             </footer>
         </div>
       </main>
