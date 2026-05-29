@@ -687,11 +687,12 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
               </AnimatePresence>
            </div>
 
-           {/* Global Page Footer */}
-           <footer className="mt-4 pt-4 border-t border-surface-highest/40 text-center space-y-0.5 shrink-0 z-10 bg-surface/80 backdrop-blur-sm">
-             <p className="text-[11px] text-zinc-500">© 2026 - Todos os direitos reservados | JIMMP Info</p>
-             <p className="text-[9px] text-[#dfbf80]/70 uppercase tracking-[0.2em] font-mono">Versão 1.2.0</p>
-           </footer>
+            {/* Global Page Footer */}
+            <footer className="py-2 mt-2 border-t border-surface-highest/20 text-center shrink-0 z-10 bg-surface/80 backdrop-blur-sm">
+              <p className="text-[9px] text-zinc-500 font-medium tracking-wide">
+                © 2026 - Todos os direitos reservados | JIMMP Info <span className="text-[#dfbf80]/30 mx-1.5">|</span> <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[8px]">Versão 1.2.0</span>
+              </p>
+            </footer>
         </div>
       </main>
 

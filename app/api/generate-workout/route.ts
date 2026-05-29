@@ -63,15 +63,30 @@ export async function POST(req: Request) {
         }
       });
     } catch (err: any) {
-      console.warn("gemini-2.5-flash failed or overloaded, trying fallback gemini-1.5-flash. Error:", err.message || err);
-      // Fallback model for high availability
-      response = await ai.models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-        }
-      });
+      const errMsg = err.message || "";
+      const isApiKeyError = err.status === 403 || errMsg.includes("403") || errMsg.toLowerCase().includes("permission_denied") || errMsg.toLowerCase().includes("api key") || errMsg.toLowerCase().includes("leaked");
+      
+      if (isApiKeyError) {
+        return NextResponse.json({ 
+          error: "Sua chave de API do Gemini (GEMINI_API_KEY) está inválida, expirou ou foi bloqueada/vazada (Erro 403). Por favor, configure a nova chave no painel da Vercel e realize o Redeploy." 
+        }, { status: 403 });
+      }
+      
+      console.warn("gemini-2.5-flash failed, trying fallback gemini-2.5-flash-lite. Error:", errMsg);
+      try {
+        response = await ai.models.generateContent({
+          model: "gemini-2.5-flash-lite",
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+          }
+        });
+      } catch (fallbackErr: any) {
+        console.error("Fallback gemini-2.5-flash-lite also failed:", fallbackErr);
+        return NextResponse.json({ 
+          error: `Erro ao gerar protocolo (IA): ${fallbackErr.message || fallbackErr}` 
+        }, { status: 500 });
+      }
     }
 
     const text = response.text;

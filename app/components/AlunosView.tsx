@@ -60,6 +60,19 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
     telegram_chat_id: ''
   });
 
+  // Edit Student Form Modal States
+  const [showEditStudentModal, setShowEditStudentModal] = useState<boolean>(false);
+  const [editStudent, setEditStudent] = useState({
+    id: '',
+    name: '',
+    age: '',
+    goal: '',
+    biotype: 'Mesomorfo',
+    status: 'Ativo',
+    phone_number: '',
+    telegram_chat_id: ''
+  });
+
   const [studentPhone, setStudentPhone] = useState<string>('');
   const [studentTelegramId, setStudentTelegramId] = useState<string>('');
   const [savingContacts, setSavingContacts] = useState<boolean>(false);
@@ -703,6 +716,93 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
     }
   };
 
+  const handleEditStudentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editStudent.name || !editStudent.age || !editStudent.goal) {
+      return showCustomAlert('Aviso', 'Preencha os campos obrigatórios!', 'warning');
+    }
+
+    const ageNum = parseInt(editStudent.age);
+    if (isNaN(ageNum) || ageNum <= 0) {
+      return showCustomAlert('Aviso', 'Idade precisa ser um número válido!', 'warning');
+    }
+
+    try {
+      const { error } = await supabase
+        .from('students')
+        .update({
+          name: editStudent.name,
+          age: ageNum,
+          goal: editStudent.goal,
+          biotype: editStudent.biotype,
+          status: editStudent.status,
+          phone_number: editStudent.phone_number || null,
+          telegram_chat_id: editStudent.telegram_chat_id || null
+        })
+        .eq('id', editStudent.id);
+
+      if (error) {
+        showCustomAlert('Erro', 'Erro ao atualizar aluno: ' + error.message, 'error');
+      } else {
+        showCustomAlert('Sucesso', 'Dados do aluno atualizados com sucesso!', 'success');
+        setShowEditStudentModal(false);
+        const updatedStudent = {
+          ...selectedStudent!,
+          name: editStudent.name,
+          age: ageNum,
+          goal: editStudent.goal,
+          biotype: editStudent.biotype,
+          status: editStudent.status,
+          phone_number: editStudent.phone_number || undefined,
+          telegram_chat_id: editStudent.telegram_chat_id || undefined
+        };
+        setSelectedStudent(updatedStudent);
+        fetchStudents();
+      }
+    } catch (err: any) {
+      console.error(err);
+      showCustomAlert('Erro', 'Erro inesperado ao atualizar aluno.', 'error');
+    }
+  };
+
+  const handleDeleteStudent = (studentId: string | number, studentName: string) => {
+    showCustomAlert(
+      'Confirmar Exclusão',
+      `Você está prestes a excluir permanentemente o aluno "${studentName}". Todos os dados de treinos, biometrias, anamnese, metas e pagamentos dele serão apagados!`,
+      'confirm',
+      studentName,
+      async () => {
+        try {
+          // Cascade delete manually to prevent foreign key errors in any DB configuration
+          // 1. Delete goals
+          await supabase.from('student_goals').delete().eq('student_id', studentId);
+          // 2. Delete anamnesis
+          await supabase.from('anamnesis').delete().eq('student_id', studentId);
+          // 3. Delete payments
+          await supabase.from('payments').delete().eq('student_id', studentId);
+          // 4. Delete physical evaluations / inspections
+          await supabase.from('field_inspections').delete().eq('student_id', studentId);
+          // 5. Delete student
+          const { error } = await supabase
+            .from('students')
+            .delete()
+            .eq('id', studentId);
+
+          if (error) {
+            showCustomAlert('Erro', 'Erro ao excluir aluno: ' + error.message, 'error');
+          } else {
+            showCustomAlert('Sucesso', 'Aluno e todos os seus registros excluídos com sucesso!', 'success');
+            setSelectedStudent(null);
+            fetchStudents();
+          }
+        } catch (e: any) {
+          console.error(e);
+          showCustomAlert('Erro', 'Erro inesperado ao excluir aluno.', 'error');
+        }
+      }
+    );
+  };
+
   const handleSaveContacts = async () => {
     if (!selectedStudent) return;
     setSavingContacts(true);
@@ -747,10 +847,38 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
         </button>
         
         <div className="bg-surface-container border border-surface-highest rounded-xl p-6">
-           <div className="mb-8">
-             <h1 className="font-heading font-bold text-3xl text-white">{selectedStudent.name}</h1>
-             <p className="text-zinc-400 capitalize mt-1 text-sm">{selectedStudent.goal} • {selectedStudent.age} anos • {selectedStudent.biotype}</p>
-           </div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 border-b border-surface-highest/40 pb-4">
+              <div>
+                <h1 className="font-heading font-bold text-3xl text-white">{selectedStudent.name}</h1>
+                <p className="text-zinc-400 capitalize mt-1 text-sm">{selectedStudent.goal} • {selectedStudent.age} anos • {selectedStudent.biotype}</p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  onClick={() => {
+                    setEditStudent({
+                      id: selectedStudent.id.toString(),
+                      name: selectedStudent.name,
+                      age: selectedStudent.age.toString(),
+                      goal: selectedStudent.goal,
+                      biotype: selectedStudent.biotype,
+                      status: selectedStudent.status,
+                      phone_number: selectedStudent.phone_number || '',
+                      telegram_chat_id: selectedStudent.telegram_chat_id || ''
+                    });
+                    setShowEditStudentModal(true);
+                  }}
+                  className="px-4 py-2 bg-surface hover:bg-surface-high border border-surface-highest text-zinc-300 hover:text-primary rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 duration-200 active:scale-95 shadow-[0_2px_10px_rgba(0,0,0,0.15)]"
+                >
+                  📝 Editar Perfil
+                </button>
+                <button
+                  onClick={() => handleDeleteStudent(selectedStudent.id, selectedStudent.name)}
+                  className="px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 duration-200 active:scale-95"
+                >
+                  🗑️ Excluir Aluno
+                </button>
+              </div>
+            </div>
 
            {/* Overtraining / Recuperação AI Card */}
            {loadingEvals ? (
@@ -2035,6 +2163,60 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                 </select>
               </div>
               <button type="submit" className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)]">Salvar Aluno</button>
+            </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Edit Student Modal Dialog */}
+      {showEditStudentModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-md w-full relative">
+            <button onClick={() => setShowEditStudentModal(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
+              <X className="w-5 h-5"/>
+            </button>
+            <h3 className="text-xl font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2">Editar Dados do Aluno</h3>
+            <form onSubmit={handleEditStudentSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs text-zinc-400 uppercase font-bold">Nome do Aluno *</label>
+                <input required type="text" value={editStudent.name} onChange={e=>setEditStudent({...editStudent, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: João da Silva"/>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-zinc-400 uppercase font-bold">Idade *</label>
+                  <input required type="number" value={editStudent.age} onChange={e=>setEditStudent({...editStudent, age: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 27"/>
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 uppercase font-bold">Biotipo</label>
+                  <select value={editStudent.biotype} onChange={e=>setEditStudent({...editStudent, biotype: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary">
+                    <option>Mesomorfo</option>
+                    <option>Endomorfo</option>
+                    <option>Ectomorfo</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 uppercase font-bold">Objetivo *</label>
+                <input required type="text" value={editStudent.goal} onChange={e=>setEditStudent({...editStudent, goal: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: Hipertrofia ou Perda de Peso"/>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-zinc-400 uppercase font-bold">WhatsApp (com DDD)</label>
+                  <input type="text" value={editStudent.phone_number} onChange={e=>setEditStudent({...editStudent, phone_number: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 5511999999999"/>
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 uppercase font-bold">Telegram Chat ID</label>
+                  <input type="text" value={editStudent.telegram_chat_id} onChange={e=>setEditStudent({...editStudent, telegram_chat_id: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 987654321"/>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-400 uppercase font-bold">Status</label>
+                <select value={editStudent.status} onChange={e=>setEditStudent({...editStudent, status: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary">
+                  <option>Ativo</option>
+                  <option>Inativo</option>
+                </select>
+              </div>
+              <button type="submit" className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)]">Salvar Alterações</button>
             </form>
           </motion.div>
         </div>
