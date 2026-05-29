@@ -2002,6 +2002,60 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
            </div>
          )}
 
+         {/* Edit Student Modal Dialog */}
+         {showEditStudentModal && selectedStudent && (
+           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-md w-full relative">
+               <button onClick={() => setShowEditStudentModal(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
+                 <X className="w-5 h-5"/>
+               </button>
+               <h3 className="text-xl font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2">Editar Dados do Aluno</h3>
+               <form onSubmit={handleEditStudentSubmit} className="space-y-4">
+                 <div>
+                   <label className="text-xs text-zinc-400 uppercase font-bold">Nome do Aluno *</label>
+                   <input required type="text" value={editStudent.name} onChange={e=>setEditStudent({...editStudent, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: João da Silva"/>
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                   <div>
+                     <label className="text-xs text-zinc-400 uppercase font-bold">Idade *</label>
+                     <input required type="number" value={editStudent.age} onChange={e=>setEditStudent({...editStudent, age: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 27"/>
+                   </div>
+                   <div>
+                     <label className="text-xs text-zinc-400 uppercase font-bold">Biotipo</label>
+                     <select value={editStudent.biotype} onChange={e=>setEditStudent({...editStudent, biotype: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary">
+                       <option>Mesomorfo</option>
+                       <option>Endomorfo</option>
+                       <option>Ectomorfo</option>
+                     </select>
+                   </div>
+                 </div>
+                 <div>
+                   <label className="text-xs text-zinc-400 uppercase font-bold">Objetivo *</label>
+                   <input required type="text" value={editStudent.goal} onChange={e=>setEditStudent({...editStudent, goal: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: Hipertrofia ou Perda de Peso"/>
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                   <div>
+                     <label className="text-xs text-zinc-400 uppercase font-bold">WhatsApp (com DDD)</label>
+                     <input type="text" value={editStudent.phone_number} onChange={e=>setEditStudent({...editStudent, phone_number: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 5511999999999"/>
+                   </div>
+                   <div>
+                     <label className="text-xs text-zinc-400 uppercase font-bold">Telegram Chat ID</label>
+                     <input type="text" value={editStudent.telegram_chat_id} onChange={e=>setEditStudent({...editStudent, telegram_chat_id: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 987654321"/>
+                   </div>
+                 </div>
+                 <div>
+                   <label className="text-xs text-zinc-400 uppercase font-bold">Status</label>
+                   <select value={editStudent.status} onChange={e=>setEditStudent({...editStudent, status: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary">
+                     <option>Ativo</option>
+                     <option>Inativo</option>
+                   </select>
+                 </div>
+                 <button type="submit" className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)]">Salvar Alterações</button>
+               </form>
+             </motion.div>
+           </div>
+         )}
+
          <CustomAlertModal
            isOpen={alertModal.isOpen}
            type={alertModal.type}
@@ -2189,59 +2243,7 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
         </div>
       )}
 
-      {/* Edit Student Modal Dialog */}
-      {showEditStudentModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-md w-full relative">
-            <button onClick={() => setShowEditStudentModal(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
-              <X className="w-5 h-5"/>
-            </button>
-            <h3 className="text-xl font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2">Editar Dados do Aluno</h3>
-            <form onSubmit={handleEditStudentSubmit} className="space-y-4">
-              <div>
-                <label className="text-xs text-zinc-400 uppercase font-bold">Nome do Aluno *</label>
-                <input required type="text" value={editStudent.name} onChange={e=>setEditStudent({...editStudent, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: João da Silva"/>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-zinc-400 uppercase font-bold">Idade *</label>
-                  <input required type="number" value={editStudent.age} onChange={e=>setEditStudent({...editStudent, age: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 27"/>
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-400 uppercase font-bold">Biotipo</label>
-                  <select value={editStudent.biotype} onChange={e=>setEditStudent({...editStudent, biotype: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary">
-                    <option>Mesomorfo</option>
-                    <option>Endomorfo</option>
-                    <option>Ectomorfo</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-zinc-400 uppercase font-bold">Objetivo *</label>
-                <input required type="text" value={editStudent.goal} onChange={e=>setEditStudent({...editStudent, goal: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: Hipertrofia ou Perda de Peso"/>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-zinc-400 uppercase font-bold">WhatsApp (com DDD)</label>
-                  <input type="text" value={editStudent.phone_number} onChange={e=>setEditStudent({...editStudent, phone_number: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 5511999999999"/>
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-400 uppercase font-bold">Telegram Chat ID</label>
-                  <input type="text" value={editStudent.telegram_chat_id} onChange={e=>setEditStudent({...editStudent, telegram_chat_id: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 987654321"/>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-zinc-400 uppercase font-bold">Status</label>
-                <select value={editStudent.status} onChange={e=>setEditStudent({...editStudent, status: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary">
-                  <option>Ativo</option>
-                  <option>Inativo</option>
-                </select>
-              </div>
-              <button type="submit" className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)]">Salvar Alterações</button>
-            </form>
-          </motion.div>
-        </div>
-      )}
+
 
       <CustomAlertModal
         isOpen={alertModal.isOpen}
