@@ -1,7 +1,8 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles } from 'lucide-react';
+import { ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
 import ProtocolosView from './components/ProtocolosView';
@@ -13,8 +14,9 @@ import { supabase } from './utils/supabase';
 import { User } from './types';
 
 export default function App() {
-    const [authState, setAuthState] = useState<'loading' | 'login' | 'app' | 'goodbye' | 'reset_password'>('loading');
+  const [authState, setAuthState] = useState<'loading' | 'login' | 'app' | 'goodbye' | 'reset_password' | 'public_evolution'>('loading');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [publicToken, setPublicToken] = useState<string>('');
   
   // Login Logic
   const [email, setEmail] = useState<string>('');
@@ -134,6 +136,16 @@ export default function App() {
       console.log('Saved theme in localStorage:', savedTheme);
       if (savedTheme === 'light') {
         document.documentElement.classList.add('light-theme');
+      }
+
+      // Check for public student_token
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('student_token');
+      if (token) {
+        console.log('Public student_token found in URL:', token);
+        setPublicToken(token);
+        setAuthState('public_evolution');
+        return; // Skip checking initial session for public token users
       }
     }
 
@@ -541,6 +553,12 @@ export default function App() {
              </form>
           </motion.div>
         </div>
+     );
+   }
+
+   if (authState === 'public_evolution') {
+     return (
+       <PublicEvolutionView token={publicToken} />
      );
    }
 
@@ -1021,6 +1039,453 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function PublicEvolutionView({ token }: { token: string }) {
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string>('');
+  const [data, setData] = useState<any>(null);
+
+  // Posture grid states
+  const [activePostureAngle, setActivePostureAngle] = useState<'front' | 'back' | 'side'>('front');
+  const [showGrid, setShowGrid] = useState<boolean>(true);
+  const [gridOpacity, setGridOpacity] = useState<number>(0.4);
+  const [gridOffset, setGridOffset] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const { data: res, error: err } = await supabase.rpc('get_public_student_evolution', {
+          p_token: token
+        });
+
+        if (err) {
+          setError(err.message);
+        } else if (res && !res.success) {
+          setError(res.message || 'Link inválido ou expirado.');
+        } else {
+          setData(res);
+        }
+      } catch (e: any) {
+        setError(e.message || 'Erro de conexão ao buscar os dados.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [token]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
+        <motion.div 
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+          className="w-12 h-12 border-4 border-[#dfbf80] border-t-transparent rounded-full mb-4"
+        />
+        <p className="text-[#dfbf80] font-heading font-medium tracking-wide animate-pulse">Carregando sua evolução física...</p>
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 rounded-full flex items-center justify-center text-red-400 mb-6 text-2xl">
+          ⚠️
+        </div>
+        <h2 className="text-xl font-heading font-bold text-white mb-2">Acesso Indisponível</h2>
+        <p className="text-zinc-400 text-sm max-w-md mb-6">{error || 'O link que você está tentando acessar é inválido ou expirou.'}</p>
+        <button 
+          onClick={() => { window.location.href = '/'; }}
+          className="px-6 py-2.5 bg-primary text-black font-bold uppercase tracking-wider text-xs rounded-xl hover:bg-primary-dim transition-colors"
+        >
+          Ir para Login
+        </button>
+      </div>
+    );
+  }
+
+  const { student, goals, evaluations, anamnesis } = data;
+
+  // Sorting evaluations by date for chart rendering
+  const chartData = [...evaluations].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()).map((e: any) => ({
+    date: new Date(e.date).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }),
+    weight: e.weight,
+    body_fat: e.body_fat,
+    skeletal_muscle: e.skeletal_muscle
+  }));
+
+  const currentWeight = evaluations.length > 0 ? evaluations[evaluations.length - 1].weight : null;
+  const currentFat = evaluations.length > 0 ? evaluations[evaluations.length - 1].body_fat : null;
+  const currentMuscle = evaluations.length > 0 ? evaluations[evaluations.length - 1].skeletal_muscle : null;
+
+  const getPosturePhoto = () => {
+    switch (activePostureAngle) {
+      case 'back':
+        return student.photo_back_url;
+      case 'side':
+        return student.photo_side_url;
+      case 'front':
+      default:
+        return student.photo_front_url;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-black text-white pb-16">
+      {/* Premium Header */}
+      <header className="border-b border-surface-highest bg-surface-container/50 backdrop-blur-md sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 bg-gradient-to-br from-[#dfbf80]/20 to-[#dfbf80]/5 rounded-lg border border-[#dfbf80]/30 flex items-center justify-center p-1 backdrop-blur-md">
+              <img src="/logo.png" alt="Logo Jaira Leal" className="h-full w-full object-contain" />
+            </div>
+            <div>
+              <h1 className="font-heading font-black text-white text-[11px] sm:text-xs tracking-widest uppercase leading-tight">Elite Coach</h1>
+              <span className="text-[#dfbf80] text-[9px] font-bold tracking-[0.2em] uppercase">Evolução do Aluno</span>
+            </div>
+          </div>
+          <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 px-3 py-1 bg-surface-high border border-surface-highest rounded-full">
+            <Sparkles className="w-3.5 h-3.5 text-[#dfbf80] animate-pulse" /> Acesso Seguro
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-4 mt-8 space-y-8 animate-fade-in">
+        {/* Welcome Section */}
+        <div className="text-center md:text-left">
+          <h2 className="text-3xl font-heading font-extrabold text-white tracking-tight">Olá, <span className="text-primary">{student.name}</span>!</h2>
+          <p className="text-zinc-400 text-sm mt-1">Acompanhe aqui o histórico completo das suas avaliações físicas, metas corporais e progresso postural.</p>
+        </div>
+
+        {/* Profile Card & Biomarker Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="md:col-span-1 bg-surface-container border border-surface-highest rounded-2xl p-6 flex flex-col items-center text-center justify-center">
+            <div className="w-16 h-16 bg-[#dfbf80]/10 border border-[#dfbf80]/30 rounded-full flex items-center justify-center text-[#dfbf80] mb-4 text-xl font-bold uppercase">
+              {student.name.charAt(0)}
+            </div>
+            <h3 className="font-heading font-bold text-white text-base leading-tight truncate w-full">{student.name}</h3>
+            <p className="text-zinc-400 text-xs mt-1 capitalize">{student.goal}</p>
+            <div className="mt-4 pt-3 border-t border-surface-highest w-full text-[11px] text-zinc-400 flex flex-col gap-1">
+              <span><strong>Idade:</strong> {student.age} anos</span>
+              <span><strong>Biotipo:</strong> {student.biotype}</span>
+            </div>
+          </div>
+
+          <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Weight Card */}
+            <div className="bg-surface-container border border-surface-highest rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                <Activity className="w-20 h-20 text-white" />
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Peso Atual</span>
+                <span className="text-3xl font-black text-white font-mono mt-1 block">
+                  {currentWeight ? `${currentWeight} kg` : '--'}
+                </span>
+              </div>
+              <div className="mt-4 pt-3 border-t border-surface-highest/60 flex items-center justify-between text-[10px] text-zinc-400">
+                <span>Meta Definida</span>
+                <span className="font-bold text-primary font-mono">{goals?.weight_target ? `${goals.weight_target} kg` : '-'}</span>
+              </div>
+            </div>
+
+            {/* Body Fat Card */}
+            <div className="bg-surface-container border border-surface-highest rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                <Trophy className="w-20 h-20 text-white" />
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">% de Gordura</span>
+                <span className="text-3xl font-black text-white font-mono mt-1 block">
+                  {currentFat ? `${currentFat}%` : '--'}
+                </span>
+              </div>
+              <div className="mt-4 pt-3 border-t border-surface-highest/60 flex items-center justify-between text-[10px] text-zinc-400">
+                <span>Meta Definida</span>
+                <span className="font-bold text-primary font-mono">{goals?.body_fat_target ? `${goals.body_fat_target}%` : '-'}</span>
+              </div>
+            </div>
+
+            {/* Muscle Mass Card */}
+            <div className="bg-surface-container border border-surface-highest rounded-2xl p-6 flex flex-col justify-between relative overflow-hidden group">
+              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                <Activity className="w-20 h-20 text-white" />
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Massa Muscular</span>
+                <span className="text-3xl font-black text-white font-mono mt-1 block">
+                  {currentMuscle ? `${currentMuscle} kg` : '--'}
+                </span>
+              </div>
+              <div className="mt-4 pt-3 border-t border-surface-highest/60 flex items-center justify-between text-[10px] text-zinc-400">
+                <span>Meta Definida</span>
+                <span className="font-bold text-primary font-mono">{goals?.muscle_target ? `${goals.muscle_target} kg` : '-'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Charts & Postural Evaluation Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Postural Evaluation View */}
+          <div className="bg-surface-container border border-surface-highest rounded-2xl p-6 space-y-6 h-fit">
+            <h3 className="font-heading font-semibold text-lg text-white border-b border-surface-highest/60 pb-2 flex items-center gap-2">
+              📸 Avaliação Postural
+            </h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Analise seu alinhamento corporal sobreposto pela nossa grade geométrica calibrável. Selecione o ângulo abaixo:
+            </p>
+
+            {/* Posture Photo Selector Buttons */}
+            <div className="flex gap-2">
+              {(['front', 'back', 'side'] as const).map(angle => (
+                <button
+                  key={angle}
+                  onClick={() => setActivePostureAngle(angle)}
+                  className={`flex-1 py-2 text-center text-[10px] font-bold uppercase tracking-wider rounded border transition-colors ${
+                    activePostureAngle === angle
+                      ? 'bg-primary/10 border-primary text-primary'
+                      : 'bg-surface border-surface-highest text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  {angle === 'front' ? 'Frente' : angle === 'back' ? 'Costas' : 'Perfil'}
+                </button>
+              ))}
+            </div>
+
+            {/* Image Box with Overlaid Calibratable Grid */}
+            <div className="border border-surface-highest rounded-xl overflow-hidden bg-black/60 relative flex items-center justify-center min-h-[300px]">
+              {getPosturePhoto() ? (
+                <div className="relative w-full aspect-[3/4] max-w-sm mx-auto overflow-hidden">
+                  <img src={getPosturePhoto()} alt="Avaliação Postural" className="w-full h-full object-contain" />
+                  
+                  {/* Calibratable Grid Overlay */}
+                  {showGrid && (
+                    <div 
+                      className="absolute inset-0 pointer-events-none flex items-center justify-center transition-opacity duration-300"
+                      style={{ opacity: gridOpacity }}
+                    >
+                      {/* Central vertical cian line */}
+                      <div 
+                        className="absolute h-full w-[2px] border-l-2 border-dashed border-cyan-400"
+                        style={{ left: `calc(50% + ${gridOffset}px)` }}
+                      />
+                      
+                      {/* Grid cells */}
+                      <div className="absolute inset-0 grid grid-cols-8 grid-rows-12">
+                        {Array.from({ length: 96 }).map((_, index) => (
+                          <div key={index} className="border-r border-b border-white/10" />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-8 text-center text-xs text-zinc-500 italic">
+                  Nenhuma foto postural cadastrada para este ângulo.
+                </div>
+              )}
+            </div>
+
+            {/* Calibrators */}
+            {getPosturePhoto() && (
+              <div className="space-y-4 pt-2 border-t border-surface-highest/60 text-[11px] text-zinc-400">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold">Sobrepor Grade</span>
+                  <input 
+                    type="checkbox" 
+                    checked={showGrid} 
+                    onChange={e => setShowGrid(e.target.checked)} 
+                    className="accent-primary w-4 h-4 cursor-pointer"
+                  />
+                </div>
+                
+                {showGrid && (
+                  <>
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <span>Calibração Horizontal da Linha</span>
+                        <span className="font-mono text-zinc-300">{gridOffset > 0 ? `+${gridOffset}` : gridOffset}px</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="-100" 
+                        max="100" 
+                        value={gridOffset} 
+                        onChange={e => setGridOffset(parseInt(e.target.value))} 
+                        className="w-full accent-primary bg-surface-high h-1 rounded-lg cursor-pointer"
+                      />
+                    </div>
+                    
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <span>Opacidade da Grade</span>
+                        <span className="font-mono text-zinc-300">{Math.round(gridOpacity * 100)}%</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max="1" 
+                        step="0.05" 
+                        value={gridOpacity} 
+                        onChange={e => setGridOpacity(parseFloat(e.target.value))} 
+                        className="w-full accent-primary bg-surface-high h-1 rounded-lg cursor-pointer"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Evolution Charts Panel */}
+          <div className="lg:col-span-2 bg-surface-container border border-surface-highest rounded-2xl p-6 space-y-6">
+            <h3 className="font-heading font-semibold text-lg text-white border-b border-surface-highest/60 pb-2 flex items-center gap-2">
+              📈 Tendência de Evolução Física
+            </h3>
+            
+            {chartData.length === 0 ? (
+              <div className="p-8 text-center text-xs text-zinc-500 italic">
+                Nenhum histórico de avaliações físicas disponível para gerar gráficos.
+              </div>
+            ) : (
+              <div className="space-y-8">
+                {/* Weight Evolution Chart */}
+                <div className="bg-surface p-4 rounded-xl border border-surface-highest/50">
+                  <h4 className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-4">Evolução do Peso (kg)</h4>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                        <XAxis dataKey="date" stroke="#666" style={{ fontSize: 9 }} />
+                        <YAxis stroke="#666" style={{ fontSize: 9 }} domain={['auto', 'auto']} />
+                        <RechartsTooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', fontSize: 10, color: '#fff' }} />
+                        {goals?.weight_target && (
+                          <ReferenceLine y={goals.weight_target} stroke="#dfbf80" strokeDasharray="5 5" label={{ value: `Meta: ${goals.weight_target}kg`, fill: '#dfbf80', fontSize: 8, position: 'top' }} />
+                        )}
+                        <Line type="monotone" dataKey="weight" stroke="#d4af37" strokeWidth={3} dot={{ fill: '#d4af37', r: 4 }} activeDot={{ r: 6 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Body Fat Evolution Chart */}
+                <div className="bg-surface p-4 rounded-xl border border-surface-highest/50">
+                  <h4 className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-4">Evolução da Gordura Corporal (%)</h4>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                        <XAxis dataKey="date" stroke="#666" style={{ fontSize: 9 }} />
+                        <YAxis stroke="#666" style={{ fontSize: 9 }} domain={['auto', 'auto']} />
+                        <RechartsTooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', fontSize: 10, color: '#fff' }} />
+                        {goals?.body_fat_target && (
+                          <ReferenceLine y={goals.body_fat_target} stroke="#dfbf80" strokeDasharray="5 5" label={{ value: `Meta: ${goals.body_fat_target}%`, fill: '#dfbf80', fontSize: 8, position: 'top' }} />
+                        )}
+                        <Line type="monotone" dataKey="body_fat" stroke="#ef4444" strokeWidth={3} dot={{ fill: '#ef4444', r: 4 }} activeDot={{ r: 6 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Muscle Mass Evolution Chart */}
+                <div className="bg-surface p-4 rounded-xl border border-surface-highest/50">
+                  <h4 className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-4">Evolução da Massa Muscular (kg)</h4>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                        <XAxis dataKey="date" stroke="#666" style={{ fontSize: 9 }} />
+                        <YAxis stroke="#666" style={{ fontSize: 9 }} domain={['auto', 'auto']} />
+                        <RechartsTooltip contentStyle={{ backgroundColor: '#111', borderColor: '#333', fontSize: 10, color: '#fff' }} />
+                        {goals?.muscle_target && (
+                          <ReferenceLine y={goals.muscle_target} stroke="#dfbf80" strokeDasharray="5 5" label={{ value: `Meta: ${goals.muscle_target}kg`, fill: '#dfbf80', fontSize: 8, position: 'top' }} />
+                        )}
+                        <Line type="monotone" dataKey="skeletal_muscle" stroke="#00ff41" strokeWidth={3} dot={{ fill: '#00ff41', r: 4 }} activeDot={{ r: 6 }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Anamnesis / Clinical Info */}
+        <div className="bg-surface-container border border-surface-highest rounded-2xl p-6 space-y-6">
+          <h3 className="font-heading font-semibold text-lg text-white border-b border-surface-highest/60 pb-2 flex items-center gap-2">
+            📋 Ficha de Anamnese e Observações Médicas
+          </h3>
+          
+          {anamnesis ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-zinc-300">
+              <div className="space-y-4">
+                <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Restrições Médicas / Lesões</span>
+                  <p className="leading-relaxed whitespace-pre-line text-[11px] text-zinc-100 font-medium">
+                    {anamnesis.medical_restrictions || 'Nenhuma restrição registrada.'}
+                  </p>
+                </div>
+                <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Histórico Cirúrgico</span>
+                  <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                    {anamnesis.surgical_history || 'Nenhuma cirurgia relatada.'}
+                  </p>
+                </div>
+                <div className="p-4 bg-surface rounded-xl border border-[#dfbf80]/15">
+                  <span className="text-[10px] text-[#dfbf80] font-bold uppercase block mb-1">Condição Cardiovascular</span>
+                  <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                    {anamnesis.cardio_condition || 'Nenhuma condição cardiovascular informada.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Medicamentos em Uso</span>
+                  <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                    {anamnesis.medications || 'Nenhum medicamento relatado.'}
+                  </p>
+                </div>
+                <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Hábitos Alimentares / Alergias</span>
+                  <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                    {anamnesis.dietary_habits || 'Nenhum hábito específico ou alergia relatados.'}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Meta Hidratação</span>
+                    <p className="font-mono text-base font-bold text-white mt-1">
+                      {anamnesis.water_intake ? `${anamnesis.water_intake} L / dia` : '--'}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-surface rounded-xl border border-[#dfbf80]/15">
+                    <span className="text-[10px] text-[#dfbf80] font-bold uppercase block mb-1">Nível de Flexibilidade</span>
+                    <p className="font-bold text-white mt-1 text-sm uppercase tracking-wide">
+                      {anamnesis.flexibility_level || '--'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-8 text-center text-xs text-zinc-500 italic">
+              Nenhuma ficha de anamnese disponível para este aluno.
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Footer */}
+      <footer className="mt-16 text-center text-[8px] text-zinc-600 font-medium tracking-widest select-none uppercase py-6 border-t border-surface-highest/30">
+        © 2026 - Todos os direitos reservados | Jaira Leal Personal | Elite Coach Premium
+      </footer>
     </div>
   );
 }

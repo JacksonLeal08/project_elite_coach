@@ -1596,6 +1596,48 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                   </div>
                 </div>
 
+                {/* Public Link Panel */}
+                <div className="bg-surface-high border border-[#dfbf80]/30 p-5 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[0_4px_20px_rgba(223,191,128,0.05)]">
+                  <div className="space-y-1 md:max-w-md">
+                    <h3 className="font-heading font-semibold text-sm text-[#dfbf80] uppercase tracking-wider flex items-center gap-1.5">
+                      🔗 Link de Consulta Pública de Evolução
+                    </h3>
+                    <p className="text-[10px] text-zinc-400">
+                      O aluno pode visualizar este link no celular para acompanhar seu histórico, metas, gráficos e fotos posturais sem precisar de login.
+                    </p>
+                  </div>
+                  <div className="flex-1 flex gap-2 max-w-lg w-full">
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={selectedStudent.share_token ? `${window.location.origin}/?student_token=${selectedStudent.share_token}` : 'Carregando link...'} 
+                      className="flex-1 bg-surface border border-surface-highest rounded px-3 py-2 text-xs text-zinc-300 font-mono select-all outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        if (!selectedStudent.share_token) return;
+                        const url = `${window.location.origin}/?student_token=${selectedStudent.share_token}`;
+                        navigator.clipboard.writeText(url);
+                        showCustomAlert('Link Copiado', 'O link de acompanhamento público do aluno foi copiado para a área de transferência!', 'success');
+                      }}
+                      className="px-3 py-2 bg-primary text-black font-bold uppercase tracking-wider text-[10px] rounded hover:bg-primary-dim transition-colors shrink-0"
+                    >
+                      Copiar
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!selectedStudent.share_token) return;
+                        const url = `${window.location.origin}/?student_token=${selectedStudent.share_token}`;
+                        const text = `Olá *${selectedStudent.name}*! Acompanhe toda a sua evolução física, metas, gráficos e laudos posturais diretamente pelo seu portal de aluno exclusivo:\n\n🔗 ${url}\n\nFoco nos treinos! 🏆`;
+                        window.open(`https://wa.me/${selectedStudent.phone_number || ''}?text=${encodeURIComponent(text)}`, '_blank');
+                      }}
+                      className="px-3 py-2 bg-[#00ff41]/20 border border-[#00ff41]/40 text-[#00ff41] hover:bg-[#00ff41]/30 text-[10px] font-bold uppercase tracking-wider rounded transition-colors shrink-0"
+                    >
+                      Enviar
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   {/* Left Column: Form targets */}
                   <div className="bg-surface-high p-5 rounded-xl border border-surface-highest/60 space-y-6 h-fit">

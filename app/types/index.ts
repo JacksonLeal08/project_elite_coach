@@ -33,6 +33,7 @@ export interface Student {
   body_fat_target?: number;
   muscle_target?: number;
   freq_target?: number;
+  share_token?: string;
 }
 
 export interface Anamnesis {
