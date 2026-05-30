@@ -1,12 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Award, CheckCircle2, Camera, Plus, X, MessageSquare, CreditCard, Trash2, History } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Award, CheckCircle2, Camera, Plus, X, MessageSquare, CreditCard, Trash2, History } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import { Student, User, Anamnesis, StudentGoal } from '../types';
 import { supabase } from '../utils/supabase';
 import { exportAnamnesisPDF, exportPosturePDF, exportEvolutionPDF, exportFrequencyPDF } from '../utils/pdf';
 import { queueOfflineOperation, runOfflineSync } from '../utils/offline';
 import CustomAlertModal from './CustomAlertModal';
+import ParticleEffect from './ParticleEffect';
 
 interface AlunosViewProps {
   currentUser: User | null;
@@ -68,6 +69,9 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
 
   // New Student Form Modal States
   const [showNewStudentModal, setShowNewStudentModal] = useState<boolean>(false);
+  const [wizardStep, setWizardStep] = useState<number>(0);
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+  const [registeredStudentName, setRegisteredStudentName] = useState<string>('');
   const [newStudent, setNewStudent] = useState({
     name: '',
     age: '',
@@ -76,8 +80,80 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
     status: 'Ativo',
     phone_number: '',
     telegram_chat_id: '',
-    photo_avatar_url: ''
+    photo_avatar_url: '',
+    email: '',
+    birth_date: '',
+    street: '',
+    number: '',
+    complement: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+    is_whatsapp: true,
+    activity_level: 'Levemente Ativo',
+    medical_history: '',
+    injuries: '',
+    medications: '',
+    weight: '',
+    height: '',
+    body_fat: '',
+    lean_mass: '',
+    blood_pressure: '',
+    waist: '',
+    abdomen: '',
+    hips: '',
+    right_arm: '',
+    left_arm: '',
+    right_thigh: '',
+    left_thigh: '',
+    freq_target: '3',
+    available_days: [] as string[],
+    duration_pref: '60 min',
+    training_location: 'Academia'
   });
+
+  const resetNewStudent = () => {
+    setNewStudent({
+      name: '',
+      age: '',
+      goal: '',
+      biotype: 'Mesomorfo',
+      status: 'Ativo',
+      phone_number: '',
+      telegram_chat_id: '',
+      photo_avatar_url: '',
+      email: '',
+      birth_date: '',
+      street: '',
+      number: '',
+      complement: '',
+      neighborhood: '',
+      city: '',
+      state: '',
+      is_whatsapp: true,
+      activity_level: 'Levemente Ativo',
+      medical_history: '',
+      injuries: '',
+      medications: '',
+      weight: '',
+      height: '',
+      body_fat: '',
+      lean_mass: '',
+      blood_pressure: '',
+      waist: '',
+      abdomen: '',
+      hips: '',
+      right_arm: '',
+      left_arm: '',
+      right_thigh: '',
+      left_thigh: '',
+      freq_target: '3',
+      available_days: [],
+      duration_pref: '60 min',
+      training_location: 'Academia'
+    });
+    setWizardStep(0);
+  };
 
   // Edit Student Form Modal States
   const [showEditStudentModal, setShowEditStudentModal] = useState<boolean>(false);
@@ -1038,48 +1114,209 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
 
   const handleAddStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStudent.name || !newStudent.age || !newStudent.goal) {
+    if (!newStudent.name || !newStudent.goal) {
       return showCustomAlert('Aviso', 'Preencha os campos obrigatórios!', 'warning');
     }
 
-    const ageNum = parseInt(newStudent.age);
-    if (isNaN(ageNum) || ageNum <= 0) {
-      return showCustomAlert('Aviso', 'Idade precisa ser um número válido!', 'warning');
+    let ageCalculated = parseInt(newStudent.age);
+    if (newStudent.birth_date) {
+      const birthDateObj = new Date(newStudent.birth_date);
+      const ageDifMs = Date.now() - birthDateObj.getTime();
+      const ageDate = new Date(ageDifMs);
+      ageCalculated = Math.abs(ageDate.getUTCFullYear() - 1970);
     }
 
-    const studentPayload = {
+    if (isNaN(ageCalculated) || ageCalculated <= 0) {
+      ageCalculated = 20; // default fallback age
+    }
+
+    const fullPayload = {
       name: newStudent.name,
-      age: ageNum,
+      age: ageCalculated,
       goal: newStudent.goal,
       biotype: newStudent.biotype,
       status: newStudent.status,
       badges: [],
-      imc: 22.5,
+      imc: newStudent.weight && newStudent.height ? parseFloat((parseFloat(newStudent.weight) / Math.pow(parseFloat(newStudent.height), 2)).toFixed(1)) : 22.5,
+      phone_number: newStudent.phone_number || null,
+      telegram_chat_id: newStudent.telegram_chat_id || null,
+      photo_avatar_url: newStudent.photo_avatar_url || null,
+      email: newStudent.email || null,
+      birth_date: newStudent.birth_date || null,
+      street: newStudent.street || null,
+      number: newStudent.number || null,
+      complement: newStudent.complement || null,
+      neighborhood: newStudent.neighborhood || null,
+      city: newStudent.city || null,
+      state: newStudent.state || null
+    };
+
+    const corePayload = {
+      name: newStudent.name,
+      age: ageCalculated,
+      goal: newStudent.goal,
+      biotype: newStudent.biotype,
+      status: newStudent.status,
+      badges: [],
+      imc: newStudent.weight && newStudent.height ? parseFloat((parseFloat(newStudent.weight) / Math.pow(parseFloat(newStudent.height), 2)).toFixed(1)) : 22.5,
       phone_number: newStudent.phone_number || null,
       telegram_chat_id: newStudent.telegram_chat_id || null,
       photo_avatar_url: newStudent.photo_avatar_url || null
     };
 
     if (!navigator.onLine) {
-      queueOfflineOperation('add_student', studentPayload);
+      queueOfflineOperation('add_student', fullPayload);
       showCustomAlert('Modo Offline', 'Aluno cadastrado localmente! Sincronização automática pendente.', 'info');
       setShowNewStudentModal(false);
-      setNewStudent({ name: '', age: '', goal: '', biotype: 'Mesomorfo', status: 'Ativo', phone_number: '', telegram_chat_id: '', photo_avatar_url: '' });
-      setStudents(prev => [...prev, { ...studentPayload, id: 'temp_' + Date.now() }]);
+      resetNewStudent();
+      setStudents(prev => [...prev, { ...fullPayload, id: 'temp_' + Date.now() }]);
       return;
     }
 
-    try {
-      const { error } = await supabase
-        .from('students')
-        .insert([studentPayload]);
+    let insertedStudent: any = null;
+    let hadMigrationError = false;
 
-      if (error) {
-        showCustomAlert('Erro', 'Erro ao cadastrar aluno: ' + error.message, 'error');
+    try {
+      const { data: resData, error: insertError } = await supabase
+        .from('students')
+        .insert([fullPayload])
+        .select();
+
+      if (insertError) {
+        if (insertError.code === '42703') {
+          hadMigrationError = true;
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from('students')
+            .insert([corePayload])
+            .select();
+
+          if (fallbackError) {
+            return showCustomAlert('Erro', 'Erro ao cadastrar aluno: ' + fallbackError.message, 'error');
+          }
+          insertedStudent = fallbackData?.[0];
+        } else {
+          return showCustomAlert('Erro', 'Erro ao cadastrar aluno: ' + insertError.message, 'error');
+        }
       } else {
-        showCustomAlert('Sucesso', 'Aluno cadastrado com sucesso!', 'success');
+        insertedStudent = resData?.[0];
+      }
+
+      if (insertedStudent) {
+        // 1. Insert Anamnesis
+        const anamnesisPayload = {
+          student_id: insertedStudent.id,
+          medical_restrictions: newStudent.medical_history || 'Nenhuma',
+          flexibility_level: 'Moderada',
+          water_intake: 2.0,
+          dietary_habits: 'Misto',
+          surgical_history: newStudent.injuries || 'Nenhuma',
+          medications: newStudent.medications || 'Nenhuma',
+          cardio_condition: newStudent.medical_history || 'Nenhuma',
+          activity_level: newStudent.activity_level
+        };
+
+        const anamnesisCorePayload = {
+          student_id: insertedStudent.id,
+          medical_restrictions: newStudent.medical_history || 'Nenhuma',
+          flexibility_level: 'Moderada',
+          water_intake: 2.0,
+          dietary_habits: 'Misto',
+          surgical_history: newStudent.injuries || 'Nenhuma',
+          medications: newStudent.medications || 'Nenhuma',
+          cardio_condition: newStudent.medical_history || 'Nenhuma'
+        };
+
+        const { error: anamnesisErr } = await supabase
+          .from('anamnesis')
+          .insert([anamnesisPayload]);
+
+        if (anamnesisErr && anamnesisErr.code === '42703') {
+          hadMigrationError = true;
+          await supabase.from('anamnesis').insert([anamnesisCorePayload]);
+        }
+
+        // 2. Insert Biometrics (if provided)
+        if (newStudent.weight || newStudent.body_fat || newStudent.height) {
+          const biometricPayload = {
+            student_id: insertedStudent.id,
+            weight: newStudent.weight ? parseFloat(newStudent.weight) : null,
+            body_fat: newStudent.body_fat ? parseFloat(newStudent.body_fat) : null,
+            skeletal_muscle: newStudent.lean_mass ? parseFloat(newStudent.lean_mass) : null,
+            lean_mass: newStudent.lean_mass ? parseFloat(newStudent.lean_mass) : null,
+            height: newStudent.height ? parseFloat(newStudent.height) : null,
+            blood_pressure: newStudent.blood_pressure || null,
+            waist: newStudent.waist ? parseFloat(newStudent.waist) : null,
+            abdomen: newStudent.abdomen ? parseFloat(newStudent.abdomen) : null,
+            hips: newStudent.hips ? parseFloat(newStudent.hips) : null,
+            right_arm: newStudent.right_arm ? parseFloat(newStudent.right_arm) : null,
+            left_arm: newStudent.left_arm ? parseFloat(newStudent.left_arm) : null,
+            right_thigh: newStudent.right_thigh ? parseFloat(newStudent.right_thigh) : null,
+            left_thigh: newStudent.left_thigh ? parseFloat(newStudent.left_thigh) : null,
+            heart_rate: 70,
+            energy: 8,
+            sleep: 8,
+            feedback: 'Avaliação inicial cadastrada via wizard'
+          };
+
+          const biometricCorePayload = {
+            student_id: insertedStudent.id,
+            weight: newStudent.weight ? parseFloat(newStudent.weight) : null,
+            body_fat: newStudent.body_fat ? parseFloat(newStudent.body_fat) : null,
+            skeletal_muscle: newStudent.lean_mass ? parseFloat(newStudent.lean_mass) : null,
+            heart_rate: 70,
+            energy: 8,
+            sleep: 8,
+            feedback: 'Avaliação inicial cadastrada via wizard'
+          };
+
+          const { error: bioErr } = await supabase
+            .from('field_inspections')
+            .insert([biometricPayload]);
+
+          if (bioErr && bioErr.code === '42703') {
+            hadMigrationError = true;
+            await supabase.from('field_inspections').insert([biometricCorePayload]);
+          }
+        }
+
+        // 3. Insert Student Goals
+        const goalsPayload = {
+          student_id: insertedStudent.id,
+          weight_target: newStudent.weight ? parseFloat(newStudent.weight) : null,
+          body_fat_target: newStudent.body_fat ? parseFloat(newStudent.body_fat) : null,
+          muscle_target: newStudent.lean_mass ? parseFloat(newStudent.lean_mass) : null,
+          freq_target: parseInt(newStudent.freq_target) || 3,
+          available_days: newStudent.available_days.join(','),
+          duration_pref: newStudent.duration_pref,
+          training_location: newStudent.training_location
+        };
+
+        const goalsCorePayload = {
+          student_id: insertedStudent.id,
+          weight_target: newStudent.weight ? parseFloat(newStudent.weight) : null,
+          body_fat_target: newStudent.body_fat ? parseFloat(newStudent.body_fat) : null,
+          muscle_target: newStudent.lean_mass ? parseFloat(newStudent.lean_mass) : null,
+          freq_target: parseInt(newStudent.freq_target) || 3
+        };
+
+        const { error: goalsErr } = await supabase
+          .from('student_goals')
+          .insert([goalsPayload]);
+
+        if (goalsErr && goalsErr.code === '42703') {
+          hadMigrationError = true;
+          await supabase.from('student_goals').insert([goalsCorePayload]);
+        }
+
+        // 4. Final Alert / Success modal
+        if (hadMigrationError) {
+          showCustomAlert('Cadastro Efetuado', 'Aluno cadastrado com sucesso! Nota: Os novos campos estendidos (endereço, circunferências, dias de treino) não foram salvos no banco. Peça para o administrador executar o script SQL de migração no Supabase.', 'info');
+        } else {
+          setRegisteredStudentName(newStudent.name);
+          setShowSuccessModal(true);
+        }
         setShowNewStudentModal(false);
-        setNewStudent({ name: '', age: '', goal: '', biotype: 'Mesomorfo', status: 'Ativo', phone_number: '', telegram_chat_id: '', photo_avatar_url: '' });
+        resetNewStudent();
         fetchStudents();
       }
     } catch (err: any) {
@@ -3102,87 +3339,431 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                     </div>
                   )}
                 </div>
-                
-                <div className="mt-1 text-right">
-                  <span className="text-primary text-xs font-bold uppercase tracking-wider flex items-center gap-1 justify-end">
-                    Ver Perfil <ChevronRight className="w-3.5 h-3.5" />
-                  </span>
-                </div>
               </div>
             ))}
           </div>
         </>
       )}
-
-      {/* New Student Modal Dialog */}
+            {/* New Student Modal Dialog */}
       {showNewStudentModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-md w-full relative">
-            <button onClick={() => setShowNewStudentModal(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-lg w-full relative overflow-y-auto max-h-[90vh] scrollbar-none">
+            <button onClick={() => { setShowNewStudentModal(false); resetNewStudent(); }} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
               <X className="w-5 h-5"/>
             </button>
-            <h3 className="text-xl font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2">Cadastrar Novo Aluno</h3>
-            <form onSubmit={handleAddStudentSubmit} className="space-y-4">
-              <div className="flex flex-col items-center justify-center mb-4">
-                <div className="relative group cursor-pointer w-20 h-20 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shadow-[0_0_15px_rgba(223,191,128,0.2)]">
-                  {newStudent.photo_avatar_url ? (
-                    <img src={newStudent.photo_avatar_url} alt="Avatar Preview" className="w-full h-full object-cover" />
-                  ) : (
-                    <Camera className="w-6 h-6 text-zinc-500 group-hover:text-[#dfbf80] transition-colors" />
-                  )}
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <span className="text-[9px] text-white font-bold uppercase tracking-wider">Upload</span>
+            <h3 className="text-lg font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2 uppercase tracking-wider">Cadastrar Novo Aluno</h3>
+            
+            {/* Wizard Steps Progress Bar */}
+            <div className="flex items-center justify-between mb-6 px-1 select-none">
+              {[
+                { label: 'Cadastro', step: 0 },
+                { label: 'Saúde', step: 1 },
+                { label: 'Biometria', step: 2 },
+                { label: 'Logística', step: 3 }
+              ].map((item, idx) => (
+                <React.Fragment key={item.step}>
+                  <div className="flex flex-col items-center relative z-10">
+                    <button
+                      type="button"
+                      disabled={idx > wizardStep && !newStudent.name}
+                      onClick={() => setWizardStep(item.step)}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold uppercase transition-all duration-300 ${
+                        wizardStep === item.step
+                          ? 'bg-[#dfbf80] text-black ring-4 ring-[#dfbf80]/30 shadow-[0_0_15px_rgba(223,191,128,0.4)]'
+                          : wizardStep > item.step
+                          ? 'bg-primary/20 text-[#dfbf80] border border-[#dfbf80]/40'
+                          : 'bg-surface border border-surface-highest text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      {item.step + 1}
+                    </button>
+                    <span className={`text-[9px] font-bold uppercase tracking-wider mt-1.5 transition-colors ${
+                      wizardStep === item.step ? 'text-[#dfbf80]' : 'text-zinc-500'
+                    }`}>
+                      {item.label}
+                    </span>
                   </div>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => handleAvatarChange(e, false)}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                  />
+                  {idx < 3 && (
+                    <div className="flex-1 h-[2px] mx-2 -mt-4 bg-surface-highest relative">
+                      <div 
+                        className="absolute inset-y-0 left-0 bg-[#dfbf80] transition-all duration-300"
+                        style={{ width: wizardStep > item.step ? '100%' : '0%' }}
+                      />
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+            </div>
+
+            <form onSubmit={handleAddStudentSubmit} className="space-y-6">
+              {/* Step 0: Dados Pessoais & Endereço */}
+              {wizardStep === 0 && (
+                <div className="space-y-4">
+                  <div className="flex flex-col items-center justify-center mb-2">
+                    <div className="relative group cursor-pointer w-16 h-16 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shadow-[0_0_12px_rgba(223,191,128,0.2)]">
+                      {newStudent.photo_avatar_url ? (
+                        <img src={newStudent.photo_avatar_url} alt="Avatar Preview" className="w-full h-full object-cover" />
+                      ) : (
+                        <Camera className="w-5 h-5 text-zinc-500 group-hover:text-[#dfbf80] transition-colors" />
+                      )}
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <span className="text-[8px] text-white font-bold uppercase tracking-wider">Upload</span>
+                      </div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleAvatarChange(e, false)}
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                      />
+                    </div>
+                    <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider mt-1">Foto de Perfil</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Nome Completo *</label>
+                      <input required type="text" value={newStudent.name} onChange={e=>setNewStudent({...newStudent, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: João da Silva"/>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Data de Nascimento (Cálculo de Idade)</label>
+                      <input type="date" value={newStudent.birth_date} onChange={e=>setNewStudent({...newStudent, birth_date: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono"/>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">E-mail</label>
+                      <input type="email" value={newStudent.email} onChange={e=>setNewStudent({...newStudent, email: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: joao@email.com"/>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Telefone / Celular</label>
+                      <input type="text" value={newStudent.phone_number} onChange={e=>setNewStudent({...newStudent, phone_number: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: 5511999999999"/>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 py-1 px-1">
+                    <input 
+                      type="checkbox" 
+                      id="is_whatsapp"
+                      checked={newStudent.is_whatsapp} 
+                      onChange={e => setNewStudent({ ...newStudent, is_whatsapp: e.target.checked })} 
+                      className="w-4 h-4 rounded border-surface-highest bg-surface-high text-primary focus:ring-primary accent-primary"
+                    />
+                    <label htmlFor="is_whatsapp" className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider cursor-pointer select-none">
+                      Este número é o mesmo do WhatsApp?
+                    </label>
+                  </div>
+
+                  <div className="border-t border-surface-highest pt-3">
+                    <h4 className="text-[10px] text-[#dfbf80] font-bold uppercase tracking-widest mb-3">Endereço Completo</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="col-span-2">
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Rua / Avenida</label>
+                        <input type="text" value={newStudent.street} onChange={e=>setNewStudent({...newStudent, street: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: Rua das Flores"/>
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Número</label>
+                        <input type="text" value={newStudent.number} onChange={e=>setNewStudent({...newStudent, number: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: 123"/>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Complemento</label>
+                        <input type="text" value={newStudent.complement} onChange={e=>setNewStudent({...newStudent, complement: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: Apto 45"/>
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Bairro</label>
+                        <input type="text" value={newStudent.neighborhood} onChange={e=>setNewStudent({...newStudent, neighborhood: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: Centro"/>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Cidade</label>
+                        <input type="text" value={newStudent.city} onChange={e=>setNewStudent({...newStudent, city: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: São Paulo"/>
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Estado (UF)</label>
+                        <input type="text" value={newStudent.state} onChange={e=>setNewStudent({...newStudent, state: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: SP"/>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-1.5">Foto de Perfil</span>
-              </div>
-              <div>
-                <label className="text-xs text-zinc-400 uppercase font-bold">Nome do Aluno *</label>
-                <input required type="text" value={newStudent.name} onChange={e=>setNewStudent({...newStudent, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: João da Silva"/>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-zinc-400 uppercase font-bold">Idade *</label>
-                  <input required type="number" value={newStudent.age} onChange={e=>setNewStudent({...newStudent, age: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 27"/>
+              )}
+
+              {/* Step 1: Anamnese & Histórico de Saúde */}
+              {wizardStep === 1 && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Objetivo Principal *</label>
+                      <select value={newStudent.goal} onChange={e=>setNewStudent({...newStudent, goal: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                        <option value="">Selecione...</option>
+                        <option>Emagrecimento</option>
+                        <option>Hipertrofia</option>
+                        <option>Condicionamento Físico</option>
+                        <option>Reabilitação Física</option>
+                        <option>Saúde e Qualidade de Vida</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Nível de Atividade Atual</label>
+                      <select value={newStudent.activity_level} onChange={e=>setNewStudent({...newStudent, activity_level: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                        <option>Sedentário</option>
+                        <option>Levemente Ativo</option>
+                        <option>Moderadamente Ativo</option>
+                        <option>Muito Ativo</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Biotipo Corporal</label>
+                      <select value={newStudent.biotype} onChange={e=>setNewStudent({...newStudent, biotype: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                        <option>Mesomorfo</option>
+                        <option>Endomorfo</option>
+                        <option>Ectomorfo</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Status Inicial</label>
+                      <select value={newStudent.status} onChange={e=>setNewStudent({...newStudent, status: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                        <option>Ativo</option>
+                        <option>Inativo</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Histórico Médico (Doenças, Cardíaco, Hipertensão)</label>
+                    <textarea value={newStudent.medical_history} onChange={e=>setNewStudent({...newStudent, medical_history: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs h-16 resize-none outline-none focus:border-primary" placeholder="Ex: Hipertensão leve controlada, histórico de asma."/>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Lesões ou Restrições Físicas (Dores, Cirurgias)</label>
+                    <textarea value={newStudent.injuries} onChange={e=>setNewStudent({...newStudent, injuries: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs h-16 resize-none outline-none focus:border-primary" placeholder="Ex: Cirurgia no joelho esquerdo, dor lombar esporádica ao correr."/>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Uso de Medicamentos Contínuos</label>
+                    <input type="text" value={newStudent.medications} onChange={e=>setNewStudent({...newStudent, medications: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: Losartana 50mg/dia"/>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-zinc-400 uppercase font-bold">Biotipo</label>
-                  <select value={newStudent.biotype} onChange={e=>setNewStudent({...newStudent, biotype: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary">
-                    <option>Mesomorfo</option>
-                    <option>Endomorfo</option>
-                    <option>Ectomorfo</option>
-                  </select>
+              )}
+
+              {/* Step 2: Dados Biométricos Atuais */}
+              {wizardStep === 2 && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[9px] text-zinc-400 font-bold uppercase block">Peso Atual (kg)</label>
+                      <input type="number" step="0.1" value={newStudent.weight} onChange={e=>setNewStudent({...newStudent, weight: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 82.5"/>
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-zinc-400 font-bold uppercase block">Altura (m)</label>
+                      <input type="number" step="0.01" value={newStudent.height} onChange={e=>setNewStudent({...newStudent, height: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 1.78"/>
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-zinc-400 font-bold uppercase block">Pressão Arterial</label>
+                      <input type="text" value={newStudent.blood_pressure} onChange={e=>setNewStudent({...newStudent, blood_pressure: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 120/80"/>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] text-zinc-400 font-bold uppercase block">% de Gordura (%)</label>
+                      <input type="number" step="0.1" value={newStudent.body_fat} onChange={e=>setNewStudent({...newStudent, body_fat: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 16.4"/>
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-zinc-400 font-bold uppercase block">Massa Magra (kg)</label>
+                      <input type="number" step="0.1" value={newStudent.lean_mass} onChange={e=>setNewStudent({...newStudent, lean_mass: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 68.2"/>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-surface-highest pt-3">
+                    <h4 className="text-[10px] text-[#dfbf80] font-bold uppercase tracking-widest mb-3">Circunferências Corporais (cm)</h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Cintura</label>
+                        <input type="number" step="0.1" value={newStudent.waist} onChange={e=>setNewStudent({...newStudent, waist: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 85"/>
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Abdômen</label>
+                        <input type="number" step="0.1" value={newStudent.abdomen} onChange={e=>setNewStudent({...newStudent, abdomen: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 92"/>
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Quadril</label>
+                        <input type="number" step="0.1" value={newStudent.hips} onChange={e=>setNewStudent({...newStudent, hips: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 104"/>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Braço Direito</label>
+                        <input type="number" step="0.1" value={newStudent.right_arm} onChange={e=>setNewStudent({...newStudent, right_arm: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 34"/>
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Braço Esquerdo</label>
+                        <input type="number" step="0.1" value={newStudent.left_arm} onChange={e=>setNewStudent({...newStudent, left_arm: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 34.2"/>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Coxa Direita</label>
+                        <input type="number" step="0.1" value={newStudent.right_thigh} onChange={e=>setNewStudent({...newStudent, right_thigh: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 58"/>
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-zinc-400 font-bold uppercase block">Coxa Esquerda</label>
+                        <input type="number" step="0.1" value={newStudent.left_thigh} onChange={e=>setNewStudent({...newStudent, left_thigh: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 57.8"/>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="text-xs text-zinc-400 uppercase font-bold">Objetivo *</label>
-                <input required type="text" value={newStudent.goal} onChange={e=>setNewStudent({...newStudent, goal: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: Hipertrofia ou Perda de Peso"/>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-zinc-400 uppercase font-bold">WhatsApp (com DDD)</label>
-                  <input type="text" value={newStudent.phone_number} onChange={e=>setNewStudent({...newStudent, phone_number: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 5511999999999"/>
+              )}
+
+              {/* Step 3: Planejamento & Logística de Treino */}
+              {wizardStep === 3 && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Frequência Semanal Alvo</label>
+                      <select value={newStudent.freq_target} onChange={e=>setNewStudent({...newStudent, freq_target: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                        <option value="1">1x na semana</option>
+                        <option value="2">2x na semana</option>
+                        <option value="3">3x na semana</option>
+                        <option value="4">4x na semana</option>
+                        <option value="5">5x ou mais na semana</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Duração Preferencial</label>
+                      <select value={newStudent.duration_pref} onChange={e=>setNewStudent({...newStudent, duration_pref: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                        <option>30 min</option>
+                        <option>45 min</option>
+                        <option>60 min</option>
+                        <option>mais de 60 min</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Local de Treinamento</label>
+                    <select value={newStudent.training_location} onChange={e=>setNewStudent({...newStudent, training_location: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                      <option>Academia</option>
+                      <option>Ar Livre</option>
+                      <option>Condomínio</option>
+                      <option>Casa</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-2">Dias Disponíveis para Treino</label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(day => {
+                        const isChecked = newStudent.available_days.includes(day);
+                        return (
+                          <label key={day} className={`flex items-center justify-center p-2 rounded-lg border text-[10px] font-bold uppercase cursor-pointer select-none transition-all ${
+                            isChecked
+                              ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.1)]'
+                              : 'bg-surface-high border-surface-highest text-zinc-500 hover:text-zinc-300'
+                          }`}>
+                            <input 
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                const days = isChecked
+                                  ? newStudent.available_days.filter(d => d !== day)
+                                  : [...newStudent.available_days, day];
+                                setNewStudent({ ...newStudent, available_days: days });
+                              }}
+                              className="hidden"
+                            />
+                            {day}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs text-zinc-400 uppercase font-bold">Telegram Chat ID</label>
-                  <input type="text" value={newStudent.telegram_chat_id} onChange={e=>setNewStudent({...newStudent, telegram_chat_id: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 987654321"/>
-                </div>
+              )}
+
+              {/* Wizard Navigation Footer */}
+              <div className="flex gap-3 pt-4 border-t border-surface-highest">
+                {wizardStep > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep(wizardStep - 1)}
+                    className="flex-1 py-2.5 bg-surface hover:bg-surface-high text-zinc-300 font-bold uppercase tracking-wider text-[10px] rounded-lg border border-surface-highest transition-all duration-200 active:scale-95 flex items-center justify-center gap-1"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" /> Voltar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowNewStudentModal(false)}
+                    className="flex-1 py-2.5 bg-surface hover:bg-surface-high text-zinc-400 hover:text-white font-bold uppercase tracking-wider text-[10px] rounded-lg border border-surface-highest transition-all duration-200 active:scale-95"
+                  >
+                    Cancelar
+                  </button>
+                )}
+                
+                {wizardStep < 3 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (wizardStep === 0 && !newStudent.name) {
+                        return showCustomAlert('Aviso', 'Nome do Aluno é obrigatório!', 'warning');
+                      }
+                      setWizardStep(wizardStep + 1);
+                    }}
+                    className="flex-1 py-2.5 bg-primary text-black font-bold uppercase tracking-wider text-[10px] rounded-lg hover:bg-primary-dim transition-all duration-200 active:scale-95 flex items-center justify-center gap-1"
+                  >
+                    Avançar <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="flex-1 py-2.5 bg-gradient-to-r from-primary to-primary-dim text-black font-bold uppercase tracking-wider text-[10px] rounded-lg hover:scale-102 transition-all duration-200 active:scale-95 shadow-[0_0_15px_rgba(212,175,55,0.2)]"
+                  >
+                    Finalizar Cadastro
+                  </button>
+                )}
               </div>
-              <div>
-                <label className="text-xs text-zinc-400 uppercase font-bold">Status Inicial</label>
-                <select value={newStudent.status} onChange={e=>setNewStudent({...newStudent, status: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary">
-                  <option>Ativo</option>
-                  <option>Inativo</option>
-                </select>
-              </div>
-              <button type="submit" className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)]">Salvar Aluno</button>
             </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Success Animation Modal Dialog */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }} 
+            animate={{ opacity: 1, scale: 1 }} 
+            className="bg-surface-container border border-[#dfbf80]/30 rounded-2xl p-8 max-w-sm w-full text-center space-y-6 shadow-[0_0_50px_rgba(223,191,128,0.2)] relative overflow-hidden"
+          >
+            <div className="absolute inset-0 pointer-events-none">
+              <ParticleEffect onComplete={() => {}} />
+            </div>
+
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#dfbf80]/20 to-[#dfbf80]/5 border border-[#dfbf80]/40 flex items-center justify-center text-primary mx-auto shadow-[0_0_20px_rgba(223,191,128,0.3)]">
+              <CheckCircle2 className="w-8 h-8 animate-bounce text-[#dfbf80]" />
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-lg font-heading font-bold text-white uppercase tracking-wider">Cadastro Concluído!</h3>
+              <p className="text-xs text-zinc-300">
+                O perfil de evolução corporal de <strong className="text-[#dfbf80]">{registeredStudentName}</strong> está pronto para receber o primeiro plano de aula!
+              </p>
+            </div>
+
+            <button 
+              onClick={() => setShowSuccessModal(false)}
+              className="w-full py-3 bg-gradient-to-r from-primary to-primary-dim text-black font-bold uppercase tracking-wider text-xs rounded-xl hover:scale-102 transition-all shadow-[0_4px_15px_rgba(212,175,55,0.3)] active:scale-98"
+            >
+              Vamos Começar
+            </button>
           </motion.div>
         </div>
       )}

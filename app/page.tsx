@@ -2140,9 +2140,13 @@ function PublicEvolutionView({ token }: { token: string }) {
     skeletal_muscle: e.skeletal_muscle
   }));
 
-  const currentWeight = evaluations.length > 0 ? evaluations[evaluations.length - 1].weight : null;
-  const currentFat = evaluations.length > 0 ? evaluations[evaluations.length - 1].body_fat : null;
-  const currentMuscle = evaluations.length > 0 ? evaluations[evaluations.length - 1].skeletal_muscle : null;
+  // Find the latest evaluation by sorting ascending and picking the last one.
+  const sortedEvals = [...evaluations].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const latestEval = sortedEvals.length > 0 ? sortedEvals[sortedEvals.length - 1] : null;
+
+  const currentWeight = latestEval ? latestEval.weight : null;
+  const currentFat = latestEval ? latestEval.body_fat : null;
+  const currentMuscle = latestEval ? latestEval.skeletal_muscle : null;
 
   const getPosturePhoto = () => {
     switch (activePostureAngle) {
@@ -2736,19 +2740,49 @@ function PublicEvolutionView({ token }: { token: string }) {
 
         {/* Profile Card & Biomarker Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-1 bg-surface-container border border-surface-highest rounded-2xl p-6 flex flex-col items-center text-center justify-center">
-            <div className="w-16 h-16 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(223,191,128,0.2)] mb-4">
+          <div className="md:col-span-1 bg-surface-container border border-surface-highest rounded-2xl p-6 flex flex-col items-center justify-center text-left">
+            <div className="w-16 h-16 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(223,191,128,0.2)] mb-4 mx-auto">
               {student.photo_avatar_url ? (
                 <img src={student.photo_avatar_url} alt={student.name} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-xl font-bold text-[#dfbf80]">{student.name.charAt(0).toUpperCase()}</span>
               )}
             </div>
-            <h3 className="font-heading font-bold text-white text-base leading-tight truncate w-full">{student.name}</h3>
-            <p className="text-zinc-400 text-xs mt-1 capitalize">{student.goal}</p>
-            <div className="mt-4 pt-3 border-t border-surface-highest w-full text-[11px] text-zinc-400 flex flex-col gap-1">
-              <span><strong>Idade:</strong> {student.age} anos</span>
-              <span><strong>Biotipo:</strong> {student.biotype}</span>
+            <h3 className="font-heading font-bold text-white text-base leading-tight truncate w-full text-center">{student.name}</h3>
+            <p className="text-zinc-400 text-xs mt-1 capitalize text-center">{student.goal}</p>
+            <div className="mt-4 pt-3 border-t border-surface-highest w-full text-[11px] text-zinc-400 flex flex-col gap-1.5">
+              <div className="flex justify-between border-b border-surface-highest/30 pb-1">
+                <span className="text-zinc-500">Idade:</span>
+                <span className="text-white font-medium">{student.age} anos</span>
+              </div>
+              <div className="flex justify-between border-b border-surface-highest/30 pb-1">
+                <span className="text-zinc-500">Biotipo:</span>
+                <span className="text-white font-medium">{student.biotype}</span>
+              </div>
+              {student.email && (
+                <div className="flex flex-col border-b border-surface-highest/30 pb-1">
+                  <span className="text-zinc-500">E-mail:</span>
+                  <span className="text-white font-medium break-all">{student.email}</span>
+                </div>
+              )}
+              {student.phone_number && (
+                <div className="flex justify-between border-b border-surface-highest/30 pb-1">
+                  <span className="text-zinc-500">Telefone:</span>
+                  <span className="text-white font-medium">{student.phone_number}</span>
+                </div>
+              )}
+              {(student.street || student.city) && (
+                <div className="flex flex-col">
+                  <span className="text-zinc-500">Endereço:</span>
+                  <span className="text-white font-medium text-[10px] leading-tight">
+                    {student.street || ''}{student.number ? `, ${student.number}` : ''}
+                    {student.complement ? ` (${student.complement})` : ''}
+                    {student.neighborhood ? ` - ${student.neighborhood}` : ''}
+                    {student.city ? ` - ${student.city}` : ''}
+                    {student.state ? `/${student.state}` : ''}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -3310,60 +3344,169 @@ function PublicEvolutionView({ token }: { token: string }) {
           {/* Anamnesis / Clinical Info (col-span-2) */}
           <div className="lg:col-span-2 bg-surface-container border border-surface-highest rounded-2xl p-6 space-y-6">
             <h3 className="font-heading font-semibold text-lg text-white border-b border-surface-highest/60 pb-2 flex items-center gap-2">
-              📋 Ficha de Anamnese e Observações Médicas
+              📋 Dados de Saúde, Medidas & Logística
             </h3>
             
-            {anamnesis ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-zinc-300">
-                <div className="space-y-4">
-                  <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Restrições Médicas / Lesões</span>
-                    <p className="leading-relaxed whitespace-pre-line text-[11px] text-zinc-100 font-medium">
-                      {anamnesis.medical_restrictions || 'Nenhuma restrição registrada.'}
-                    </p>
-                  </div>
-                  <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Histórico Cirúrgico</span>
-                    <p className="leading-relaxed whitespace-pre-line text-[11px]">
-                      {anamnesis.surgical_history || 'Nenhuma cirurgia relatada.'}
-                    </p>
-                  </div>
-                  <div className="p-4 bg-surface rounded-xl border border-[#dfbf80]/15">
-                    <span className="text-[10px] text-[#dfbf80] font-bold uppercase block mb-1">Condição Cardiovascular</span>
-                    <p className="leading-relaxed whitespace-pre-line text-[11px]">
-                      {anamnesis.cardio_condition || 'Nenhuma condição cardiovascular informada.'}
-                    </p>
-                  </div>
+            {/* Medidas e Antropometria Section */}
+            {latestEval && (
+              <div className="p-4 bg-surface rounded-xl border border-surface-highest/50 space-y-3">
+                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">
+                  📏 Últimas Medidas & Antropometria ({new Date(latestEval.date).toLocaleDateString('pt-BR')})
+                </span>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-zinc-300">
+                  {latestEval.height && (
+                    <div className="p-2.5 bg-surface-container rounded-lg border border-surface-highest/40">
+                      <span className="text-[9px] text-zinc-500 uppercase block">Altura</span>
+                      <span className="text-white font-bold font-mono text-xs">{latestEval.height} m</span>
+                    </div>
+                  )}
+                  {latestEval.lean_mass && (
+                    <div className="p-2.5 bg-surface-container rounded-lg border border-surface-highest/40">
+                      <span className="text-[9px] text-zinc-500 uppercase block">Massa Magra</span>
+                      <span className="text-white font-bold font-mono text-xs">{latestEval.lean_mass} kg</span>
+                    </div>
+                  )}
+                  {latestEval.blood_pressure && (
+                    <div className="p-2.5 bg-surface-container rounded-lg border border-surface-highest/40">
+                      <span className="text-[9px] text-zinc-500 uppercase block">Pressão Arterial</span>
+                      <span className="text-white font-bold font-mono text-xs">{latestEval.blood_pressure}</span>
+                    </div>
+                  )}
+                  {latestEval.waist && (
+                    <div className="p-2.5 bg-surface-container rounded-lg border border-surface-highest/40">
+                      <span className="text-[9px] text-zinc-500 uppercase block">Cintura</span>
+                      <span className="text-white font-bold font-mono text-xs">{latestEval.waist} cm</span>
+                    </div>
+                  )}
+                  {latestEval.abdomen && (
+                    <div className="p-2.5 bg-surface-container rounded-lg border border-surface-highest/40">
+                      <span className="text-[9px] text-zinc-500 uppercase block">Abdômen</span>
+                      <span className="text-white font-bold font-mono text-xs">{latestEval.abdomen} cm</span>
+                    </div>
+                  )}
+                  {latestEval.hips && (
+                    <div className="p-2.5 bg-surface-container rounded-lg border border-surface-highest/40">
+                      <span className="text-[9px] text-zinc-500 uppercase block">Quadril</span>
+                      <span className="text-white font-bold font-mono text-xs">{latestEval.hips} cm</span>
+                    </div>
+                  )}
+                  {(latestEval.right_arm || latestEval.left_arm) && (
+                    <div className="p-2.5 bg-surface-container rounded-lg border border-surface-highest/40 col-span-1">
+                      <span className="text-[9px] text-zinc-500 uppercase block">Braços (D/E)</span>
+                      <span className="text-white font-bold font-mono text-xs">
+                        {latestEval.right_arm || '--'} / {latestEval.left_arm || '--'} cm
+                      </span>
+                    </div>
+                  )}
+                  {(latestEval.right_thigh || latestEval.left_thigh) && (
+                    <div className="p-2.5 bg-surface-container rounded-lg border border-surface-highest/40 col-span-1">
+                      <span className="text-[9px] text-zinc-500 uppercase block">Coxas (D/E)</span>
+                      <span className="text-white font-bold font-mono text-xs">
+                        {latestEval.right_thigh || '--'} / {latestEval.left_thigh || '--'} cm
+                      </span>
+                    </div>
+                  )}
                 </div>
+              </div>
+            )}
 
-                <div className="space-y-4">
-                  <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Medicamentos em Uso</span>
-                    <p className="leading-relaxed whitespace-pre-line text-[11px]">
-                      {anamnesis.medications || 'Nenhum medicamento relatado.'}
-                    </p>
-                  </div>
-                  <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Hábitos Alimentares / Alergias</span>
-                    <p className="leading-relaxed whitespace-pre-line text-[11px]">
-                      {anamnesis.dietary_habits || 'Nenhum hábito específico ou alergia relatados.'}
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
+            {anamnesis ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-zinc-300">
+                  <div className="space-y-4">
                     <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
-                      <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Meta Hidratação</span>
-                      <p className="font-mono text-base font-bold text-white mt-1">
-                        {anamnesis.water_intake ? `${anamnesis.water_intake} L / dia` : '--'}
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Restrições Médicas / Lesões</span>
+                      <p className="leading-relaxed whitespace-pre-line text-[11px] text-zinc-100 font-medium">
+                        {anamnesis.medical_restrictions || 'Nenhuma restrição registrada.'}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Histórico Cirúrgico</span>
+                      <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                        {anamnesis.surgical_history || 'Nenhuma cirurgia relatada.'}
                       </p>
                     </div>
                     <div className="p-4 bg-surface rounded-xl border border-[#dfbf80]/15">
-                      <span className="text-[10px] text-[#dfbf80] font-bold uppercase block mb-1">Nível de Flexibilidade</span>
-                      <p className="font-bold text-white mt-1 text-sm uppercase tracking-wide">
-                        {anamnesis.flexibility_level || '--'}
+                      <span className="text-[10px] text-[#dfbf80] font-bold uppercase block mb-1">Condição Cardiovascular</span>
+                      <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                        {anamnesis.cardio_condition || 'Nenhuma condição cardiovascular informada.'}
                       </p>
                     </div>
                   </div>
+
+                  <div className="space-y-4">
+                    <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Medicamentos em Uso</span>
+                      <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                        {anamnesis.medications || 'Nenhum medicamento relatado.'}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Hábitos Alimentares / Alergias</span>
+                      <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                        {anamnesis.dietary_habits || 'Nenhum hábito específico ou alergia relatados.'}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="p-3 bg-surface rounded-xl border border-surface-highest/50 flex flex-col justify-between">
+                        <span className="text-[9px] text-zinc-400 font-bold uppercase block mb-1">Hidratação</span>
+                        <p className="font-mono text-xs font-bold text-white mt-1">
+                          {anamnesis.water_intake ? `${anamnesis.water_intake}L/dia` : '--'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-surface rounded-xl border border-surface-highest/50 flex flex-col justify-between">
+                        <span className="text-[9px] text-zinc-400 font-bold uppercase block mb-1">Flexibilidade</span>
+                        <p className="font-bold text-white mt-1 text-[10px] uppercase tracking-wide">
+                          {anamnesis.flexibility_level || '--'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-surface rounded-xl border border-[#dfbf80]/15 flex flex-col justify-between">
+                        <span className="text-[9px] text-[#dfbf80] font-bold uppercase block mb-1">Atividade</span>
+                        <p className="font-bold text-white mt-1 text-[9px] leading-tight">
+                          {anamnesis.activity_level || '--'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Logistic Planning Section */}
+                {(goals?.available_days || goals?.duration_pref || goals?.training_location) && (
+                  <div className="pt-4 border-t border-surface-highest/40">
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-2">
+                      🗓️ Planejamento Logístico e Rotina de Treino
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="p-3 bg-surface rounded-xl border border-surface-highest/40 flex flex-col justify-between">
+                        <span className="text-[9px] text-zinc-500 uppercase block mb-1">Dias Disponíveis</span>
+                        <div className="flex flex-wrap gap-1">
+                          {goals?.available_days ? (
+                            goals.available_days.split(',').map((day: string, dIdx: number) => (
+                              <span key={dIdx} className="bg-primary/10 text-primary border border-primary/20 text-[9px] font-bold px-1.5 py-0.5 rounded">
+                                {day.trim()}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-zinc-500 italic">Não informado</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="p-3 bg-surface rounded-xl border border-surface-highest/40 flex flex-col justify-between">
+                        <span className="text-[9px] text-zinc-500 uppercase block mb-1">Duração da Sessão</span>
+                        <p className="font-mono text-xs font-bold text-white mt-1">
+                          {goals?.duration_pref || 'Não informada'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-surface rounded-xl border border-[#dfbf80]/15 flex flex-col justify-between">
+                        <span className="text-[9px] text-[#dfbf80] uppercase block mb-1">Local de Treinamento</span>
+                        <p className="font-bold text-white mt-1 text-xs">
+                          {goals?.training_location || 'Não informado'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="p-8 text-center text-xs text-zinc-500 italic">

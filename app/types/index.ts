@@ -36,6 +36,14 @@ export interface Student {
   freq_target?: number | null;
   share_token?: string | null;
   photo_avatar_url?: string | null;
+  email?: string | null;
+  birth_date?: string | null;
+  street?: string | null;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
+  city?: string | null;
+  state?: string | null;
 }
 
 export interface Anamnesis {
@@ -48,6 +56,7 @@ export interface Anamnesis {
   surgical_history: string;
   medications: string;
   cardio_condition: string;
+  activity_level?: string | null;
 }
 
 export interface Exercise {
@@ -128,6 +137,9 @@ export interface StudentGoal {
   muscle_target: number | null;
   freq_target: number | null;
   updated_at?: string;
+  available_days?: string | null;
+  duration_pref?: string | null;
+  training_location?: string | null;
 }
 
 export interface Cost {
