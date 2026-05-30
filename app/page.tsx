@@ -46,6 +46,67 @@ export default function App() {
   const [resetSuccess, setResetSuccess] = useState<string>('');
   const [resetLoading, setResetLoading] = useState<boolean>(false);
 
+  // Notifications States & Handlers
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
+
+  const fetchNotifications = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (data) {
+        setNotifications(data);
+      }
+    } catch (e) {
+      console.error('Error fetching notifications:', e);
+    }
+  };
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', id);
+      if (!error) {
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('read', false);
+      if (!error) {
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', id);
+      if (!error) {
+        setNotifications(prev => prev.filter(n => n.id !== id));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+
   // Separate useEffect to fetch profile when sessionUser is defined, avoiding auth loop deadlock
   useEffect(() => {
     if (!sessionUser) return;
@@ -129,6 +190,15 @@ export default function App() {
     return () => clearInterval(interval);
   }, [currentUser]);
 
+  // Notifications Polling
+  useEffect(() => {
+    if (!currentUser) return;
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+
   useEffect(() => {
     console.log('App.tsx useEffect mounted');
     if (typeof window !== 'undefined') {
@@ -202,8 +272,21 @@ export default function App() {
     setAuthState('loading');
 
     try {
+      let targetEmail = email.trim();
+      if (!targetEmail.includes('@')) {
+        const { data: profileEmail, error: lookupError } = await supabase
+          .rpc('get_profile_by_username', { p_username: targetEmail.toLowerCase() });
+        
+        if (lookupError || !profileEmail || profileEmail.length === 0) {
+          setLoginError('Nome de usuário não encontrado.');
+          setAuthState('login');
+          return;
+        }
+        targetEmail = profileEmail[0].email;
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: targetEmail,
         password
       });
 
@@ -211,12 +294,12 @@ export default function App() {
         setLoginError(error.message || 'Credenciais inválidas.');
         setAuthState('login');
       }
-      // Note: onAuthStateChange listener will automatically trigger profile fetching and change authState to 'app'
     } catch (err: any) {
       setLoginError(err.message || 'Erro de conexão.');
       setAuthState('login');
     }
   };
+
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -393,7 +476,7 @@ export default function App() {
            <form onSubmit={handleLogin} className="space-y-4">
               {loginError && <div className="p-3 bg-red-500/10 text-red-700 text-sm font-semibold text-center rounded-xl border border-red-500/20">{loginError}</div>}
               <div>
-                <input type="email" placeholder="E-mail" value={email} onChange={e=>setEmail(e.target.value)} className="w-full px-5 py-3.5 bg-white/60 border border-[#8fa498]/60 rounded-xl text-[#0b2817] placeholder-[#5a6c60] font-medium focus:outline-none focus:border-[#0b2817] focus:bg-white transition-all shadow-sm" required />
+                <input type="text" placeholder="E-mail ou Usuário" value={email} onChange={e=>setEmail(e.target.value)} className="w-full px-5 py-3.5 bg-white/60 border border-[#8fa498]/60 rounded-xl text-[#0b2817] placeholder-[#5a6c60] font-medium focus:outline-none focus:border-[#0b2817] focus:bg-white transition-all shadow-sm" required />
               </div>
               <div className="relative">
                 <input 
@@ -563,11 +646,48 @@ export default function App() {
    }
 
   return (
-    <MainApp currentUser={currentUser} setCurrentUser={setCurrentUser} showSupportBtn={showSupportBtn} setShowSupportBtn={setShowSupportBtn} handleLogout={handleLogout} />
+    <MainApp 
+      currentUser={currentUser} 
+      setCurrentUser={setCurrentUser} 
+      showSupportBtn={showSupportBtn} 
+      setShowSupportBtn={setShowSupportBtn} 
+      handleLogout={handleLogout} 
+      notifications={notifications}
+      showNotificationsModal={showNotificationsModal}
+      setShowNotificationsModal={setShowNotificationsModal}
+      handleMarkAsRead={handleMarkAsRead}
+      handleMarkAllAsRead={handleMarkAllAsRead}
+      handleDeleteNotification={handleDeleteNotification}
+    />
   );
 }
 
-function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBtn, handleLogout }: { currentUser: User | null, setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>, showSupportBtn: boolean, setShowSupportBtn: any, handleLogout: () => void }) {
+function MainApp({ 
+  currentUser, 
+  setCurrentUser, 
+  showSupportBtn, 
+  setShowSupportBtn, 
+  handleLogout,
+  notifications,
+  showNotificationsModal,
+  setShowNotificationsModal,
+  handleMarkAsRead,
+  handleMarkAllAsRead,
+  handleDeleteNotification
+}: { 
+  currentUser: User | null, 
+  setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>, 
+  showSupportBtn: boolean, 
+  setShowSupportBtn: any, 
+  handleLogout: () => void,
+  notifications: any[],
+  showNotificationsModal: boolean,
+  setShowNotificationsModal: React.Dispatch<React.SetStateAction<boolean>>,
+  handleMarkAsRead: (id: string) => Promise<void>,
+  handleMarkAllAsRead: () => Promise<void>,
+  handleDeleteNotification: (id: string) => Promise<void>
+}) {
+
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [time, setTime] = useState<string>('');
   const [date, setDate] = useState<string>('');
@@ -858,9 +978,16 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
 
            <div className="flex items-center gap-4">
               {/* Notification Bell */}
-              <button className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-primary transition-colors hover:bg-surface-high relative">
+              <button 
+                onClick={() => setShowNotificationsModal(true)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-primary transition-colors hover:bg-surface-high relative"
+              >
                  <Bell className="w-4 h-4" />
-                 <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+                 {notifications.filter(n => !n.read).length > 0 && (
+                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center border border-surface">
+                     {notifications.filter(n => !n.read).length}
+                   </span>
+                 )}
               </button>
 
               {/* Logged in User Profile Info (Top Right) */}
@@ -1039,9 +1166,114 @@ function MainApp({ currentUser, setCurrentUser, showSupportBtn, setShowSupportBt
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Notifications Modal */}
+      <AnimatePresence>
+        {showNotificationsModal && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            onClick={() => setShowNotificationsModal(false)}
+            className="fixed inset-0 bg-black/85 backdrop-blur-md z-[100] flex items-center justify-center p-4 cursor-pointer"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative max-w-md w-full bg-surface-container border border-surface-highest rounded-2xl p-6 shadow-2xl cursor-default flex flex-col max-h-[80vh]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-surface-highest pb-3 mb-4">
+                <h3 className="text-sm font-bold text-[#dfbf80] uppercase tracking-wider flex items-center gap-2">
+                  🔔 Notificações ({notifications.filter(n => !n.read).length} não lidas)
+                </h3>
+                <button 
+                  onClick={() => setShowNotificationsModal(false)}
+                  className="text-zinc-400 hover:text-white p-1.5 rounded-lg bg-surface-high border border-surface-highest"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {notifications.filter(n => !n.read).length > 0 && (
+                <div className="flex justify-end mb-3">
+                  <button 
+                    onClick={handleMarkAllAsRead}
+                    className="text-[10px] text-primary font-bold uppercase tracking-wider hover:underline"
+                  >
+                    Marcar todas como lidas
+                  </button>
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-none">
+                {notifications.length === 0 ? (
+                  <div className="p-8 text-center text-xs text-zinc-500 italic">
+                    Nenhuma notificação registrada.
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <div 
+                      key={n.id} 
+                      className={`p-3 rounded-xl border transition-all relative flex flex-col gap-1.5 ${
+                        n.read 
+                          ? 'bg-surface/30 border-surface-highest/40 opacity-60' 
+                          : 'bg-[#dfbf80]/5 border-[#dfbf80]/20 shadow-[inset_0_0_10px_rgba(223,191,128,0.02)]'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start gap-4">
+                        <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                          n.type === 'warning' 
+                            ? 'bg-red-500/20 text-red-400' 
+                            : n.type === 'success' 
+                            ? 'bg-green-500/20 text-green-400' 
+                            : n.type === 'schedule'
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : 'bg-zinc-500/20 text-zinc-300'
+                        }`}>
+                          {n.type === 'schedule' ? 'Agenda' : n.type === 'warning' ? 'Aviso' : n.type === 'success' ? 'Financeiro' : 'Info'}
+                        </span>
+                        
+                        <div className="flex gap-2">
+                          {!n.read && (
+                            <button
+                              onClick={() => handleMarkAsRead(n.id)}
+                              className="text-[9px] text-[#dfbf80] hover:underline uppercase font-bold"
+                              title="Marcar como lida"
+                            >
+                              Lida
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteNotification(n.id)}
+                            className="text-[9px] text-red-400 hover:text-red-300 hover:underline uppercase font-bold"
+                            title="Excluir notificação"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+
+                      <h4 className="text-xs font-bold text-white">{n.title}</h4>
+                      <p className="text-[11px] text-zinc-300 leading-relaxed">{n.message}</p>
+                      
+                      <span className="text-[9px] text-zinc-500 self-end font-mono">
+                        {new Date(n.created_at).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
 
 function PublicEvolutionView({ token }: { token: string }) {
   const [loading, setLoading] = useState<boolean>(true);
@@ -1053,6 +1285,51 @@ function PublicEvolutionView({ token }: { token: string }) {
   const [showGrid, setShowGrid] = useState<boolean>(true);
   const [gridOpacity, setGridOpacity] = useState<number>(0.4);
   const [gridOffset, setGridOffset] = useState<number>(0);
+
+  // Workout active tab, completions, video player, and celebration
+  const [activeWorkoutDayIdx, setActiveWorkoutDayIdx] = useState<number>(0);
+  const [completedDays, setCompletedDays] = useState<string[]>([]);
+  const [checkingDay, setCheckingDay] = useState<string | null>(null);
+  const [showCelebration, setShowCelebration] = useState<boolean>(false);
+  const [exerciseVideos, setExerciseVideos] = useState<Record<string, { video_url?: string; video_file_url?: string }>>({});
+  const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(null);
+  const [activeVideoTitle, setActiveVideoTitle] = useState<string>('');
+
+  const getEmbedUrl = (url: string) => {
+    if (!url) return '';
+    if (url.includes('youtube.com/embed/')) return url;
+    let videoId = '';
+    if (url.includes('youtu.be/')) {
+      videoId = url.split('youtu.be/')[1]?.split('?')[0];
+    } else if (url.includes('youtube.com/watch')) {
+      const params = new URLSearchParams(url.split('?')[1]);
+      videoId = params.get('v') || '';
+    }
+    return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+  };
+
+  useEffect(() => {
+    const fetchLibrary = async () => {
+      try {
+        const { data } = await supabase
+          .from('exercise_library')
+          .select('name, video_url, video_file_url');
+        if (data) {
+          const map: Record<string, { video_url?: string; video_file_url?: string }> = {};
+          data.forEach((ex: any) => {
+            map[ex.name.toLowerCase().trim()] = {
+              video_url: ex.video_url || undefined,
+              video_file_url: ex.video_file_url || undefined
+            };
+          });
+          setExerciseVideos(map);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchLibrary();
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -1068,6 +1345,14 @@ function PublicEvolutionView({ token }: { token: string }) {
           setError(res.message || 'Link inválido ou expirado.');
         } else {
           setData(res);
+          // Load completed days for today
+          if (res.workout_logs) {
+            const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+            const completedToday = res.workout_logs
+              .filter((log: any) => log.completed_at.startsWith(todayStr))
+              .map((log: any) => log.day_name);
+            setCompletedDays(completedToday);
+          }
         }
       } catch (e: any) {
         setError(e.message || 'Erro de conexão ao buscar os dados.');
@@ -1078,18 +1363,61 @@ function PublicEvolutionView({ token }: { token: string }) {
     fetchData();
   }, [token]);
 
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-black">
+        <div className="absolute inset-0 z-0 bg-cover bg-center opacity-30" style={{ backgroundImage: 'url("https://i.ibb.co/jk8KJxCz/personal-trainer-loading-screen.png")' }}></div>
+        <div className="absolute inset-0 bg-black/60 z-0 backdrop-blur-[4px]"></div>
+
         <motion.div 
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-          className="w-12 h-12 border-4 border-[#dfbf80] border-t-transparent rounded-full mb-4"
-        />
-        <p className="text-[#dfbf80] font-heading font-medium tracking-wide animate-pulse">Carregando sua evolução física...</p>
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.8 }}
+          className="flex flex-col items-center z-10 w-full max-w-[420px] px-6 text-center"
+        >
+          <motion.div 
+             animate={{ 
+               scale: [1, 1.04, 1],
+               filter: [
+                 'drop-shadow(0 0 20px rgba(223,191,128,0.25))',
+                 'drop-shadow(0 0 35px rgba(223,191,128,0.5))',
+                 'drop-shadow(0 0 20px rgba(223,191,128,0.25))'
+               ]
+             }} 
+             transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+             className="w-[260px] h-[260px] sm:w-[320px] sm:h-[320px] mb-4 flex items-center justify-center animate-fade-in"
+          >
+             <img 
+               src="/logo.png" 
+               alt="Logo Jaira Leal" 
+               className="w-full h-full object-contain" 
+               onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} 
+             />
+             <div className="hidden flex-col items-center justify-center">
+               <span className="text-6xl mb-2 drop-shadow-md">💃</span>
+             </div>
+          </motion.div>
+          
+          <div className="w-48 h-1 rounded-full relative overflow-hidden bg-[#dfbf80]/10 border border-[#dfbf80]/20">
+             <motion.div 
+               animate={{ 
+                 left: ["-100%", "100%"]
+               }} 
+               transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }} 
+               className="absolute top-0 bottom-0 w-1/2 rounded-full"
+               style={{ background: 'linear-gradient(90deg, transparent 0%, #dfbf80 50%, transparent 100%)' }}
+             />
+          </div>
+          
+          <p className="mt-6 text-[#dfbf80] text-xs sm:text-sm font-semibold tracking-[0.15em] uppercase drop-shadow-md animate-pulse">
+            Carregando evolução física...
+          </p>
+        </motion.div>
       </div>
     );
   }
+
 
   if (error || !data) {
     return (
@@ -1109,7 +1437,7 @@ function PublicEvolutionView({ token }: { token: string }) {
     );
   }
 
-  const { student, goals, evaluations, anamnesis } = data;
+  const { student, goals, evaluations, anamnesis, latest_workout } = data;
 
   // Sorting evaluations by date for chart rendering
   const chartData = [...evaluations].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()).map((e: any) => ({
@@ -1134,6 +1462,40 @@ function PublicEvolutionView({ token }: { token: string }) {
         return student.photo_front_url;
     }
   };
+
+  const handleToggleDay = async (dayName: string) => {
+    if (!latest_workout) return;
+    setCheckingDay(dayName);
+    const isCompleted = completedDays.includes(dayName);
+    try {
+      if (isCompleted) {
+        const { error: err } = await supabase.rpc('unlog_public_workout_day', {
+          p_token: token,
+          p_protocol_id: latest_workout.id,
+          p_day_name: dayName
+        });
+        if (!err) {
+          setCompletedDays(prev => prev.filter(d => d !== dayName));
+        }
+      } else {
+        const { error: err } = await supabase.rpc('log_public_workout_day', {
+          p_token: token,
+          p_protocol_id: latest_workout.id,
+          p_day_name: dayName
+        });
+        if (!err) {
+          setCompletedDays(prev => [...prev, dayName]);
+          setShowCelebration(true);
+          setTimeout(() => setShowCelebration(false), 3000);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setCheckingDay(null);
+    }
+  };
+
 
   return (
     <div className="min-h-screen bg-black text-white pb-16">
@@ -1230,8 +1592,140 @@ function PublicEvolutionView({ token }: { token: string }) {
           </div>
         </div>
 
+        {/* Planilha de Treinos / Active Workout Section */}
+        {latest_workout && latest_workout.workout_data && latest_workout.workout_data.days && (
+          <div className="bg-surface-container border border-surface-highest rounded-2xl p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-surface-highest/60 pb-3 gap-3">
+              <div>
+                <h3 className="font-heading font-semibold text-lg text-white flex items-center gap-2">
+                  💪 Seu Cronograma de Treino Ativo
+                </h3>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Objetivo: <strong className="text-[#dfbf80]">{latest_workout.objective}</strong> | Divisão: <strong>{latest_workout.split}</strong> ({latest_workout.duration_weeks} semanas)
+                </p>
+              </div>
+              
+              <button 
+                onClick={() => window.open(`https://wa.me/5511999999999?text=Olá, coach! Estou com dúvidas sobre minha planilha de treinos...`, '_blank')}
+                className="px-4 py-2 bg-surface hover:bg-surface-high border border-surface-highest rounded text-zinc-300 hover:text-white transition-colors text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 self-start sm:self-center"
+              >
+                💬 Chamar Treinador
+              </button>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-6">
+              {/* Left Day Selector Tabs */}
+              <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 shrink-0 w-full md:w-48 scrollbar-none">
+                {latest_workout.workout_data.days.map((day: any, idx: number) => {
+                  const isDoneToday = completedDays.includes(day.dayName);
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveWorkoutDayIdx(idx)}
+                      className={`flex items-center justify-between px-4 py-3 rounded-xl border text-[11px] font-bold uppercase tracking-wider transition-all w-full min-w-[120px] md:min-w-0 ${
+                        activeWorkoutDayIdx === idx
+                          ? 'bg-[#dfbf80]/10 border-[#dfbf80] text-[#dfbf80] shadow-[0_0_15px_rgba(223,191,128,0.15)]'
+                          : 'bg-surface border-surface-highest text-zinc-400 hover:text-zinc-200'
+                      }`}
+                    >
+                      <span className="truncate">{day.dayName}</span>
+                      {isDoneToday && (
+                        <span className="text-[9px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30 shrink-0 ml-2">
+                          CONCLUÍDO
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Exercises List for Active Day */}
+              <div className="flex-1 bg-surface/50 border border-surface-highest/60 rounded-xl p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-surface-highest/40 pb-3 gap-3">
+                  <div>
+                    <h4 className="font-heading font-black text-sm text-white uppercase tracking-wider">
+                      {latest_workout.workout_data.days[activeWorkoutDayIdx]?.dayName}
+                    </h4>
+                    <p className="text-[10px] text-zinc-500 font-medium">
+                      Estão listados abaixo os exercícios e repetições recomendadas
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={() => handleToggleDay(latest_workout.workout_data.days[activeWorkoutDayIdx].dayName)}
+                    disabled={checkingDay !== null}
+                    className={`px-4 py-2 rounded-xl border text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md ${
+                      completedDays.includes(latest_workout.workout_data.days[activeWorkoutDayIdx]?.dayName)
+                        ? 'bg-green-600 border-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.2)]'
+                        : 'bg-[#dfbf80] hover:bg-[#d4af37] border-[#dfbf80] text-black hover:-translate-y-0.5'
+                    }`}
+                  >
+                    {checkingDay === latest_workout.workout_data.days[activeWorkoutDayIdx]?.dayName ? (
+                      <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    ) : completedDays.includes(latest_workout.workout_data.days[activeWorkoutDayIdx]?.dayName) ? (
+                      '✓ Treino Feito Hoje!'
+                    ) : (
+                      '✓ Concluir Treino Hoje'
+                    )}
+                  </button>
+                </div>
+
+                <div className="space-y-3 divide-y divide-surface-highest/20">
+                  {latest_workout.workout_data.days[activeWorkoutDayIdx]?.exercises.map((ex: any, idx: number) => {
+                    const videoInfo = exerciseVideos[ex.name.toLowerCase().trim()];
+                    const hasVideo = !!(videoInfo?.video_url || videoInfo?.video_file_url);
+                    
+                    return (
+                      <div key={idx} className="pt-3 first:pt-0 flex items-center justify-between gap-4 group">
+                        <div className="space-y-1">
+                          <h5 className="font-bold text-xs sm:text-sm text-zinc-100 group-hover:text-primary transition-colors flex items-center gap-2">
+                            {ex.name}
+                            {hasVideo && (
+                              <button
+                                onClick={() => {
+                                  const url = videoInfo?.video_url || videoInfo?.video_file_url || '';
+                                  setActiveVideoUrl(url);
+                                  setActiveVideoTitle(ex.name);
+                                }}
+                                className="text-[8px] sm:text-[9px] bg-[#dfbf80]/20 text-[#dfbf80] border border-[#dfbf80]/30 px-1.5 py-0.5 rounded font-mono font-bold hover:bg-[#dfbf80] hover:text-black transition-colors shrink-0"
+                              >
+                                VER EXECUÇÃO
+                              </button>
+                            )}
+                          </h5>
+                          {ex.notes && (
+                            <p className="text-[10px] sm:text-[11px] text-zinc-400 italic">
+                              Obs: {ex.notes}
+                            </p>
+                          )}
+                        </div>
+                        
+                        <div className="flex gap-3 font-mono text-[10px] sm:text-[11px] text-zinc-400 bg-surface px-3 py-1 rounded-lg border border-surface-highest/40 shrink-0">
+                          <div>
+                            <span className="text-[8px] text-zinc-500 uppercase font-bold block">Séries</span>
+                            <span className="font-bold text-white text-xs sm:text-sm">{ex.sets}</span>
+                          </div>
+                          <div className="border-l border-surface-highest/40 pl-3">
+                            <span className="text-[8px] text-zinc-500 uppercase font-bold block">Reps</span>
+                            <span className="font-bold text-white text-xs sm:text-sm">{ex.reps}</span>
+                          </div>
+                          <div className="border-l border-surface-highest/40 pl-3">
+                            <span className="text-[8px] text-zinc-500 uppercase font-bold block">Descan.</span>
+                            <span className="font-bold text-white text-xs sm:text-sm">{ex.rest}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Charts & Postural Evaluation Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
           {/* Postural Evaluation View */}
           <div className="bg-surface-container border border-surface-highest rounded-2xl p-6 space-y-6 h-fit">
             <h3 className="font-heading font-semibold text-lg text-white border-b border-surface-highest/60 pb-2 flex items-center gap-2">
@@ -1482,6 +1976,94 @@ function PublicEvolutionView({ token }: { token: string }) {
         </div>
       </main>
 
+      {/* Celebration Overlay */}
+      {showCelebration && (
+        <div className="fixed inset-0 pointer-events-none z-[100] flex items-center justify-center">
+          <div className="absolute inset-0 bg-[#dfbf80]/10 backdrop-blur-[1px] animate-pulse" />
+          <motion.div 
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ scale: [1.2, 1], opacity: [1, 0] }}
+            transition={{ duration: 1.5, ease: "easeOut" }}
+            className="text-4xl sm:text-6xl font-black text-[#dfbf80] drop-shadow-[0_0_20px_rgba(223,191,128,0.8)] select-none uppercase tracking-widest text-center"
+          >
+            💪 Treino Concluído! <br/>
+            <span className="text-xl sm:text-2xl mt-2 block text-white font-sans font-medium">BOM TRABALHO! 🏆</span>
+          </motion.div>
+          {Array.from({ length: 40 }).map((_, i) => {
+            const angle = (i * 360) / 40;
+            const radius = 100 + Math.random() * 200;
+            const x = Math.cos((angle * Math.PI) / 180) * radius;
+            const y = Math.sin((angle * Math.PI) / 180) * radius;
+            return (
+              <motion.div
+                key={i}
+                initial={{ x: 0, y: 0, scale: 1, opacity: 1 }}
+                animate={{ x, y, scale: 0, opacity: 0 }}
+                transition={{ duration: 1.5, ease: "easeOut" }}
+                className="absolute w-2.5 h-2.5 rounded-full"
+                style={{
+                  backgroundColor: i % 2 === 0 ? '#dfbf80' : '#18462b',
+                  boxShadow: '0 0 10px rgba(223,191,128,0.5)',
+                  left: '50%',
+                  top: '50%'
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Video Player Modal */}
+      <AnimatePresence>
+        {activeVideoUrl && (
+          <motion.div 
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }} 
+            onClick={() => setActiveVideoUrl(null)}
+            className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 cursor-zoom-out"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative max-w-2xl w-full aspect-video bg-surface-container border border-surface-highest rounded-2xl overflow-hidden p-2 shadow-2xl cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="absolute top-4 left-4 z-10 bg-black/60 px-3 py-1 rounded backdrop-blur-md text-xs font-bold text-white border border-white/10 uppercase tracking-wider">
+                🎥 {activeVideoTitle}
+              </div>
+              <button 
+                onClick={() => setActiveVideoUrl(null)}
+                className="absolute top-4 right-4 z-10 bg-black/60 hover:bg-black text-white p-2 rounded-full backdrop-blur-sm transition-colors border border-white/10"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="w-full h-full rounded-xl overflow-hidden bg-black flex items-center justify-center">
+                {activeVideoUrl.includes('youtube.com') || activeVideoUrl.includes('youtu.be') ? (
+                  <iframe 
+                    src={getEmbedUrl(activeVideoUrl)} 
+                    title={activeVideoTitle} 
+                    className="w-full h-full border-none" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allowFullScreen 
+                  />
+                ) : (
+                  <video 
+                    src={activeVideoUrl} 
+                    controls 
+                    autoPlay 
+                    className="w-full h-full object-contain" 
+                  />
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Footer */}
       <footer className="mt-16 text-center text-[8px] text-zinc-600 font-medium tracking-widest select-none uppercase py-6 border-t border-surface-highest/30">
         © 2026 - Todos os direitos reservados | Jaira Leal Personal | Elite Coach Premium
@@ -1489,3 +2071,4 @@ function PublicEvolutionView({ token }: { token: string }) {
     </div>
   );
 }
+

@@ -14,8 +14,9 @@ interface ConfigViewProps {
 export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState<boolean>(true);
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Treinador', password: '', expires_at: '' });
+  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Treinador', password: '', expires_at: '', username: '' });
   const [adding, setAdding] = useState<boolean>(false);
+
   const [showNewUserPassword, setShowNewUserPassword] = useState<boolean>(false);
 
   // Custom Alert Modal State
@@ -51,6 +52,7 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
   const [theme, setTheme] = useState<string>(() => typeof window !== 'undefined' ? (localStorage.getItem('elite_coach_theme') || 'dark') : 'dark');
 
   const [botToken, setBotToken] = useState<string>('');
+  const [adminChatId, setAdminChatId] = useState<string>('');
   const [showToken, setShowToken] = useState<boolean>(false);
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
   const [testMessage, setTestMessage] = useState<string>('');
@@ -149,7 +151,7 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
 
   const fetchTelegramToken = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: botData, error } = await supabase
         .from('system_settings')
         .select('value')
         .eq('key', 'telegram_bot_token')
@@ -161,8 +163,17 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
         } else {
           console.error('Error fetching bot token:', error);
         }
-      } else if (data?.value) {
-        setBotToken(data.value);
+      } else if (botData?.value) {
+        setBotToken(botData.value);
+      }
+
+      const { data: adminData } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'telegram_admin_chat_id')
+        .maybeSingle();
+      if (adminData?.value) {
+        setAdminChatId(adminData.value);
       }
     } catch (e: any) {
       console.error(e);
@@ -295,7 +306,7 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
 
               if (!rpcError && rpcData?.success) {
                 showCustomAlert('Sucesso', 'Membro sincronizado e registrado com sucesso!', 'success');
-                setNewUser({ name: '', email: '', role: 'Treinador', password: '', expires_at: '' });
+                setNewUser({ name: '', email: '', role: 'Treinador', password: '', expires_at: '', username: '' });
                 setAdding(false);
                 fetchUsers();
                 return;
@@ -320,7 +331,8 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
               email: newUser.email,
               role: newUser.role,
               unremovable: false,
-              expires_at: newUser.expires_at ? new Date(newUser.expires_at).toISOString() : null
+              expires_at: newUser.expires_at ? new Date(newUser.expires_at).toISOString() : null,
+              username: newUser.username ? newUser.username.toLowerCase().trim() : null
             }, { onConflict: 'id' });
 
           if (profileError) {
@@ -329,7 +341,7 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
         }
 
         showCustomAlert('Sucesso', 'Membro registrado com sucesso! Um e-mail de confirmação foi disparado.', 'success');
-        setNewUser({ name: '', email: '', role: 'Treinador', password: '', expires_at: '' });
+        setNewUser({ name: '', email: '', role: 'Treinador', password: '', expires_at: '', username: '' });
         setAdding(false);
         fetchUsers();
       } catch (err: any) {
@@ -353,9 +365,11 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
             name: editForm.name,
             email: editForm.email,
             role: editForm.role,
-            expires_at: editForm.expires_at ? new Date(editForm.expires_at).toISOString() : null
+            expires_at: editForm.expires_at ? new Date(editForm.expires_at).toISOString() : null,
+            username: editForm.username ? editForm.username.toLowerCase().trim() : null
           })
           .eq('id', editingId);
+
 
         if (error) {
           showCustomAlert('Erro', 'Erro ao atualizar perfil: ' + error.message, 'error');
@@ -414,22 +428,27 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
     setSavingToken(true);
     setDbWarning('');
     try {
-      const { error } = await supabase
+      const { error: botError } = await supabase
         .from('system_settings')
         .upsert({ key: 'telegram_bot_token', value: botToken, updated_at: new Date().toISOString() });
 
-      if (error) {
-        if (error.code === 'PGRST205' || error.message?.includes('relation "public.system_settings" does not exist')) {
+      const { error: adminError } = await supabase
+        .from('system_settings')
+        .upsert({ key: 'telegram_admin_chat_id', value: adminChatId, updated_at: new Date().toISOString() });
+
+      if (botError || adminError) {
+        const errorMsg = (botError || adminError)?.message;
+        if ((botError || adminError)?.code === 'PGRST205' || errorMsg?.includes('relation "public.system_settings" does not exist')) {
           setDbWarning('Erro ao salvar: a tabela public.system_settings não existe no banco.');
         } else {
-          showCustomAlert('Erro', 'Erro ao salvar token: ' + error.message, 'error');
+          showCustomAlert('Erro', 'Erro ao salvar configurações: ' + errorMsg, 'error');
         }
       } else {
-        showCustomAlert('Sucesso', 'Token do Telegram salvo com sucesso!', 'success');
+        showCustomAlert('Sucesso', 'Configurações do Telegram salvas com sucesso!', 'success');
       }
     } catch (e: any) {
       console.error(e);
-      showCustomAlert('Erro', 'Erro inesperado ao salvar token.', 'error');
+      showCustomAlert('Erro', 'Erro inesperado ao salvar configurações.', 'error');
     } finally {
       setSavingToken(false);
     }
@@ -572,6 +591,17 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
                   </button>
                 </div>
               </div>
+
+              <div>
+                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Chat ID do Administrador (Telegram)</label>
+                <input 
+                  type="text" 
+                  value={adminChatId} 
+                  onChange={e=>setAdminChatId(e.target.value)} 
+                  className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors font-mono" 
+                  placeholder="Ex: 987654321"
+                />
+              </div>
               
               <div className="flex items-center justify-between p-4 bg-surface-high border border-surface-highest rounded">
                  <div>
@@ -655,6 +685,11 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
                     </div>
 
                     <div>
+                      <label className="text-xs text-zinc-400 font-bold block uppercase tracking-wide">Nome de Usuário (Username)</label>
+                      <input type="text" value={newUser.username || ''} onChange={e=>setNewUser({...newUser, username:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: coach_jairaleal" />
+                    </div>
+
+                    <div>
                       <label className="text-xs text-zinc-400 font-bold block uppercase tracking-wide">Senha de Acesso</label>
                       <div className="relative mt-1">
                         <input 
@@ -707,6 +742,7 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
                  <thead className="bg-surface-high uppercase text-xs font-bold text-zinc-500">
                    <tr>
                      <th className="p-3 rounded-tl">Nome</th>
+                     <th className="p-3">Usuário</th>
                      <th className="p-3">E-mail</th>
                      <th className="p-3">Acesso</th>
                      <th className="p-3">Expiração</th>
@@ -718,6 +754,9 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
                      <tr key={u.id} className="hover:bg-surface-high/30">
                        <td className="p-3 font-medium text-white">
                           {editingId === u.id && editForm ? <input type="text" value={editForm.name} onChange={e=>setEditForm({...editForm, name:e.target.value})} className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary" /> : u.name}
+                       </td>
+                       <td className="p-3 text-zinc-300 font-mono text-xs">
+                          {editingId === u.id && editForm ? <input type="text" value={editForm.username || ''} onChange={e=>setEditForm({...editForm, username:e.target.value})} className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary" placeholder="Sem username" /> : u.username || <span className="text-zinc-600 italic">Sem Usuário</span>}
                        </td>
                        <td className="p-3 text-zinc-400">
                           {editingId === u.id && editForm ? <input type="email" value={editForm.email} onChange={e=>setEditForm({...editForm, email:e.target.value})} className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary" /> : u.email}
@@ -780,29 +819,32 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
                  <div key={u.id} className="bg-surface-high border border-surface-highest p-4 rounded-lg flex flex-col gap-3">
                    <div className="flex justify-between items-start">
                      <div>
-                       {editingId === u.id && editForm ? (
-                         <div className="space-y-2 mt-1">
-                           <label className="text-[10px] text-zinc-500 font-bold block uppercase">Nome</label>
-                           <input type="text" value={editForm.name} onChange={e=>setEditForm({...editForm, name:e.target.value})} className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary text-white" />
-                           <label className="text-[10px] text-zinc-500 font-bold block uppercase">E-mail</label>
-                           <input type="email" value={editForm.email} onChange={e=>setEditForm({...editForm, email:e.target.value})} className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary text-white" />
-                           <label className="text-[10px] text-zinc-500 font-bold block uppercase">Temporizador / Expiração</label>
-                           <input 
-                             type="datetime-local" 
-                             value={editForm.expires_at ? new Date(new Date(editForm.expires_at).getTime() - new Date(editForm.expires_at).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} 
-                             onChange={e=>setEditForm({...editForm, expires_at: e.target.value || undefined})} 
-                             className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary text-white font-mono" 
-                           />
-                         </div>
-                       ) : (
-                         <>
-                           <h4 className="font-bold text-white text-sm">{u.name}</h4>
-                           <span className="text-xs text-zinc-400 block mt-0.5">{u.email}</span>
-                           {u.expires_at && (
-                             <span className="text-[10px] text-[#dfbf80] block mt-1 font-mono">Expira: {new Date(u.expires_at).toLocaleString('pt-BR')}</span>
-                           )}
-                         </>
-                       )}
+                        {editingId === u.id && editForm ? (
+                          <div className="space-y-2 mt-1">
+                            <label className="text-[10px] text-zinc-500 font-bold block uppercase">Nome</label>
+                            <input type="text" value={editForm.name} onChange={e=>setEditForm({...editForm, name:e.target.value})} className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary text-white" />
+                            <label className="text-[10px] text-zinc-500 font-bold block uppercase">E-mail</label>
+                            <input type="email" value={editForm.email} onChange={e=>setEditForm({...editForm, email:e.target.value})} className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary text-white" />
+                            <label className="text-[10px] text-zinc-500 font-bold block uppercase">Nome de Usuário (Username)</label>
+                            <input type="text" value={editForm.username || ''} onChange={e=>setEditForm({...editForm, username:e.target.value})} className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary text-white font-mono" placeholder="Sem username" />
+                            <label className="text-[10px] text-zinc-500 font-bold block uppercase">Temporizador / Expiração</label>
+                            <input 
+                              type="datetime-local" 
+                              value={editForm.expires_at ? new Date(new Date(editForm.expires_at).getTime() - new Date(editForm.expires_at).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} 
+                              onChange={e=>setEditForm({...editForm, expires_at: e.target.value || undefined})} 
+                              className="bg-surface border border-surface-highest rounded px-2 py-1 text-xs w-full outline-none focus:border-primary text-white font-mono" 
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <h4 className="font-bold text-white text-sm">{u.name}</h4>
+                            <span className="text-xs text-zinc-400 block mt-0.5">{u.email}</span>
+                            <span className="text-[10px] text-zinc-500 block mt-0.5 font-mono">Usuário: {u.username || <span className="italic text-zinc-600">Sem usuário</span>}</span>
+                            {u.expires_at && (
+                              <span className="text-[10px] text-[#dfbf80] block mt-1 font-mono">Expira: {new Date(u.expires_at).toLocaleString('pt-BR')}</span>
+                            )}
+                          </>
+                        )}
                      </div>
                      <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border shrink-0 ${
                        u.role === 'Desenvolvedor' ? 'bg-[#d4af37]/10 text-[#d4af37] border-[#d4af37]/20' : 

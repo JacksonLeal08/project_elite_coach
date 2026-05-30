@@ -7,6 +7,7 @@ export interface User {
   pass?: string;
   avatar_url?: string;
   expires_at?: string;
+  username?: string;
 }
 
 export interface Badge {
@@ -133,4 +134,24 @@ export interface Cost {
   status: 'Pago' | 'Pendente' | 'Atrasado';
   category: 'Aluguel' | 'Marketing' | 'Equipamentos' | 'Serviços' | 'Impostos' | 'Outros';
   created_at: string;
+}
+
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'schedule';
+  read: boolean;
+  created_at: string;
+}
+
+export interface EvaluationSchedule {
+  id: string;
+  student_id: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  status: 'Agendado' | 'Realizado' | 'Cancelado';
+  notes?: string;
+  created_at: string;
+  student_name?: string;
 }

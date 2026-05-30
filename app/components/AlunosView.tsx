@@ -96,10 +96,16 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
   const [activeMetric, setActiveMetric] = useState<'weight' | 'body_fat' | 'heart_rate'>('weight');
 
   // Tab and Anamnesis State
-  const [activeProfileTab, setActiveProfileTab] = useState<'general' | 'anamnesis' | 'goals'>('general');
+  const [activeProfileTab, setActiveProfileTab] = useState<'general' | 'anamnesis' | 'goals' | 'schedule'>('general');
   const [anamnesis, setAnamnesis] = useState<Anamnesis | null>(null);
   const [loadingAnamnesis, setLoadingAnamnesis] = useState<boolean>(false);
   const [savingAnamnesis, setSavingAnamnesis] = useState<boolean>(false);
+
+  // Schedules State
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [loadingSchedules, setLoadingSchedules] = useState<boolean>(false);
+  const [savingSchedule, setSavingSchedule] = useState<boolean>(false);
+  const [newSchedule, setNewSchedule] = useState({ date: '', time: '', notes: '' });
 
   // Goals State
   const [goals, setGoals] = useState<StudentGoal | null>(null);
@@ -386,6 +392,7 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
       fetchStudentEvaluations(selectedStudent.id);
       fetchAnamnesis(selectedStudent.id);
       fetchStudentGoals(selectedStudent.id);
+      fetchStudentSchedules(selectedStudent.id);
       setActiveProfileTab('general');
     } else {
       setPhoto(null);
@@ -398,6 +405,7 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
       setBodyFatTarget('');
       setMuscleTarget('');
       setFreqTarget('');
+      setSchedules([]);
     }
     return () => stopCamera();
   }, [selectedStudent]);
@@ -496,6 +504,120 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
       showCustomAlert('Erro', 'Erro inesperado ao salvar metas.', 'error');
     } finally {
       setSavingGoals(false);
+    }
+  };
+
+  const fetchStudentSchedules = async (studentId: string | number) => {
+    setLoadingSchedules(true);
+    try {
+      const { data, error } = await supabase
+        .from('evaluation_schedules')
+        .select('*')
+        .eq('student_id', studentId)
+        .order('scheduled_date', { ascending: true });
+
+      if (!error && data) {
+        setSchedules(data);
+      }
+    } catch (e) {
+      console.error('Error fetching schedules:', e);
+    } finally {
+      setLoadingSchedules(false);
+    }
+  };
+
+  const handleAddSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+    if (!newSchedule.date || !newSchedule.time) {
+      return showCustomAlert('Aviso', 'Preencha a data e o horário do retorno!', 'warning');
+    }
+
+    setSavingSchedule(true);
+    try {
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('evaluation_schedules')
+        .insert([{
+          student_id: selectedStudent.id,
+          scheduled_date: newSchedule.date,
+          scheduled_time: newSchedule.time,
+          status: 'Agendado',
+          notes: newSchedule.notes || null
+        }])
+        .select()
+        .single();
+
+      if (scheduleError) {
+        showCustomAlert('Erro', 'Erro ao salvar agendamento: ' + scheduleError.message, 'error');
+        setSavingSchedule(false);
+        return;
+      }
+
+      // Create notification in the notifications table
+      const dateFormatted = new Date(newSchedule.date + 'T' + newSchedule.time).toLocaleString('pt-BR');
+      const { error: notifError } = await supabase
+        .from('notifications')
+        .insert([{
+          title: 'Novo Retorno Agendado',
+          message: `Retorno agendado para o aluno ${selectedStudent.name} em ${dateFormatted}.`,
+          type: 'schedule',
+          read: false
+        }]);
+
+      if (notifError) {
+        console.error('Error inserting notification:', notifError);
+      }
+
+      // Send telegram alert to administrator if chat id is configured in system settings
+      const { data: adminSettings } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'telegram_admin_chat_id')
+        .maybeSingle();
+
+      if (adminSettings?.value) {
+        const tgMsg = `<b>🔔 Elite Coach - Novo Retorno Agendado!</b>\n\n👤 <b>Aluno:</b> ${selectedStudent.name}\n📅 <b>Data:</b> ${newSchedule.date.split('-').reverse().join('/')}\n⏰ <b>Hora:</b> ${newSchedule.time}\n📝 <b>Notas:</b> ${newSchedule.notes || 'Sem observações'}`;
+        
+        try {
+          await fetch('/api/telegram/send-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId: adminSettings.value, message: tgMsg })
+          });
+        } catch (tgErr) {
+          console.error('Error sending Telegram notification:', tgErr);
+        }
+      }
+
+      showCustomAlert('Sucesso', 'Retorno agendado com sucesso!', 'success');
+      setNewSchedule({ date: '', time: '', notes: '' });
+      fetchStudentSchedules(selectedStudent.id);
+    } catch (err: any) {
+      console.error(err);
+      showCustomAlert('Erro', 'Erro inesperado ao agendar retorno.', 'error');
+    } finally {
+      setSavingSchedule(false);
+    }
+  };
+
+  const handleUpdateScheduleStatus = async (scheduleId: string, newStatus: 'Realizado' | 'Cancelado') => {
+    try {
+      const { error } = await supabase
+        .from('evaluation_schedules')
+        .update({ status: newStatus })
+        .eq('id', scheduleId);
+
+      if (error) {
+        showCustomAlert('Erro', 'Erro ao atualizar agendamento: ' + error.message, 'error');
+      } else {
+        showCustomAlert('Sucesso', `Agendamento marcado como ${newStatus.toLowerCase()}!`, 'success');
+        if (selectedStudent) {
+          fetchStudentSchedules(selectedStudent.id);
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      showCustomAlert('Erro', 'Erro inesperado ao atualizar agendamento.', 'error');
     }
   };
 
@@ -965,6 +1087,19 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
               >
                 Metas & Evolução Corporal
               </button>
+              <button
+                 onClick={() => {
+                   setActiveProfileTab('schedule');
+                   stopCamera();
+                 }}
+                 className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+                   activeProfileTab === 'schedule'
+                     ? 'text-primary border-primary bg-primary/5'
+                     : 'text-zinc-400 border-transparent hover:text-white'
+                 }`}
+               >
+                 Agenda de Retorno
+               </button>
            </div>
 
            {activeProfileTab === 'general' && (
@@ -1959,7 +2094,114 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                 </div>
               </div>
             )}
-         </div>
+
+            {activeProfileTab === 'schedule' && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Form to schedule a return */}
+                <div className="bg-surface-high p-5 rounded-xl border border-surface-highest/60 space-y-6 h-fit">
+                  <h3 className="font-heading font-semibold text-lg text-white border-b border-surface-highest pb-2 flex items-center gap-2">
+                    📅 Agendar Retorno
+                  </h3>
+                  
+                  <form onSubmit={handleAddSchedule} className="space-y-4 text-xs">
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Data do Retorno</label>
+                      <input
+                        type="date"
+                        value={newSchedule.date}
+                        onChange={e => setNewSchedule({ ...newSchedule, date: e.target.value })}
+                        className="w-full bg-surface border border-surface-highest rounded px-3 py-2.5 mt-1 text-white font-mono text-xs outline-none focus:border-primary"
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Horário</label>
+                      <input
+                        type="time"
+                        value={newSchedule.time}
+                        onChange={e => setNewSchedule({ ...newSchedule, time: e.target.value })}
+                        className="w-full bg-surface border border-surface-highest rounded px-3 py-2.5 mt-1 text-white font-mono text-xs outline-none focus:border-primary"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Observações / Notas</label>
+                      <textarea
+                        value={newSchedule.notes}
+                        onChange={e => setNewSchedule({ ...newSchedule, notes: e.target.value })}
+                        className="w-full bg-surface border border-surface-highest rounded px-3 py-2 mt-1 text-white text-xs outline-none focus:border-primary h-24 resize-none"
+                        placeholder="Ex: Próxima avaliação física completa para comparar evolução..."
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={savingSchedule}
+                      className="w-full py-3 bg-primary text-black font-bold uppercase tracking-wider text-xs rounded hover:bg-primary-dim transition-all shadow-[0_0_12px_rgba(212,175,55,0.15)] flex items-center justify-center gap-1.5"
+                    >
+                      {savingSchedule ? 'Agendando...' : 'Confirmar Agendamento'}
+                    </button>
+                  </form>
+                </div>
+
+                {/* List of returns */}
+                <div className="bg-surface-high p-5 rounded-xl border border-surface-highest/60 lg:col-span-2 space-y-6">
+                  <h3 className="font-heading font-semibold text-lg text-white border-b border-surface-highest pb-2 flex items-center gap-2">
+                    📋 Retornos Cadastrados
+                  </h3>
+
+                  {loadingSchedules ? (
+                    <p className="text-zinc-500 text-xs italic py-6 animate-pulse">Carregando retornos agendados...</p>
+                  ) : schedules.length === 0 ? (
+                    <p className="text-zinc-500 text-xs italic py-6 text-center">Nenhum retorno agendado para este aluno.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {schedules.map(sch => (
+                        <div key={sch.id} className="bg-surface border border-surface-highest/60 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div className="space-y-1 text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-white font-mono">
+                                {sch.scheduled_date.split('-').reverse().join('/')} às {sch.scheduled_time.slice(0, 5)}
+                              </span>
+                              <span className={`px-2 py-0.5 border rounded text-[9px] font-bold uppercase tracking-widest ${
+                                sch.status === 'Agendado' ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' :
+                                sch.status === 'Realizado' ? 'text-[#00ff41] bg-[#00ff41]/10 border-[#00ff41]/20' :
+                                'text-red-400 bg-red-500/10 border-red-500/20'
+                              }`}>
+                                {sch.status}
+                              </span>
+                            </div>
+                            {sch.notes && (
+                              <p className="text-xs text-zinc-400 italic mt-1">“{sch.notes}”</p>
+                            )}
+                          </div>
+
+                          {sch.status === 'Agendado' && (
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                              <button
+                                onClick={() => handleUpdateScheduleStatus(sch.id, 'Realizado')}
+                                className="px-2.5 py-1 bg-[#00ff41]/10 border border-[#00ff41]/20 text-[#00ff41] hover:bg-[#00ff41]/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                              >
+                                Concluir
+                              </button>
+                              <button
+                                onClick={() => handleUpdateScheduleStatus(sch.id, 'Cancelado')}
+                                className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
          {/* New Payment Modal Dialog */}
          {showPaymentModal && selectedStudent && (
