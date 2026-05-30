@@ -4,7 +4,7 @@ import { ChevronRight, Award, CheckCircle2, Camera, Plus, X, MessageSquare, Cred
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import { Student, User, Anamnesis, StudentGoal } from '../types';
 import { supabase } from '../utils/supabase';
-import { exportAnamnesisPDF, exportPosturePDF, exportEvolutionPDF } from '../utils/pdf';
+import { exportAnamnesisPDF, exportPosturePDF, exportEvolutionPDF, exportFrequencyPDF } from '../utils/pdf';
 import CustomAlertModal from './CustomAlertModal';
 
 interface AlunosViewProps {
@@ -96,7 +96,7 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
   const [activeMetric, setActiveMetric] = useState<'weight' | 'body_fat' | 'heart_rate'>('weight');
 
   // Tab and Anamnesis State
-  const [activeProfileTab, setActiveProfileTab] = useState<'general' | 'anamnesis' | 'goals' | 'schedule'>('general');
+  const [activeProfileTab, setActiveProfileTab] = useState<'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance'>('general');
   const [anamnesis, setAnamnesis] = useState<Anamnesis | null>(null);
   const [loadingAnamnesis, setLoadingAnamnesis] = useState<boolean>(false);
   const [savingAnamnesis, setSavingAnamnesis] = useState<boolean>(false);
@@ -115,6 +115,11 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
   const [bodyFatTarget, setBodyFatTarget] = useState<string>('');
   const [muscleTarget, setMuscleTarget] = useState<string>('');
   const [freqTarget, setFreqTarget] = useState<string>('');
+
+  // Workout Progress and Latest Workout State
+  const [workoutProgress, setWorkoutProgress] = useState<any[]>([]);
+  const [loadingProgress, setLoadingProgress] = useState<boolean>(false);
+  const [latestWorkout, setLatestWorkout] = useState<any | null>(null);
 
   // Postural Grid State
   const [activeAngle, setActiveAngle] = useState<'front' | 'back' | 'side'>('front');
@@ -393,6 +398,8 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
       fetchAnamnesis(selectedStudent.id);
       fetchStudentGoals(selectedStudent.id);
       fetchStudentSchedules(selectedStudent.id);
+      fetchStudentProgress(selectedStudent.id);
+      fetchLatestWorkout(selectedStudent.id);
       setActiveProfileTab('general');
     } else {
       setPhoto(null);
@@ -406,6 +413,8 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
       setMuscleTarget('');
       setFreqTarget('');
       setSchedules([]);
+      setWorkoutProgress([]);
+      setLatestWorkout(null);
     }
     return () => stopCamera();
   }, [selectedStudent]);
@@ -523,6 +532,58 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
       console.error('Error fetching schedules:', e);
     } finally {
       setLoadingSchedules(false);
+    }
+  };
+
+  const fetchStudentProgress = async (studentId: string | number) => {
+    setLoadingProgress(true);
+    try {
+      const { data, error } = await supabase
+        .from('student_workout_progress')
+        .select('*')
+        .eq('student_id', studentId)
+        .order('workout_date', { ascending: true });
+      if (!error && data) {
+        setWorkoutProgress(data);
+      } else {
+        setWorkoutProgress([]);
+      }
+    } catch (e) {
+      console.error('Error fetching progress:', e);
+      setWorkoutProgress([]);
+    } finally {
+      setLoadingProgress(false);
+    }
+  };
+
+  const fetchLatestWorkout = async (studentId: string | number) => {
+    try {
+      const { data, error } = await supabase
+        .from('workout_protocols')
+        .select('*')
+        .eq('student_id', studentId)
+        .order('date', { ascending: false })
+        .limit(1);
+      if (!error && data && data.length > 0) {
+        setLatestWorkout({
+          id: data[0].id,
+          objective: data[0].objective,
+          split: data[0].split,
+          days: data[0].days,
+          durationWeeks: data[0].duration_weeks,
+          needs: data[0].needs,
+          clinicalNotes: data[0].clinical_notes,
+          workoutData: data[0].workout_data,
+          date: data[0].date,
+          startDate: data[0].start_date,
+          endDate: data[0].end_date
+        });
+      } else {
+        setLatestWorkout(null);
+      }
+    } catch (e) {
+      console.error('Error fetching latest workout:', e);
+      setLatestWorkout(null);
     }
   };
 
@@ -1100,6 +1161,19 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                >
                  Agenda de Retorno
                </button>
+               <button
+                  onClick={() => {
+                    setActiveProfileTab('attendance');
+                    stopCamera();
+                  }}
+                  className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+                    activeProfileTab === 'attendance'
+                      ? 'text-primary border-primary bg-primary/5'
+                      : 'text-zinc-400 border-transparent hover:text-white'
+                  }`}
+                >
+                  Assiduidade e Treinos
+                </button>
            </div>
 
            {activeProfileTab === 'general' && (
@@ -2199,6 +2273,206 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {activeProfileTab === 'attendance' && (
+              <div className="space-y-6">
+                {/* PDF generation panel */}
+                <div className="bg-surface-high border border-surface-highest/60 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <h3 className="font-heading font-semibold text-sm text-white uppercase tracking-wider">Histórico de Assiduidade de Treinos</h3>
+                    <p className="text-[10px] text-zinc-400">Visualize e emita o extrato de frequência do aluno.</p>
+                  </div>
+                  <div>
+                    <button
+                      onClick={() => {
+                        if (!selectedStudent || !latestWorkout) {
+                          showCustomAlert('Aviso', 'O aluno precisa de um protocolo ativo para emitir o extrato.', 'warning');
+                          return;
+                        }
+                        exportFrequencyPDF(selectedStudent, latestWorkout, workoutProgress);
+                      }}
+                      className="px-4 py-2 bg-primary text-black font-bold uppercase tracking-wider text-xs rounded hover:bg-primary-dim transition-all shadow-[0_0_10px_rgba(212,175,55,0.15)] flex items-center gap-1.5"
+                    >
+                      📄 Emitir Extrato de Frequência
+                    </button>
+                  </div>
+                </div>
+
+                {loadingProgress ? (
+                  <p className="text-zinc-500 text-sm py-4 italic animate-pulse text-center">Carregando histórico de frequência...</p>
+                ) : !latestWorkout ? (
+                  <div className="bg-surface-high border border-surface-highest p-6 rounded-xl text-center text-zinc-500 italic text-sm">
+                    Nenhum protocolo ativo encontrado para este aluno. Crie um protocolo em "Protocolos de Treino" para acompanhar a frequência.
+                  </div>
+                ) : (
+                  (() => {
+                    // Calculation of stats
+                    const totalWeeks = parseInt(latestWorkout.durationWeeks || '4', 10);
+                    const daysInSplit = latestWorkout.workoutData?.days?.length || 0;
+                    const totalPlannedSessions = totalWeeks * daysInSplit;
+
+                    const getDayOffsetInWeek = (d: number, totalDays: number): number => {
+                      if (totalDays === 1) return 0;
+                      if (totalDays === 2) return d === 0 ? 0 : 3;
+                      if (totalDays === 3) return d === 0 ? 0 : d === 1 ? 2 : 4;
+                      if (totalDays === 4) return d === 0 ? 0 : d === 1 ? 1 : d === 2 ? 3 : 4;
+                      if (totalDays === 5) return d;
+                      return d;
+                    };
+
+                    const getWorkoutDateForKey = (wIdx: number, dIdx: number) => {
+                      const startStr = latestWorkout.startDate || latestWorkout.date || new Date().toISOString();
+                      const start = new Date(startStr + 'T12:00:00');
+                      start.setDate(start.getDate() + (wIdx * 7) + getDayOffsetInWeek(dIdx, daysInSplit));
+                      return start;
+                    };
+
+                    const getWorkoutStatus = (workoutDate: Date, entry: any) => {
+                      if (entry) return entry.status;
+                      const today = new Date();
+                      today.setHours(0,0,0,0);
+                      const compareDate = new Date(workoutDate);
+                      compareDate.setHours(0,0,0,0);
+                      if (compareDate < today) {
+                        return 'NÃO REALIZADO';
+                      }
+                      return 'PENDENTE';
+                    };
+
+                    let completedSessions = 0;
+                    let missedSessions = 0;
+                    let pendingSessions = 0;
+                    const calendarWeeks: any[] = [];
+
+                    for (let w = 0; w < totalWeeks; w++) {
+                      const weekDays: any[] = [];
+                      for (let d = 0; d < daysInSplit; d++) {
+                        const wDate = getWorkoutDateForKey(w, d);
+                        const dateKey = wDate.toISOString().split('T')[0];
+                        const progressEntry = workoutProgress.find(p => p.workout_date === dateKey && p.day_name === latestWorkout.workoutData.days[d].dayName);
+                        const status = getWorkoutStatus(wDate, progressEntry);
+
+                        if (status === 'REALIZADO') completedSessions++;
+                        else if (status === 'NÃO REALIZADO') missedSessions++;
+                        else pendingSessions++;
+
+                        weekDays.push({
+                          date: wDate,
+                          dateKey,
+                          dayName: latestWorkout.workoutData.days[d].dayName,
+                          status,
+                          progress: progressEntry ? Math.round((progressEntry.checked_exercises?.length || 0) / (progressEntry.total_exercises || 1) * 100) : 0,
+                          entry: progressEntry
+                        });
+                      }
+                      calendarWeeks.push(weekDays);
+                    }
+
+                    const attendancePct = totalPlannedSessions > 0 ? Math.round((completedSessions / totalPlannedSessions) * 100) : 0;
+                    const isGoldTheme = attendancePct >= 80;
+
+                    return (
+                      <div className="space-y-6">
+                        {/* Stats Cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className={`p-4 rounded-xl border ${
+                            isGoldTheme 
+                              ? 'bg-gradient-to-br from-[#dfbf80]/15 to-[#dfbf80]/5 border-[#dfbf80]/40 shadow-[0_0_15px_rgba(223,191,128,0.1)]' 
+                              : 'bg-surface-high border-surface-highest/60'
+                          } space-y-1`}>
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Assiduidade %</span>
+                            <span className={`text-2xl font-bold font-mono ${isGoldTheme ? 'text-[#dfbf80] animate-pulse' : 'text-primary'}`}>
+                              {attendancePct}%
+                            </span>
+                            {isGoldTheme && (
+                              <span className="text-[9px] text-[#dfbf80] font-bold uppercase block tracking-widest mt-1">💎 Elite Premium</span>
+                            )}
+                          </div>
+                          
+                          <div className="bg-surface-high border border-surface-highest/60 p-4 rounded-xl space-y-1">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Realizados</span>
+                            <span className="text-2xl font-bold font-mono text-green-400">
+                              {completedSessions}
+                            </span>
+                          </div>
+
+                          <div className="bg-surface-high border border-surface-highest/60 p-4 rounded-xl space-y-1">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Não Executados</span>
+                            <span className="text-2xl font-bold font-mono text-red-400">
+                              {missedSessions}
+                            </span>
+                          </div>
+
+                          <div className="bg-surface-high border border-surface-highest/60 p-4 rounded-xl space-y-1">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Pendentes</span>
+                            <span className="text-2xl font-bold font-mono text-amber-400">
+                              {pendingSessions}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Calendar Grid View */}
+                        <div className="bg-surface-high border border-surface-highest/60 p-5 rounded-xl space-y-6">
+                          <h3 className="font-heading font-semibold text-base text-white border-b border-surface-highest/60 pb-2 flex items-center gap-2">
+                            📅 Cronograma Detalhado & Histórico de Treinos
+                          </h3>
+                          
+                          <div className="space-y-6">
+                            {calendarWeeks.map((week, wIdx) => (
+                              <div key={wIdx} className="space-y-3">
+                                <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Semana {wIdx + 1}</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  {week.map((dayItem: any, dIdx: number) => {
+                                    return (
+                                      <div key={dIdx} className={`p-4 rounded-xl border bg-surface flex flex-col justify-between gap-3 text-xs ${
+                                        dayItem.status === 'REALIZADO' ? 'border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.05)]' :
+                                        dayItem.status === 'NÃO REALIZADO' ? 'border-red-500/30 shadow-[0_0_10px_rgba(239,68,68,0.05)]' :
+                                        'border-surface-highest/60'
+                                      }`}>
+                                        <div className="flex justify-between items-start">
+                                          <div>
+                                            <span className="font-bold text-white uppercase tracking-wide block">{dayItem.dayName}</span>
+                                            <span className="font-mono text-zinc-500 text-[10px] mt-0.5 block">{dayItem.date.toLocaleDateString('pt-BR')}</span>
+                                          </div>
+                                          <span className={`px-2 py-0.5 border rounded text-[9px] font-bold uppercase tracking-widest ${
+                                            dayItem.status === 'REALIZADO' ? 'text-green-400 bg-green-500/10 border-green-500/20' :
+                                            dayItem.status === 'NÃO REALIZADO' ? 'text-red-400 bg-red-500/10 border-red-500/20' :
+                                            'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                                          }`}>
+                                            {dayItem.status}
+                                          </span>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <div className="flex justify-between text-[10px] text-zinc-400">
+                                            <span>Progresso</span>
+                                            <span className="font-mono">{dayItem.entry?.checked_exercises?.length || 0}/{dayItem.entry?.total_exercises || latestWorkout.workoutData.days[dIdx].exercises.length}</span>
+                                          </div>
+                                          <div className="w-full bg-surface-high rounded-full h-1.5 overflow-hidden">
+                                            <div 
+                                              className={`h-full transition-all duration-500 ${
+                                                dayItem.status === 'REALIZADO' ? 'bg-green-400' :
+                                                dayItem.status === 'NÃO REALIZADO' ? 'bg-red-400' :
+                                                'bg-amber-400'
+                                              }`} 
+                                              style={{ width: `${dayItem.progress}%` }} 
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()
+                )}
               </div>
             )}
           </div>

@@ -25,6 +25,7 @@ export default function DashboardView() {
   const [recentActivities, setRecentActivities] = useState<any[]>([]);
   const [chartTab, setChartTab] = useState<'loads' | 'billing'>('loads');
   const [billingData, setBillingData] = useState<any[]>([]);
+  const [ranking, setRanking] = useState<any[]>([]);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -160,6 +161,56 @@ export default function DashboardView() {
       } else {
         setRecentActivities(activitiesList.slice(0, 4));
       }
+
+      // 5. Fetch Protocols & Progress for Attendance Ranking
+      const { data: allProtocols } = await supabase
+        .from('workout_protocols')
+        .select('id, student_id, duration_weeks, workout_data, date')
+        .order('date', { ascending: false });
+
+      const { data: allProgress } = await supabase
+        .from('student_workout_progress')
+        .select('student_id, protocol_id, status');
+
+      const studentRanking: any[] = [];
+
+      if (students) {
+        students.forEach((student: any) => {
+          const studentProts = allProtocols ? allProtocols.filter((p: any) => p.student_id.toString() === student.id.toString()) : [];
+          const latestProt = studentProts[0];
+
+          let attendancePct = 0;
+          let completed = 0;
+          let totalPlanned = 0;
+
+          if (latestProt) {
+            const weeks = parseInt(latestProt.duration_weeks || '4', 10);
+            const daysInSplit = latestProt.workout_data?.days?.length || 0;
+            totalPlanned = weeks * daysInSplit;
+
+            const studentProg = allProgress ? allProgress.filter((pr: any) => 
+              pr.student_id.toString() === student.id.toString() && 
+              pr.protocol_id.toString() === latestProt.id.toString() &&
+              pr.status === 'REALIZADO'
+            ) : [];
+            completed = studentProg.length;
+
+            attendancePct = totalPlanned > 0 ? Math.round((completed / totalPlanned) * 100) : 0;
+          }
+
+          studentRanking.push({
+            id: student.id,
+            name: student.name,
+            status: student.status,
+            attendancePct,
+            completed,
+            totalPlanned
+          });
+        });
+      }
+
+      studentRanking.sort((a, b) => b.attendancePct - a.attendancePct || b.completed - a.completed);
+      setRanking(studentRanking);
 
     } catch (err) {
       console.error('Error loading dashboard stats:', err);
@@ -326,34 +377,78 @@ export default function DashboardView() {
                 )}
               </ResponsiveContainer>
            </div>
-        </div>
+         </div>
+         {/* Right Column: Arena Elite: Ranking de Assiduidade (colspan 1) */}
+         <div className="bg-surface-container border border-surface-highest rounded-xl p-6 flex flex-col justify-between">
+            <div>
+              <h3 className="font-heading font-semibold text-lg text-white mb-4 flex items-center gap-2">
+                <Award className="w-5 h-5 text-[#dfbf80]" /> Arena Elite: Ranking
+              </h3>
+              <div className="space-y-3 overflow-y-auto max-h-[260px] pr-1">
+                {ranking.slice(0, 5).map((student, index) => {
+                  const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🏃';
+                  const isElite = student.attendancePct >= 80;
+                  return (
+                    <div key={student.id} className={`p-2.5 rounded-lg border flex items-center justify-between gap-3 text-xs bg-surface ${
+                      isElite 
+                        ? 'border-[#dfbf80]/30 shadow-[0_2px_10px_rgba(223,191,128,0.05)] bg-gradient-to-r from-[#dfbf80]/5 to-transparent' 
+                        : 'border-surface-highest/60'
+                    }`}>
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <span className="text-base shrink-0">{medal}</span>
+                        <div className="overflow-hidden">
+                          <span className="font-bold text-white block truncate">{student.name}</span>
+                          <span className="text-[9px] text-zinc-500 font-mono uppercase tracking-wide">
+                            {student.completed} de {student.totalPlanned} treinos
+                          </span>
+                        </div>
+                      </div>
 
-        <div className="bg-surface-container border border-surface-highest rounded-xl p-6">
-           <h3 className="font-heading font-semibold text-lg text-white mb-6">Atividades Recentes</h3>
-           {recentActivities.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-zinc-500 text-center h-48 border border-dashed border-surface-highest rounded-lg bg-surface/20">
-                 <History className="w-8 h-8 mb-2 opacity-35" />
-                 <p className="text-xs font-semibold text-zinc-400">Nenhuma atividade recente</p>
-                 <p className="text-[10px] text-zinc-500 mt-1 max-w-[200px] leading-relaxed">As interações aparecerão aqui assim que novos treinos ou avaliações forem registrados.</p>
-              </div>
-           ) : (
-              <div className="space-y-6">
-                {recentActivities.map((act) => (
-                   <div key={act.id} className="flex gap-4 relative">
-                      <div className="w-px h-full bg-surface-highest absolute left-[15px] top-4"></div>
-                      <div className="w-8 h-8 rounded-full bg-surface-high border-2 border-surface-highest flex-shrink-0 flex items-center justify-center z-10 text-xs text-zinc-400">
-                        <History className="w-3 h-3"/>
+                      <div className="flex flex-col items-end shrink-0 gap-1">
+                        <span className={`px-1.5 py-0.5 border rounded text-[9px] font-bold font-mono ${
+                          isElite 
+                            ? 'text-[#dfbf80] bg-[#dfbf80]/10 border-[#dfbf80]/20 animate-pulse' 
+                            : 'text-primary bg-primary/10 border-primary/20'
+                        }`}>
+                          {student.attendancePct}%
+                        </span>
                       </div>
-                      <div className="pt-1 w-full">
-                         <div className="text-sm text-zinc-300 font-medium">{act.user}</div>
-                         <div className="text-sm text-zinc-500 mt-0.5 leading-snug">{act.msg}</div>
-                         <div className="text-xs text-primary mt-1 font-mono">{act.time}</div>
-                      </div>
-                   </div>
-                ))}
+                    </div>
+                  );
+                })}
+                {ranking.length === 0 && (
+                  <p className="text-zinc-500 text-xs italic text-center py-8">Nenhum aluno no ranking.</p>
+                )}
               </div>
-           )}
-        </div>
+            </div>
+         </div>
+      </div>
+
+      {/* Atividades Recentes Row */}
+      <div className="bg-surface-container border border-surface-highest rounded-xl p-6">
+         <h3 className="font-heading font-semibold text-lg text-white mb-6">Atividades Recentes</h3>
+         {recentActivities.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-zinc-500 text-center h-48 border border-dashed border-surface-highest rounded-lg bg-surface/20">
+               <History className="w-8 h-8 mb-2 opacity-35" />
+               <p className="text-xs font-semibold text-zinc-400">Nenhuma atividade recente</p>
+               <p className="text-[10px] text-zinc-500 mt-1 max-w-[200px] leading-relaxed">As interações aparecerão aqui assim que novos treinos ou avaliações forem registrados.</p>
+            </div>
+         ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {recentActivities.map((act) => (
+                 <div key={act.id} className="bg-surface border border-surface-highest/60 p-4 rounded-xl flex gap-3 relative">
+                    <div className="w-8 h-8 rounded-full bg-surface-high border-2 border-surface-highest flex-shrink-0 flex items-center justify-center text-xs text-zinc-400">
+                      <History className="w-3.5 h-3.5 text-primary"/>
+                    </div>
+                    <div className="overflow-hidden">
+                       <div className="text-xs text-zinc-300 font-bold truncate">{act.user}</div>
+                       <div className="text-xs text-zinc-500 mt-0.5 leading-snug line-clamp-2">{act.msg}</div>
+                       <div className="text-[10px] text-primary mt-1 font-mono">{act.time}</div>
+                    </div>
+                 </div>
+              ))}
+            </div>
+         )}
       </div>
     </div>
   );

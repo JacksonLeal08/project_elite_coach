@@ -1288,12 +1288,19 @@ function PublicEvolutionView({ token }: { token: string }) {
 
   // Workout active tab, completions, video player, and celebration
   const [activeWorkoutDayIdx, setActiveWorkoutDayIdx] = useState<number>(0);
-  const [completedDays, setCompletedDays] = useState<string[]>([]);
-  const [checkingDay, setCheckingDay] = useState<string | null>(null);
+  const [activeWeekIdx, setActiveWeekIdx] = useState<number>(0);
   const [showCelebration, setShowCelebration] = useState<boolean>(false);
   const [exerciseVideos, setExerciseVideos] = useState<Record<string, { video_url?: string; video_file_url?: string }>>({});
   const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(null);
   const [activeVideoTitle, setActiveVideoTitle] = useState<string>('');
+
+  // Return Scheduling states
+  const [schedDate, setSchedDate] = useState<string>('');
+  const [schedTime, setSchedTime] = useState<string>('');
+  const [schedNotes, setSchedNotes] = useState<string>('');
+  const [scheduling, setScheduling] = useState<boolean>(false);
+  const [schedSuccess, setSchedSuccess] = useState<string>('');
+  const [schedError, setSchedError] = useState<string>('');
 
   const getEmbedUrl = (url: string) => {
     if (!url) return '';
@@ -1345,14 +1352,6 @@ function PublicEvolutionView({ token }: { token: string }) {
           setError(res.message || 'Link inválido ou expirado.');
         } else {
           setData(res);
-          // Load completed days for today
-          if (res.workout_logs) {
-            const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
-            const completedToday = res.workout_logs
-              .filter((log: any) => log.completed_at.startsWith(todayStr))
-              .map((log: any) => log.day_name);
-            setCompletedDays(completedToday);
-          }
         }
       } catch (e: any) {
         setError(e.message || 'Erro de conexão ao buscar os dados.');
@@ -1463,36 +1462,224 @@ function PublicEvolutionView({ token }: { token: string }) {
     }
   };
 
-  const handleToggleDay = async (dayName: string) => {
+  const getDayOffsetInWeek = (d: number, totalDays: number): number => {
+    if (totalDays === 1) return 0;
+    if (totalDays === 2) return d === 0 ? 0 : 3;
+    if (totalDays === 3) return d === 0 ? 0 : d === 1 ? 2 : 4;
+    if (totalDays === 4) return d === 0 ? 0 : d === 1 ? 1 : d === 2 ? 3 : 4;
+    if (totalDays === 5) return d;
+    return d;
+  };
+
+  const getWorkoutStatus = (workoutDate: Date, entry: any) => {
+    if (entry) return entry.status;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const compareDate = new Date(workoutDate);
+    compareDate.setHours(0,0,0,0);
+    if (compareDate < today) {
+      return 'NÃO REALIZADO';
+    }
+    return 'PENDENTE';
+  };
+
+  const getWorkoutDateForKey = (wIdx: number, dIdx: number) => {
+    const startStr = latest_workout?.start_date || latest_workout?.date || new Date().toISOString();
+    const start = new Date(startStr + 'T12:00:00');
+    start.setDate(start.getDate() + (wIdx * 7) + getDayOffsetInWeek(dIdx, latest_workout?.workout_data?.days?.length || 1));
+    return start;
+  };
+
+  const formatWorkoutDate = (date: Date) => {
+    const weekday = date.toLocaleDateString('pt-BR', { weekday: 'long' });
+    const dayMonth = date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' });
+    return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${dayMonth}`;
+  };
+
+  const getWeekRangeLabel = (weekIdx: number) => {
+    const startStr = latest_workout?.start_date || latest_workout?.date || new Date().toISOString();
+    const start = new Date(startStr + 'T12:00:00');
+    const weekStart = new Date(start);
+    weekStart.setDate(start.getDate() + (weekIdx * 7));
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    return `${weekStart.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })} - ${weekEnd.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}`;
+  };
+
+  const handleToggleExercise = async (exerciseName: string, wDayIdx: number, wWeekIdx: number) => {
     if (!latest_workout) return;
-    setCheckingDay(dayName);
-    const isCompleted = completedDays.includes(dayName);
+    
+    const activeDayName = latest_workout.workout_data.days[wDayIdx]?.dayName;
+    const activeDayDate = getWorkoutDateForKey(wWeekIdx, wDayIdx);
+    const activeDayDateKey = activeDayDate.toISOString().split('T')[0];
+    
+    const activeDayProgressEntry = data.workout_progress?.find((p: any) => p.workout_date === activeDayDateKey && p.day_name === activeDayName);
+    
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const compareDate = new Date(activeDayDate);
+    compareDate.setHours(0,0,0,0);
+    
+    const isCompleted = activeDayProgressEntry?.status === 'REALIZADO';
+    const isFuture = compareDate > today;
+    const isLocked = isCompleted || isFuture;
+    
+    if (isLocked) return;
+    
+    const totalExercises = latest_workout.workout_data.days[wDayIdx]?.exercises.length || 0;
+    const currentChecked = activeDayProgressEntry?.checked_exercises || [];
+    
+    let newChecked: string[];
+    if (currentChecked.includes(exerciseName)) {
+      newChecked = currentChecked.filter((name: string) => name !== exerciseName);
+    } else {
+      newChecked = [...currentChecked, exerciseName];
+    }
+    
+    let newStatus: 'REALIZADO' | 'PENDENTE' | 'NÃO REALIZADO' = 'PENDENTE';
+    if (newChecked.length === totalExercises) {
+      newStatus = 'REALIZADO';
+    } else if (newChecked.length === 0) {
+      if (compareDate < today) {
+        newStatus = 'NÃO REALIZADO';
+      }
+    }
+    
     try {
-      if (isCompleted) {
-        const { error: err } = await supabase.rpc('unlog_public_workout_day', {
-          p_token: token,
-          p_protocol_id: latest_workout.id,
-          p_day_name: dayName
-        });
-        if (!err) {
-          setCompletedDays(prev => prev.filter(d => d !== dayName));
+      const { error: rpcError } = await supabase.rpc('save_public_workout_progress', {
+        p_token: token,
+        p_protocol_id: latest_workout.id,
+        p_workout_date: activeDayDateKey,
+        p_day_name: activeDayName,
+        p_checked_exercises: newChecked,
+        p_total_exercises: totalExercises,
+        p_status: newStatus
+      });
+      
+      if (rpcError) {
+        console.error('Error saving workout progress:', rpcError);
+        return;
+      }
+      
+      setData((prev: any) => {
+        const oldProgress = prev.workout_progress || [];
+        const exists = oldProgress.some((p: any) => p.workout_date === activeDayDateKey && p.day_name === activeDayName);
+        
+        let newProgress;
+        if (exists) {
+          newProgress = oldProgress.map((p: any) => 
+            (p.workout_date === activeDayDateKey && p.day_name === activeDayName)
+              ? { ...p, checked_exercises: newChecked, status: newStatus, total_exercises: totalExercises, updated_at: new Date().toISOString() }
+               : p
+          );
+        } else {
+          newProgress = [
+            ...oldProgress,
+            {
+              workout_date: activeDayDateKey,
+              day_name: activeDayName,
+              checked_exercises: newChecked,
+              total_exercises: totalExercises,
+              status: newStatus,
+              protocol_id: latest_workout.id,
+              student_id: student.id,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }
+          ];
         }
-      } else {
-        const { error: err } = await supabase.rpc('log_public_workout_day', {
-          p_token: token,
-          p_protocol_id: latest_workout.id,
-          p_day_name: dayName
-        });
-        if (!err) {
-          setCompletedDays(prev => [...prev, dayName]);
-          setShowCelebration(true);
-          setTimeout(() => setShowCelebration(false), 3000);
+        return { ...prev, workout_progress: newProgress };
+      });
+
+      if (newStatus === 'REALIZADO') {
+        setShowCelebration(true);
+        setTimeout(() => setShowCelebration(false), 4000);
+        
+        const { data: adminSettings } = await supabase
+          .from('system_settings')
+          .select('value')
+          .eq('key', 'telegram_admin_chat_id')
+          .maybeSingle();
+
+        if (adminSettings?.value) {
+          const tgMsg = `<b>💪 Elite Coach - Treino Concluído!</b>\n\n👤 <b>Aluno:</b> ${student.name}\n🏋️‍♂️ <b>Treino:</b> ${activeDayName}\n📅 <b>Data:</b> ${activeDayDateKey.split('-').reverse().join('/')}`;
+          try {
+            await fetch('/api/telegram/send-message', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chatId: adminSettings.value, message: tgMsg })
+            });
+          } catch (tgErr) {
+            console.error('Error sending Telegram alert:', tgErr);
+          }
         }
       }
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      console.error('Exception saving workout progress:', err);
+    }
+  };
+
+  const handleScheduleEvaluation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!schedDate || !schedTime) return;
+    setScheduling(true);
+    setSchedError('');
+    setSchedSuccess('');
+    
+    try {
+      const { data: res, error: err } = await supabase.rpc('schedule_public_evaluation', {
+        p_token: token,
+        p_scheduled_date: schedDate,
+        p_scheduled_time: schedTime,
+        p_notes: schedNotes
+      });
+      
+      if (err || (res && !res.success)) {
+        setSchedError(err?.message || res?.message || 'Falha ao agendar retorno.');
+      } else {
+        setSchedSuccess('Retorno solicitado com sucesso!');
+        
+        setData((prev: any) => ({
+          ...prev,
+          schedules: [
+            ...(prev.schedules || []),
+            {
+              scheduled_date: schedDate,
+              scheduled_time: schedTime,
+              notes: schedNotes,
+              status: 'Agendado',
+              created_at: new Date().toISOString()
+            }
+          ]
+        }));
+        
+        setSchedDate('');
+        setSchedTime('');
+        setSchedNotes('');
+        
+        const { data: adminSettings } = await supabase
+          .from('system_settings')
+          .select('value')
+          .eq('key', 'telegram_admin_chat_id')
+          .maybeSingle();
+
+        if (adminSettings?.value) {
+          const tgMsg = `<b>📅 Elite Coach - Solicitação de Avaliação!</b>\n\n👤 <b>Aluno:</b> ${student.name}\n📅 <b>Data:</b> ${schedDate.split('-').reverse().join('/')}\n⏰ <b>Hora:</b> ${schedTime}\n📝 <b>Notas:</b> ${schedNotes || 'Sem observações'}`;
+          try {
+            await fetch('/api/telegram/send-message', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chatId: adminSettings.value, message: tgMsg })
+            });
+          } catch (tgErr) {
+            console.error('Error sending Telegram alert:', tgErr);
+          }
+        }
+      }
+    } catch (ex: any) {
+      setSchedError(ex.message || 'Erro ao processar agendamento.');
     } finally {
-      setCheckingDay(null);
+      setScheduling(false);
     }
   };
 
@@ -1593,135 +1780,237 @@ function PublicEvolutionView({ token }: { token: string }) {
         </div>
 
         {/* Planilha de Treinos / Active Workout Section */}
-        {latest_workout && latest_workout.workout_data && latest_workout.workout_data.days && (
-          <div className="bg-surface-container border border-surface-highest rounded-2xl p-6 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-surface-highest/60 pb-3 gap-3">
-              <div>
-                <h3 className="font-heading font-semibold text-lg text-white flex items-center gap-2">
-                  💪 Seu Cronograma de Treino Ativo
-                </h3>
-                <p className="text-xs text-zinc-400 mt-1">
-                  Objetivo: <strong className="text-[#dfbf80]">{latest_workout.objective}</strong> | Divisão: <strong>{latest_workout.split}</strong> ({latest_workout.duration_weeks} semanas)
-                </p>
-              </div>
-              
-              <button 
-                onClick={() => window.open(`https://wa.me/5511999999999?text=Olá, coach! Estou com dúvidas sobre minha planilha de treinos...`, '_blank')}
-                className="px-4 py-2 bg-surface hover:bg-surface-high border border-surface-highest rounded text-zinc-300 hover:text-white transition-colors text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 self-start sm:self-center"
-              >
-                💬 Chamar Treinador
-              </button>
-            </div>
+        {latest_workout && latest_workout.workout_data && latest_workout.workout_data.days && (() => {
+          const totalWeeks = parseInt(latest_workout.duration_weeks || '4', 10);
+          
+          // Calculate active week progress
+          const activeWeekDays = latest_workout.workout_data.days;
+          let weekTotalExercises = 0;
+          let weekCheckedExercises = 0;
+          activeWeekDays.forEach((day: any, idx: number) => {
+            const wDate = getWorkoutDateForKey(activeWeekIdx, idx);
+            const dateKey = wDate.toISOString().split('T')[0];
+            const progressEntry = data.workout_progress?.find((p: any) => p.workout_date === dateKey && p.day_name === day.dayName);
+            weekTotalExercises += day.exercises.length;
+            weekCheckedExercises += progressEntry?.checked_exercises?.length || 0;
+          });
+          const weekProgressPct = weekTotalExercises > 0 ? Math.round((weekCheckedExercises / weekTotalExercises) * 100) : 0;
 
-            <div className="flex flex-col md:flex-row gap-6">
-              {/* Left Day Selector Tabs */}
-              <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 shrink-0 w-full md:w-48 scrollbar-none">
-                {latest_workout.workout_data.days.map((day: any, idx: number) => {
-                  const isDoneToday = completedDays.includes(day.dayName);
-                  return (
+          // Day progress & states for active workout day
+          const activeDayName = latest_workout.workout_data.days[activeWorkoutDayIdx]?.dayName;
+          const activeDayDate = getWorkoutDateForKey(activeWeekIdx, activeWorkoutDayIdx);
+          const activeDayDateKey = activeDayDate.toISOString().split('T')[0];
+          const activeDayProgressEntry = data.workout_progress?.find((p: any) => p.workout_date === activeDayDateKey && p.day_name === activeDayName);
+          
+          const today = new Date();
+          today.setHours(0,0,0,0);
+          const compareDate = new Date(activeDayDate);
+          compareDate.setHours(0,0,0,0);
+          
+          const isCompleted = activeDayProgressEntry?.status === 'REALIZADO';
+          const isFuture = compareDate > today;
+          const isLocked = isCompleted || isFuture;
+
+          let dayPct = 0;
+          if (activeDayProgressEntry && activeDayProgressEntry.total_exercises > 0) {
+            dayPct = Math.round((activeDayProgressEntry.checked_exercises.length / activeDayProgressEntry.total_exercises) * 100);
+          }
+
+          return (
+            <div className="bg-surface-container border border-surface-highest rounded-2xl p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-surface-highest/60 pb-3 gap-3">
+                <div>
+                  <h3 className="font-heading font-semibold text-lg text-white flex items-center gap-2">
+                    💪 Seu Cronograma de Treino Ativo
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    Objetivo: <strong className="text-[#dfbf80]">{latest_workout.objective}</strong> | Divisão: <strong>{latest_workout.split}</strong> ({latest_workout.duration_weeks} semanas)
+                  </p>
+                </div>
+                
+                <button 
+                  onClick={() => window.open(`https://wa.me/5511999999999?text=Olá, coach! Estou com dúvidas sobre minha planilha de treinos...`, '_blank')}
+                  className="px-4 py-2 bg-surface hover:bg-surface-high border border-surface-highest rounded text-zinc-300 hover:text-white transition-colors text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 self-start sm:self-center"
+                >
+                  💬 Chamar Treinador
+                </button>
+              </div>
+
+              {/* Progress & Week Selector */}
+              <div className="space-y-4">
+                {/* Week Tabs */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-3 mb-2 scrollbar-none border-b border-surface-highest/40">
+                  {Array.from({ length: totalWeeks }).map((_, wIdx) => (
                     <button
-                      key={idx}
-                      onClick={() => setActiveWorkoutDayIdx(idx)}
-                      className={`flex items-center justify-between px-4 py-3 rounded-xl border text-[11px] font-bold uppercase tracking-wider transition-all w-full min-w-[120px] md:min-w-0 ${
-                        activeWorkoutDayIdx === idx
-                          ? 'bg-[#dfbf80]/10 border-[#dfbf80] text-[#dfbf80] shadow-[0_0_15px_rgba(223,191,128,0.15)]'
-                          : 'bg-surface border-surface-highest text-zinc-400 hover:text-zinc-200'
+                      key={wIdx}
+                      onClick={() => {
+                        setActiveWeekIdx(wIdx);
+                        setActiveWorkoutDayIdx(0);
+                      }}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap text-left shrink-0 ${
+                        activeWeekIdx === wIdx
+                          ? 'bg-primary text-black font-black shadow-[0_0_12px_rgba(212,175,55,0.4)]'
+                          : 'bg-surface-high text-zinc-400 hover:text-zinc-200 border border-surface-highest/60'
                       }`}
                     >
-                      <span className="truncate">{day.dayName}</span>
-                      {isDoneToday && (
-                        <span className="text-[9px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30 shrink-0 ml-2">
-                          CONCLUÍDO
-                        </span>
-                      )}
+                      Semana {wIdx + 1}
+                      <span className="block text-[8px] lowercase opacity-80 font-normal mt-0.5">({getWeekRangeLabel(wIdx)})</span>
                     </button>
-                  );
-                })}
-              </div>
-
-              {/* Exercises List for Active Day */}
-              <div className="flex-1 bg-surface/50 border border-surface-highest/60 rounded-xl p-5 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-surface-highest/40 pb-3 gap-3">
-                  <div>
-                    <h4 className="font-heading font-black text-sm text-white uppercase tracking-wider">
-                      {latest_workout.workout_data.days[activeWorkoutDayIdx]?.dayName}
-                    </h4>
-                    <p className="text-[10px] text-zinc-500 font-medium">
-                      Estão listados abaixo os exercícios e repetições recomendadas
-                    </p>
-                  </div>
-                  
-                  <button
-                    onClick={() => handleToggleDay(latest_workout.workout_data.days[activeWorkoutDayIdx].dayName)}
-                    disabled={checkingDay !== null}
-                    className={`px-4 py-2 rounded-xl border text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md ${
-                      completedDays.includes(latest_workout.workout_data.days[activeWorkoutDayIdx]?.dayName)
-                        ? 'bg-green-600 border-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.2)]'
-                        : 'bg-[#dfbf80] hover:bg-[#d4af37] border-[#dfbf80] text-black hover:-translate-y-0.5'
-                    }`}
-                  >
-                    {checkingDay === latest_workout.workout_data.days[activeWorkoutDayIdx]?.dayName ? (
-                      <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    ) : completedDays.includes(latest_workout.workout_data.days[activeWorkoutDayIdx]?.dayName) ? (
-                      '✓ Treino Feito Hoje!'
-                    ) : (
-                      '✓ Concluir Treino Hoje'
-                    )}
-                  </button>
+                  ))}
                 </div>
 
-                <div className="space-y-3 divide-y divide-surface-highest/20">
-                  {latest_workout.workout_data.days[activeWorkoutDayIdx]?.exercises.map((ex: any, idx: number) => {
-                    const videoInfo = exerciseVideos[ex.name.toLowerCase().trim()];
-                    const hasVideo = !!(videoInfo?.video_url || videoInfo?.video_file_url);
+                {/* Progress Bar for the active week */}
+                <div className="bg-surface p-4 rounded-xl border border-surface-highest/60">
+                  <div className="flex justify-between items-center text-[10px] font-bold uppercase tracking-wider text-zinc-400 mb-1.5">
+                    <span>Frequência da Semana {activeWeekIdx + 1}</span>
+                    <span className="font-mono text-primary text-xs">{weekProgressPct}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-surface-high rounded-full overflow-hidden border border-surface-highest">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${weekProgressPct}%` }}
+                      transition={{ duration: 0.5, ease: 'easeOut' }}
+                      className="h-full rounded-full bg-gradient-to-r from-primary/50 to-primary shadow-[0_0_10px_rgba(212,175,55,0.3)]"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row gap-6">
+                {/* Left Day Selector Tabs */}
+                <div className="flex md:flex-col gap-2 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 shrink-0 w-full md:w-56 scrollbar-none">
+                  {latest_workout.workout_data.days.map((day: any, idx: number) => {
+                    const wDate = getWorkoutDateForKey(activeWeekIdx, idx);
+                    const dateKey = wDate.toISOString().split('T')[0];
+                    const progressEntry = data.workout_progress?.find((p: any) => p.workout_date === dateKey && p.day_name === day.dayName);
+                    const status = getWorkoutStatus(wDate, progressEntry);
+                    
+                    let pct = 0;
+                    if (progressEntry && progressEntry.total_exercises > 0) {
+                      pct = Math.round((progressEntry.checked_exercises.length / progressEntry.total_exercises) * 100);
+                    }
                     
                     return (
-                      <div key={idx} className="pt-3 first:pt-0 flex items-center justify-between gap-4 group">
-                        <div className="space-y-1">
-                          <h5 className="font-bold text-xs sm:text-sm text-zinc-100 group-hover:text-primary transition-colors flex items-center gap-2">
-                            {ex.name}
-                            {hasVideo && (
-                              <button
-                                onClick={() => {
-                                  const url = videoInfo?.video_url || videoInfo?.video_file_url || '';
-                                  setActiveVideoUrl(url);
-                                  setActiveVideoTitle(ex.name);
-                                }}
-                                className="text-[8px] sm:text-[9px] bg-[#dfbf80]/20 text-[#dfbf80] border border-[#dfbf80]/30 px-1.5 py-0.5 rounded font-mono font-bold hover:bg-[#dfbf80] hover:text-black transition-colors shrink-0"
-                              >
-                                VER EXECUÇÃO
-                              </button>
-                            )}
-                          </h5>
-                          {ex.notes && (
-                            <p className="text-[10px] sm:text-[11px] text-zinc-400 italic">
-                              Obs: {ex.notes}
-                            </p>
+                      <button
+                        key={idx}
+                        onClick={() => setActiveWorkoutDayIdx(idx)}
+                        className={`flex flex-col items-start p-3.5 rounded-xl border transition-all w-full min-w-[180px] md:min-w-0 text-left ${
+                          activeWorkoutDayIdx === idx
+                            ? 'bg-[#dfbf80]/10 border-[#dfbf80] text-[#dfbf80] shadow-[0_0_15px_rgba(223,191,128,0.15)]'
+                            : 'bg-surface border-surface-highest text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >
+                        <div className="flex justify-between items-center w-full">
+                          <span className="font-bold text-xs truncate">{day.dayName}</span>
+                          {status === 'REALIZADO' ? (
+                            <span className="text-[8px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30 font-extrabold">
+                              FEITO
+                            </span>
+                          ) : status === 'NÃO REALIZADO' ? (
+                            <span className="text-[8px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/30 font-extrabold">
+                              FALTOU
+                            </span>
+                          ) : (
+                            <span className="text-[8px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/30 font-extrabold">
+                              {pct > 0 ? `${pct}%` : 'PENDENTE'}
+                            </span>
                           )}
                         </div>
-                        
-                        <div className="flex gap-3 font-mono text-[10px] sm:text-[11px] text-zinc-400 bg-surface px-3 py-1 rounded-lg border border-surface-highest/40 shrink-0">
-                          <div>
-                            <span className="text-[8px] text-zinc-500 uppercase font-bold block">Séries</span>
-                            <span className="font-bold text-white text-xs sm:text-sm">{ex.sets}</span>
-                          </div>
-                          <div className="border-l border-surface-highest/40 pl-3">
-                            <span className="text-[8px] text-zinc-500 uppercase font-bold block">Reps</span>
-                            <span className="font-bold text-white text-xs sm:text-sm">{ex.reps}</span>
-                          </div>
-                          <div className="border-l border-surface-highest/40 pl-3">
-                            <span className="text-[8px] text-zinc-500 uppercase font-bold block">Descan.</span>
-                            <span className="font-bold text-white text-xs sm:text-sm">{ex.rest}</span>
-                          </div>
-                        </div>
-                      </div>
+                        <span className="text-[9px] text-zinc-500 mt-1 font-medium font-sans">
+                          {formatWorkoutDate(wDate)}
+                        </span>
+                      </button>
                     );
                   })}
                 </div>
+
+                {/* Exercises List for Active Day */}
+                <div className="flex-1 bg-surface/50 border border-surface-highest/60 rounded-xl p-5 space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-surface-highest/40 pb-3 gap-3">
+                    <div>
+                      <h4 className="font-heading font-black text-sm text-white uppercase tracking-wider">
+                        {latest_workout.workout_data.days[activeWorkoutDayIdx]?.dayName}
+                      </h4>
+                      <p className="text-[10px] text-zinc-500 font-medium">
+                        Marque cada exercício concluído.
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono font-bold text-zinc-400">Progresso:</span>
+                      <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${isCompleted ? 'bg-green-500/20 text-green-400' : 'bg-primary/20 text-primary'}`}>{dayPct}%</span>
+                    </div>
+                  </div>
+
+                  {isLocked && (
+                    <div className={`p-3 text-center text-xs rounded-lg font-bold border ${isFuture ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
+                      {isFuture ? '📅 Este treino está agendado para o futuro e ainda não foi liberado.' : '✓ Treino gravado e concluído com sucesso! Travado para edições.'}
+                    </div>
+                  )}
+
+                  <div className="space-y-3 divide-y divide-surface-highest/20">
+                    {latest_workout.workout_data.days[activeWorkoutDayIdx]?.exercises.map((ex: any, idx: number) => {
+                      const videoInfo = exerciseVideos[ex.name.toLowerCase().trim()];
+                      const hasVideo = !!(videoInfo?.video_url || videoInfo?.video_file_url);
+                      const isChecked = activeDayProgressEntry?.checked_exercises?.includes(ex.name) || false;
+                      
+                      return (
+                        <div key={idx} className="pt-3 first:pt-0 flex items-center justify-between gap-4 group transition-all">
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              disabled={isLocked}
+                              onChange={() => handleToggleExercise(ex.name, activeWorkoutDayIdx, activeWeekIdx)}
+                              className="w-4.5 h-4.5 rounded border-surface-highest bg-surface-high text-primary focus:ring-primary accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+                            <div className="space-y-0.5">
+                              <h5 className={`font-bold text-xs sm:text-sm text-zinc-100 group-hover:text-primary transition-colors flex items-center gap-2 ${isChecked ? 'line-through text-zinc-500' : ''}`}>
+                                {ex.name}
+                                {hasVideo && (
+                                  <button
+                                    onClick={() => {
+                                      const url = videoInfo?.video_url || videoInfo?.video_file_url || '';
+                                      setActiveVideoUrl(url);
+                                      setActiveVideoTitle(ex.name);
+                                    }}
+                                    className="text-[8px] sm:text-[9px] bg-[#dfbf80]/20 text-[#dfbf80] border border-[#dfbf80]/30 px-1.5 py-0.5 rounded font-mono font-bold hover:bg-[#dfbf80] hover:text-black transition-colors shrink-0"
+                                  >
+                                    VER EXECUÇÃO
+                                  </button>
+                                )}
+                              </h5>
+                              {ex.notes && (
+                                <p className="text-[10px] sm:text-[10.5px] text-zinc-400 italic">
+                                  Obs: {ex.notes}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex gap-2.5 font-mono text-[9.5px] sm:text-[10px] text-zinc-400 bg-surface px-2.5 py-1 rounded-lg border border-surface-highest/40 shrink-0">
+                            <div>
+                              <span className="text-[7.5px] text-zinc-500 uppercase font-bold block">Séries</span>
+                              <span className="font-bold text-white text-xs">{ex.sets}</span>
+                            </div>
+                            <div className="border-l border-surface-highest/40 pl-2.5">
+                              <span className="text-[7.5px] text-zinc-500 uppercase font-bold block">Reps</span>
+                              <span className="font-bold text-white text-xs">{ex.reps}</span>
+                            </div>
+                            <div className="border-l border-surface-highest/40 pl-2.5">
+                              <span className="text-[7.5px] text-zinc-500 uppercase font-bold block">Pausa</span>
+                              <span className="font-bold text-white text-xs">{ex.rest}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Charts & Postural Evaluation Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -1910,69 +2199,151 @@ function PublicEvolutionView({ token }: { token: string }) {
           </div>
         </div>
 
-        {/* Anamnesis / Clinical Info */}
-        <div className="bg-surface-container border border-surface-highest rounded-2xl p-6 space-y-6">
-          <h3 className="font-heading font-semibold text-lg text-white border-b border-surface-highest/60 pb-2 flex items-center gap-2">
-            📋 Ficha de Anamnese e Observações Médicas
-          </h3>
-          
-          {anamnesis ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-zinc-300">
-              <div className="space-y-4">
-                <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Restrições Médicas / Lesões</span>
-                  <p className="leading-relaxed whitespace-pre-line text-[11px] text-zinc-100 font-medium">
-                    {anamnesis.medical_restrictions || 'Nenhuma restrição registrada.'}
-                  </p>
-                </div>
-                <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Histórico Cirúrgico</span>
-                  <p className="leading-relaxed whitespace-pre-line text-[11px]">
-                    {anamnesis.surgical_history || 'Nenhuma cirurgia relatada.'}
-                  </p>
-                </div>
-                <div className="p-4 bg-surface rounded-xl border border-[#dfbf80]/15">
-                  <span className="text-[10px] text-[#dfbf80] font-bold uppercase block mb-1">Condição Cardiovascular</span>
-                  <p className="leading-relaxed whitespace-pre-line text-[11px]">
-                    {anamnesis.cardio_condition || 'Nenhuma condição cardiovascular informada.'}
-                  </p>
-                </div>
+        {/* Return Scheduling & Anamnesis Info */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Scheduling Card */}
+          <div className="bg-surface-container border border-surface-highest rounded-2xl p-6 space-y-4 h-fit">
+            <h3 className="font-heading font-semibold text-lg text-white border-b border-surface-highest/60 pb-2 flex items-center gap-2">
+              📅 Agendar Retorno / Avaliação
+            </h3>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Solicite uma avaliação presencial ou de retorno com o treinador.
+            </p>
+
+            <form onSubmit={handleScheduleEvaluation} className="space-y-3">
+              {schedError && <div className="p-2.5 bg-red-500/10 text-red-400 text-xs font-semibold text-center rounded-lg border border-red-500/20">{schedError}</div>}
+              {schedSuccess && <div className="p-2.5 bg-green-500/10 text-green-400 text-xs font-semibold text-center rounded-lg border border-green-500/20">{schedSuccess}</div>}
+              
+              <div>
+                <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-1">Data Desejada</label>
+                <input 
+                  type="date" 
+                  min={new Date(Date.now() + 86400000).toISOString().split('T')[0]} 
+                  value={schedDate} 
+                  onChange={e => setSchedDate(e.target.value)} 
+                  className="w-full bg-surface-high border border-surface-highest text-white rounded-lg p-2.5 outline-none focus:border-primary text-xs font-sans" 
+                  required 
+                />
+              </div>
+              
+              <div>
+                <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-1">Horário</label>
+                <input 
+                  type="time" 
+                  value={schedTime} 
+                  onChange={e => setSchedTime(e.target.value)} 
+                  className="w-full bg-surface-high border border-surface-highest text-white rounded-lg p-2.5 outline-none focus:border-primary text-xs font-mono" 
+                  required 
+                />
               </div>
 
-              <div className="space-y-4">
-                <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Medicamentos em Uso</span>
-                  <p className="leading-relaxed whitespace-pre-line text-[11px]">
-                    {anamnesis.medications || 'Nenhum medicamento relatado.'}
-                  </p>
+              <div>
+                <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-1">Observações</label>
+                <textarea 
+                  value={schedNotes} 
+                  onChange={e => setSchedNotes(e.target.value)} 
+                  placeholder="Ex: Preferência por período matutino..." 
+                  className="w-full bg-surface-high border border-surface-highest text-white rounded-lg p-2.5 h-16 resize-none outline-none focus:border-primary text-xs font-sans" 
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={scheduling}
+                className="w-full py-2.5 bg-primary hover:bg-[#d4af37] text-black font-bold uppercase tracking-wider text-[10px] rounded-lg transition-all shadow-[0_0_12px_rgba(212,175,55,0.2)] disabled:opacity-50"
+              >
+                {scheduling ? 'Enviando Solicitação...' : 'Solicitar Agendamento'}
+              </button>
+            </form>
+
+            {data.schedules && data.schedules.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-surface-highest/40">
+                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-2">Solicitações Recentes:</span>
+                <div className="space-y-2 max-h-40 overflow-y-auto scrollbar-none pr-1">
+                  {data.schedules.map((s: any, sIdx: number) => (
+                    <div key={sIdx} className="bg-surface p-2 rounded-lg border border-surface-highest/50 flex justify-between items-center text-xs">
+                      <div className="space-y-0.5">
+                        <span className="font-bold text-white block">{new Date(s.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                        <span className="text-[10px] text-zinc-500 font-mono">{s.scheduled_time}</span>
+                      </div>
+                      <span className={`text-[9px] px-2 py-0.5 rounded font-extrabold uppercase ${
+                        s.status === 'Realizado' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+                        s.status === 'Cancelado' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                        'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      }`}>
+                        {s.status}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-                <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Hábitos Alimentares / Alergias</span>
-                  <p className="leading-relaxed whitespace-pre-line text-[11px]">
-                    {anamnesis.dietary_habits || 'Nenhum hábito específico ou alergia relatados.'}
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+              </div>
+            )}
+          </div>
+
+          {/* Anamnesis / Clinical Info (col-span-2) */}
+          <div className="lg:col-span-2 bg-surface-container border border-surface-highest rounded-2xl p-6 space-y-6">
+            <h3 className="font-heading font-semibold text-lg text-white border-b border-surface-highest/60 pb-2 flex items-center gap-2">
+              📋 Ficha de Anamnese e Observações Médicas
+            </h3>
+            
+            {anamnesis ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-zinc-300">
+                <div className="space-y-4">
                   <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
-                    <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Meta Hidratação</span>
-                    <p className="font-mono text-base font-bold text-white mt-1">
-                      {anamnesis.water_intake ? `${anamnesis.water_intake} L / dia` : '--'}
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Restrições Médicas / Lesões</span>
+                    <p className="leading-relaxed whitespace-pre-line text-[11px] text-zinc-100 font-medium">
+                      {anamnesis.medical_restrictions || 'Nenhuma restrição registrada.'}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Histórico Cirúrgico</span>
+                    <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                      {anamnesis.surgical_history || 'Nenhuma cirurgia relatada.'}
                     </p>
                   </div>
                   <div className="p-4 bg-surface rounded-xl border border-[#dfbf80]/15">
-                    <span className="text-[10px] text-[#dfbf80] font-bold uppercase block mb-1">Nível de Flexibilidade</span>
-                    <p className="font-bold text-white mt-1 text-sm uppercase tracking-wide">
-                      {anamnesis.flexibility_level || '--'}
+                    <span className="text-[10px] text-[#dfbf80] font-bold uppercase block mb-1">Condição Cardiovascular</span>
+                    <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                      {anamnesis.cardio_condition || 'Nenhuma condição cardiovascular informada.'}
                     </p>
                   </div>
                 </div>
+
+                <div className="space-y-4">
+                  <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Medicamentos em Uso</span>
+                    <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                      {anamnesis.medications || 'Nenhum medicamento relatado.'}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                    <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Hábitos Alimentares / Alergias</span>
+                    <p className="leading-relaxed whitespace-pre-line text-[11px]">
+                      {anamnesis.dietary_habits || 'Nenhum hábito específico ou alergia relatados.'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-surface rounded-xl border border-surface-highest/50">
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase block mb-1">Meta Hidratação</span>
+                      <p className="font-mono text-base font-bold text-white mt-1">
+                        {anamnesis.water_intake ? `${anamnesis.water_intake} L / dia` : '--'}
+                      </p>
+                    </div>
+                    <div className="p-4 bg-surface rounded-xl border border-[#dfbf80]/15">
+                      <span className="text-[10px] text-[#dfbf80] font-bold uppercase block mb-1">Nível de Flexibilidade</span>
+                      <p className="font-bold text-white mt-1 text-sm uppercase tracking-wide">
+                        {anamnesis.flexibility_level || '--'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="p-8 text-center text-xs text-zinc-500 italic">
-              Nenhuma ficha de anamnese disponível para este aluno.
-            </div>
-          )}
+            ) : (
+              <div className="p-8 text-center text-xs text-zinc-500 italic">
+                Nenhuma ficha de anamnese disponível para este aluno.
+              </div>
+            )}
+          </div>
         </div>
       </main>
 

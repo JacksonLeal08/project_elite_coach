@@ -505,3 +505,157 @@ export const exportEvolutionPDF = async (student: Student, evaluations: any[], g
   
   doc.save(`Evolucao_${student.name.replace(/ /g, '_')}.pdf`);
 };
+
+export const exportFrequencyPDF = async (student: Student, latestWorkout: any, workoutProgress: any[]) => {
+  const doc = new jsPDF();
+  
+  // Header Config (Premium Dark-Gold)
+  doc.setFillColor(10, 20, 16); // surface: #0a1410
+  doc.rect(0, 0, 210, 297, 'F');
+  
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.setTextColor(212, 175, 55); // Gold
+  doc.text("ELITE COACH", 14, 25);
+  doc.setFontSize(14);
+  doc.setTextColor(255, 255, 255);
+  doc.text("EXTRATO DE ASSIDUIDADE & FREQUÊNCIA", 14, 32);
+  
+  // Divider
+  doc.setDrawColor(212, 175, 55);
+  doc.setLineWidth(1);
+  doc.line(14, 36, 196, 36);
+  
+  // Student basic info
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(180, 180, 180);
+  doc.text("ALUNO:", 14, 45);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(255, 255, 255);
+  doc.text(`${student.name} (${student.age} anos)`, 32, 45);
+  
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(180, 180, 180);
+  doc.text("PROTOCOLO:", 110, 45);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(255, 255, 255);
+  doc.text(latestWorkout.objective || 'Ativo', 135, 45);
+  
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(180, 180, 180);
+  doc.text("VIGÊNCIA:", 14, 51);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(255, 255, 255);
+  const startD = latestWorkout.startDate ? new Date(latestWorkout.startDate + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+  const endD = latestWorkout.endDate ? new Date(latestWorkout.endDate + 'T12:00:00').toLocaleDateString('pt-BR') : '-';
+  doc.text(`${startD} a ${endD}`, 35, 51);
+
+  // Stats calculation
+  const totalWeeks = parseInt(latestWorkout.durationWeeks || '4', 10);
+  const daysInSplit = latestWorkout.workoutData?.days?.length || 0;
+  const totalPlannedSessions = totalWeeks * daysInSplit;
+  
+  const getDayOffsetInWeek = (d: number, totalDays: number): number => {
+    if (totalDays === 1) return 0;
+    if (totalDays === 2) return d === 0 ? 0 : 3;
+    if (totalDays === 3) return d === 0 ? 0 : d === 1 ? 2 : 4;
+    if (totalDays === 4) return d === 0 ? 0 : d === 1 ? 1 : d === 2 ? 3 : 4;
+    if (totalDays === 5) return d;
+    return d;
+  };
+
+  const getWorkoutDateForKey = (wIdx: number, dIdx: number) => {
+    const startStr = latestWorkout.startDate || latestWorkout.date || new Date().toISOString();
+    const start = new Date(startStr + 'T12:00:00');
+    start.setDate(start.getDate() + (wIdx * 7) + getDayOffsetInWeek(dIdx, daysInSplit));
+    return start;
+  };
+
+  const getWorkoutStatus = (workoutDate: Date, entry: any) => {
+    if (entry) return entry.status;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const compareDate = new Date(workoutDate);
+    compareDate.setHours(0,0,0,0);
+    if (compareDate < today) {
+      return 'NÃO REALIZADO';
+    }
+    return 'PENDENTE';
+  };
+
+  let completedSessions = 0;
+  let missedSessions = 0;
+  let pendingSessions = 0;
+  const tableRows: any[] = [];
+
+  for (let w = 0; w < totalWeeks; w++) {
+    for (let d = 0; d < daysInSplit; d++) {
+      const wDate = getWorkoutDateForKey(w, d);
+      const dateKey = wDate.toISOString().split('T')[0];
+      const progressEntry = workoutProgress.find(p => p.workout_date === dateKey && p.day_name === latestWorkout.workoutData.days[d].dayName);
+      const status = getWorkoutStatus(wDate, progressEntry);
+      
+      if (status === 'REALIZADO') completedSessions++;
+      else if (status === 'NÃO REALIZADO') missedSessions++;
+      else pendingSessions++;
+      
+      tableRows.push([
+        `Semana ${w + 1}`,
+        latestWorkout.workoutData.days[d].dayName,
+        wDate.toLocaleDateString('pt-BR'),
+        status === 'REALIZADO' ? '✓ REALIZADO' : status === 'NÃO REALIZADO' ? '✗ FALTOU (NÃO REALIZADO)' : '⌛ PENDENTE',
+        progressEntry ? `${progressEntry.checked_exercises?.length || 0} / ${progressEntry.total_exercises || 0}` : `0 / ${latestWorkout.workoutData.days[d].exercises.length}`
+      ]);
+    }
+  }
+
+  const attendancePct = totalPlannedSessions > 0 ? Math.round((completedSessions / totalPlannedSessions) * 100) : 0;
+
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(180, 180, 180);
+  doc.text("ASSIDUIDADE:", 110, 51);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(212, 175, 55);
+  doc.text(`${attendancePct}% (${completedSessions} de ${totalPlannedSessions} treinos feitos)`, 135, 51);
+  
+  // Divider
+  doc.setDrawColor(34, 66, 51);
+  doc.line(14, 56, 196, 56);
+
+  autoTable(doc, {
+    startY: 62,
+    head: [['Semana', 'Treino', 'Data Programada', 'Status', 'Exercícios Concluídos']],
+    body: tableRows,
+    theme: 'grid',
+    headStyles: { fillColor: [26, 52, 40], textColor: [212, 175, 55], fontStyle: 'bold' },
+    styles: { fontSize: 9, cellPadding: 5, textColor: [220, 220, 220], fillColor: [18, 36, 28] },
+    alternateRowStyles: { fillColor: [10, 20, 16] },
+    columnStyles: {
+      3: { fontStyle: 'bold' }
+    },
+    didParseCell: (cellData: any) => {
+      if (cellData.column.index === 3 && cellData.cell.section === 'body') {
+        const text = cellData.cell.text[0];
+        if (text.includes('REALIZADO')) {
+          cellData.cell.styles.textColor = [34, 197, 94];
+        } else if (text.includes('FALTOU')) {
+          cellData.cell.styles.textColor = [239, 68, 68];
+        } else {
+          cellData.cell.styles.textColor = [245, 158, 11];
+        }
+      }
+    }
+  });
+
+  const finalY = (doc as any).lastAutoTable.finalY + 25;
+  doc.setDrawColor(100, 100, 100);
+  doc.line(60, finalY, 150, finalY);
+  
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(150, 150, 150);
+  doc.text("Assinatura do Treinador / Elite Coach CRM", 78, finalY + 5);
+
+  doc.save(`Extrato_Frequencia_${student.name.replace(/ /g, '_')}.pdf`);
+};

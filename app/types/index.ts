@@ -80,6 +80,8 @@ export interface HistoryEntry {
   clinicalNotes?: string;
   workoutData: WorkoutData;
   date: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface ProfileConfig {
@@ -154,4 +156,17 @@ export interface EvaluationSchedule {
   notes?: string;
   created_at: string;
   student_name?: string;
+}
+
+export interface WorkoutProgress {
+  id: string;
+  student_id: string;
+  protocol_id: string;
+  workout_date: string;
+  day_name: string;
+  checked_exercises: string[];
+  total_exercises: number;
+  status: 'REALIZADO' | 'PENDENTE' | 'NÃO REALIZADO';
+  created_at: string;
+  updated_at: string;
 }

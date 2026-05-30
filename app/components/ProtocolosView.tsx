@@ -32,6 +32,19 @@ export default function ProtocolosView() {
   const [height, setHeight] = useState<string>(draft?.height || '');
   const [imc, setImc] = useState<string>(draft?.imc || '');
   const [clinicalNotes, setClinicalNotes] = useState<string>(draft?.clinicalNotes || '');
+  const [startDate, setStartDate] = useState<string>(draft?.startDate || new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState<string>(draft?.endDate || '');
+
+  useEffect(() => {
+    if (startDate && durationWeeks) {
+      const weeks = parseInt(durationWeeks, 10);
+      if (!isNaN(weeks) && weeks > 0) {
+        const start = new Date(startDate + 'T12:00:00');
+        start.setDate(start.getDate() + (weeks * 7));
+        setEndDate(start.toISOString().split('T')[0]);
+      }
+    }
+  }, [startDate, durationWeeks]);
   
   // Creation Mode & Autocomplete States
   const [creationMode, setCreationMode] = useState<'ia' | 'manual'>('ia');
@@ -60,9 +73,9 @@ export default function ProtocolosView() {
   };
 
   useEffect(() => {
-    const data = { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes };
+    const data = { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes, startDate, endDate };
     localStorage.setItem('elite_coach_protocol_draft', JSON.stringify(data));
-  }, [student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes]);
+  }, [student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes, startDate, endDate]);
 
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [workoutData, setWorkoutData] = useState<WorkoutData | null>(null);
@@ -130,7 +143,9 @@ export default function ProtocolosView() {
           clinicalNotes: item.clinical_notes,
           needs: item.needs,
           workoutData: item.workout_data,
-          date: item.date
+          date: item.date,
+          startDate: item.start_date,
+          endDate: item.end_date
         }));
         setHistory(mapped);
       }
@@ -319,7 +334,9 @@ export default function ProtocolosView() {
           imc: params.imc,
           clinical_notes: params.clinicalNotes,
           needs: params.needs,
-          workout_data: data
+          workout_data: data,
+          start_date: params.startDate,
+          end_date: params.endDate
         }]);
 
       if (error) {
@@ -385,6 +402,8 @@ export default function ProtocolosView() {
     setHeight(item.height || '');
     setImc(item.imc || '');
     setClinicalNotes(item.clinicalNotes || '');
+    setStartDate(item.startDate || new Date().toISOString().split('T')[0]);
+    setEndDate(item.endDate || '');
     setActiveDayIdx(0);
   };
 
@@ -441,7 +460,7 @@ export default function ProtocolosView() {
       
       setWorkoutData(data);
       setActiveDayIdx(0);
-      await saveToHistory(data, { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes }, sendNotification);
+      await saveToHistory(data, { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes, startDate, endDate }, sendNotification);
     } catch (error: any) {
       showCustomAlert("Erro", `Erro ao gerar protocolo: ${error.message}\nTente novamente em alguns instantes.`, "error");
     } finally {
@@ -459,7 +478,7 @@ export default function ProtocolosView() {
     
     setIsGenerating(true);
     try {
-      await saveToHistory(workoutData, { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes }, sendNotification);
+      await saveToHistory(workoutData, { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes, startDate, endDate }, sendNotification);
       showCustomAlert("Sucesso", "Treino manual salvo com sucesso no histórico!", "success");
     } catch (err: any) {
       showCustomAlert("Erro", "Erro ao salvar protocolo manual: " + err.message, "error");
@@ -597,9 +616,17 @@ export default function ProtocolosView() {
               </div>
               
               <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
+                  <div>
                      <label className="text-xs text-zinc-400">Duração (Semanas)</label>
                      <input value={durationWeeks} onChange={e=>setDurationWeeks(e.target.value)} type="number" min="1" max="16" className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 focus:border-primary outline-none transition-colors" />
+                  </div>
+                  <div>
+                     <label className="text-xs text-zinc-400">Data de Início</label>
+                     <input value={startDate} onChange={e=>setStartDate(e.target.value)} type="date" className="w-full bg-surface-high border border-surface-highest text-white rounded p-2 mt-1 focus:border-primary outline-none transition-colors" />
+                  </div>
+                  <div className="col-span-2">
+                     <label className="text-xs text-zinc-400 font-bold text-zinc-300">Data de Término (Calculada)</label>
+                     <input value={endDate} disabled type="date" className="w-full bg-surface border border-surface-highest text-zinc-400 rounded p-2 mt-1 outline-none opacity-60 cursor-not-allowed font-mono text-xs" />
                   </div>
               </div>
 
