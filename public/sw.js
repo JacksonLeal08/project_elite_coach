@@ -33,6 +33,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
+  // Intercept only HTTP/HTTPS requests (ignore chrome-extension://, etc.)
+  if (!request.url.startsWith('http:') && !request.url.startsWith('https:')) {
+    return;
+  }
+
   // Intercept only GET requests
   if (request.method !== 'GET') {
     return;

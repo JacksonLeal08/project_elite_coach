@@ -1389,6 +1389,9 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                 </button>
            </div>
 
+            {/* Horizontal scrollability wrapper for active tabs content on mobile */}
+            <div className="overflow-x-auto w-full scrollbar-none">
+              <div className="min-w-[700px] md:min-w-0">
            {activeProfileTab === 'general' && (
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                <div className="space-y-8">
@@ -1441,7 +1444,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                      </h3>
                      <div className="space-y-3">
                         <div>
-                           <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">WhatsApp (DDD + Número, sem símbolos)</label>
+                           <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Número de WhatsApp do aluno (DDI + DDD + Número) para envios diretos de relatórios e mensagens de treino.">WhatsApp (DDD + Número, sem símbolos)</label>
                            <input 
                               type="text" 
                               value={studentPhone} 
@@ -1451,7 +1454,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                            />
                         </div>
                         <div>
-                           <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Telegram Chat ID (código numérico)</label>
+                           <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Identificação numérica única do chat do aluno no Telegram, utilizada para o envio de alertas automatizados.">Telegram Chat ID (código numérico)</label>
                            <input 
                               type="text" 
                               value={studentTelegramId} 
@@ -1694,7 +1697,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                  ) : (
                    <div className="space-y-4 text-xs">
                      <div>
-                       <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Restrições Médicas / Lesões / Dores</label>
+                       <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Indique restrições médicas, patologias diagnosticadas, lesões musculoesqueléticas ou dores frequentes relatadas pelo aluno.">Restrições Médicas / Lesões / Dores</label>
                        <textarea
                          value={anamnesis.medical_restrictions || ''}
                          onChange={e => setAnamnesis({ ...anamnesis, medical_restrictions: e.target.value })}
@@ -1704,7 +1707,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                      </div>
 
                      <div>
-                       <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Histórico de Cirurgias</label>
+                       <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Procedimentos cirúrgicos anteriores realizados pelo aluno e tempo de recuperação aproximado.">Histórico de Cirurgias</label>
                        <textarea
                          value={anamnesis.surgical_history || ''}
                          onChange={e => setAnamnesis({ ...anamnesis, surgical_history: e.target.value })}
@@ -1714,7 +1717,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                      </div>
 
                      <div>
-                       <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Condições Cardiovasculares (Pressão, Coração)</label>
+                       <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Relato de hipertensão, hipotensão, arritmias ou qualquer fator de risco cardiovascular relevante para a prática física.">Condições Cardiovasculares (Pressão, Coração)</label>
                        <textarea
                          value={anamnesis.cardio_condition || ''}
                          onChange={e => setAnamnesis({ ...anamnesis, cardio_condition: e.target.value })}
@@ -1724,7 +1727,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                      </div>
 
                      <div>
-                       <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Medicamentos em Uso</label>
+                       <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Medicações de uso diário ou frequente que possam interferir na frequência cardíaca, pressão arterial ou rendimento do aluno.">Medicamentos em Uso</label>
                        <textarea
                          value={anamnesis.medications || ''}
                          onChange={e => setAnamnesis({ ...anamnesis, medications: e.target.value })}
@@ -1734,7 +1737,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                      </div>
 
                      <div>
-                       <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Hábitos Alimentares / Alergias</label>
+                       <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Estilo de alimentação predominante, suplementação atual, alergias ou intolerâncias alimentares declaradas.">Hábitos Alimentares / Alergias</label>
                        <textarea
                          value={anamnesis.dietary_habits || ''}
                          onChange={e => setAnamnesis({ ...anamnesis, dietary_habits: e.target.value })}
@@ -1745,7 +1748,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
 
                      <div className="grid grid-cols-2 gap-4">
                        <div>
-                         <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Consumo Diário de Água (L)</label>
+                         <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Quantidade diária média de ingestão de água em litros informada pelo aluno.">Consumo Diário de Água (L)</label>
                          <input
                            type="number"
                            step="0.5"
@@ -1758,7 +1761,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                        </div>
 
                        <div>
-                         <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Nível de Flexibilidade</label>
+                         <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Nível subjetivo ou testado de flexibilidade corporal geral do aluno.">Nível de Flexibilidade</label>
                          <select
                            value={anamnesis.flexibility_level || 'Médio'}
                            onChange={e => setAnamnesis({ ...anamnesis, flexibility_level: e.target.value })}
@@ -1883,7 +1886,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                          {/* Alignment Grid Controls */}
                          <div className="bg-surface border border-surface-highest/60 p-4 rounded-xl space-y-3.5">
                            <div className="flex items-center justify-between">
-                             <span className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">Grade Postural (ON/OFF)</span>
+                             <span className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider cursor-help" title="Liga ou desliga a grade isométrica e a linha de prumo vertical sobre a foto do aluno.">Grade Postural (ON/OFF)</span>
                              <button
                                onClick={() => setShowGrid(!showGrid)}
                                className={`px-3 py-1 rounded text-[10px] font-bold uppercase border transition-all ${
@@ -1899,7 +1902,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                            {showGrid && (
                              <>
                                <div>
-                                 <div className="flex justify-between text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                                 <div className="flex justify-between text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-1 cursor-help" title="Desloque a linha de prumo vertical para o centro de gravidade/simetria corporal do aluno.">
                                    <span>Calibração Horizontal (Plumb Line)</span>
                                    <span className="font-mono text-cyan-400">{gridX}%</span>
                                  </div>
@@ -1914,7 +1917,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                                </div>
 
                                <div>
-                                 <div className="flex justify-between text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-1">
+                                 <div className="flex justify-between text-[9px] font-bold uppercase tracking-wider text-zinc-400 mb-1 cursor-help" title="Ajuste a transparência da grade sobreposta para melhor visualização das referências anatômicas.">
                                    <span>Opacidade da Grade</span>
                                    <span className="font-mono text-cyan-400">{Math.round(gridOpacity * 100)}%</span>
                                  </div>
@@ -2072,7 +2075,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                     ) : (
                       <div className="space-y-4 text-xs">
                         <div>
-                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Peso Alvo (kg)</label>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Meta de peso corporal total em quilogramas (kg) que o aluno deseja alcançar.">Peso Alvo (kg)</label>
                           <input
                             type="number"
                             step="0.1"
@@ -2086,7 +2089,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                         </div>
 
                         <div>
-                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">% Gordura Corporal Alvo</label>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Meta ideal de percentual de gordura corporal do aluno para acompanhamento de composição corporal.">% Gordura Corporal Alvo</label>
                           <input
                             type="number"
                             step="0.1"
@@ -2100,7 +2103,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                         </div>
 
                         <div>
-                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Massa Muscular Alvo (kg)</label>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Quantidade desejada de massa muscular em quilogramas (kg) a ser atingida pelo aluno.">Massa Muscular Alvo (kg)</label>
                           <input
                             type="number"
                             step="0.1"
@@ -2114,7 +2117,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                         </div>
 
                         <div>
-                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Frequência Semanal Alvo (dias)</label>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block cursor-help" title="Frequência semanal ideal de sessões de treino planejadas e estimadas para o aluno.">Frequência Semanal Alvo (dias)</label>
                           <select
                             value={freqTarget}
                             onChange={e => setFreqTarget(e.target.value)}
@@ -2818,6 +2821,8 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                 )}
               </div>
             )}
+          </div>
+          </div>
           </div>
 
          {/* New Payment Modal Dialog */}

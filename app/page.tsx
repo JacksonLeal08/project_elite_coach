@@ -1,7 +1,7 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight } from 'lucide-react';
 import { ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
@@ -725,6 +725,66 @@ export default function App() {
   );
 }
 
+const tourSteps = [
+  {
+    target: 'dashboard',
+    title: '📊 Painel Principal (Dashboard)',
+    content: 'Aqui você acompanha o faturamento mensal, faturas ativas/atrasadas e o resumo geral dos alunos matriculados.'
+  },
+  {
+    target: 'alunos',
+    title: '👥 Gestão de Alunos',
+    content: 'Gerencie anamneses, envie laudos posturais com grade geométrica, defina metas de evolução e envie o link de acesso exclusivo.'
+  },
+  {
+    target: 'criar-treino',
+    title: '🏋️‍♂️ Prescrição Inteligente (IA)',
+    content: 'Monte planilhas de treinos e cronogramas. A IA do Clinical Guard valida restrições médicas do aluno automaticamente!'
+  },
+  {
+    target: 'notifications',
+    title: '🔔 Alertas e Avisos',
+    content: 'Fique sabendo imediatamente quando um aluno aceita um cronograma ou solicita uma agenda de retorno/avaliação.'
+  },
+  {
+    target: 'ai-agent',
+    title: '🤖 Agente de Ajuda 24h',
+    content: 'Dúvidas sobre o sistema? Use nosso assistente virtual inteligente 24 horas no rodapé para respostas instantâneas.'
+  }
+];
+
+const LOCAL_HELP_KB: Record<string, Record<string, string>> = {
+  "Painel Geral & Financeiro": {
+    "Informações Básicas e Badges": "No Painel Geral, você gerencia as informações cadastrais do aluno e visualiza suas Conquistas (Badges). As Badges celebram a assiduidade e progresso do aluno (ex: Treino Focado, Frequência Ouro).",
+    "Faturas e Mensalidades": "Na aba Financeiro, você pode lançar faturas manuais selecionando planos padrão (Mensal, Trimestral, Semestral, Anual) ou valores personalizados, definindo datas de vencimento específicas.",
+    "Alertas Financeiros (Pulse)": "Faturas com data de vencimento ultrapassada e status 'Pendente' mudam automaticamente para 'Atrasado', exibindo um alerta animado vermelho (pulse) para destacar pendências financeiras."
+  },
+  "Anamnese & Avaliação Postural": {
+    "Ficha Clínica de Alunos": "A Anamnese reúne o histórico de saúde do aluno: restrições médicas, histórico cirúrgico, uso de medicamentos, condições cardiovasculares, hábitos alimentares, consumo diário de água e flexibilidade.",
+    "Grade Postural Geométrica": "A ferramenta de Avaliação Postural sobrepõe uma grade geométrica nas fotos de Frente, Costas e Perfil do aluno. Você pode calibrar a Linha de Prumo (Eixo X) e ajustar a opacidade da grade para analisar desvios posturais.",
+    "Cálculo de Consumo de Água": "O campo de Consumo Diário de Água na anamnese registra a quantidade recomendada (em litros) para o aluno, auxiliando no controle de hidratação diária."
+  },
+  "Metas & Evolução Corporal": {
+    "Metas de Peso e Gordura": "Permite definir metas de Peso Corporal, % de Gordura e Massa Muscular. O sistema compara esses alvos com os resultados das avaliações físicas para calcular o progresso.",
+    "Gráficos de Evolução": "Gera gráficos de linha comparativos mostrando a biometria real do aluno (peso, gordura, músculo) ao longo do tempo em relação à linha de meta estabelecida.",
+    "Link de Acesso Público": "Gera um link exclusivo e seguro contendo um token de compartilhamento. O aluno pode salvar esse link no celular para acessar suas informações de treino e evolução sem precisar de login."
+  },
+  "Agenda de Retorno": {
+    "Tipos de Status (Pendente/Confirmado/Sugerido)": "Os agendamentos possuem 3 status principais: Pendente (solicitado pelo aluno), Sugerido (quando o treinador propõe uma nova data/hora) e Confirmado (aceito por ambos).",
+    "Propor Novas Datas": "Caso a data solicitada pelo aluno não seja viável, o treinador pode clicar em 'Propor Nova Data'. O aluno será notificado em seu portal para aceitar ou recusar a contraproposta.",
+    "Notificações de Retorno": "Quando um agendamento é criado, atualizado ou cancelado, notificações automáticas são registradas e alertas no Telegram podem ser configurados."
+  },
+  "Assiduidade e Treinos": {
+    "Check-ins de Treinos": "O aluno registra no seu portal os exercícios executados. Ao marcar todos os exercícios do dia, o treino é concluído, incrementando a assiduidade e disparando alertas de progresso.",
+    "Badges de Frequência": "À medida que o aluno acumula treinos concluídos, ele conquista novos badges de assiduidade, promovendo gamificação e engajamento.",
+    "PWA e Acesso Offline": "O portal do aluno é um PWA completo. Ele salva os treinos em cache no localStorage. O aluno pode fazer o check-in offline, e as ações serão sincronizadas automaticamente assim que houver conexão."
+  },
+  "Clinical Guard IA": {
+    "Validação de Lesões na Prescrição": "O AI Clinical Guard analisa a anamnese do aluno em busca de lesões relatadas (ex: hérnia discal, condromalácia) e impede a prescrição de exercícios contraindicados no gerador de treinos.",
+    "Restrições de Exercícios": "A IA analisa ativamente restrições de movimento e sugere adaptações seguras, garantindo a integridade física do aluno."
+  }
+};
+
 function MainApp({ 
   currentUser, 
   setCurrentUser, 
@@ -773,6 +833,96 @@ function MainApp({
   const [showInstallBtn, setShowInstallBtn] = useState<boolean>(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
 
+  // Onboarding Tour state
+  const [currentTourStep, setCurrentTourStep] = useState<number | null>(null);
+
+  // AI Agent states
+  const [showAiAgent, setShowAiAgent] = useState<boolean>(false);
+  const [aiTopic, setAiTopic] = useState<string>('');
+  const [aiSubtopic, setAiSubtopic] = useState<string>('');
+  const [aiQuestion, setAiQuestion] = useState<string>('');
+  const [aiResponse, setAiResponse] = useState<string>('');
+  const [aiLoading, setAiLoading] = useState<boolean>(false);
+  const [aiIsOffline, setAiIsOffline] = useState<boolean>(false);
+
+  const searchLocalKB = (query: string) => {
+    const q = query.toLowerCase();
+    let bestMatch = '';
+    let highestScore = 0;
+
+    for (const topic in LOCAL_HELP_KB) {
+      for (const subtopic in LOCAL_HELP_KB[topic]) {
+        const text = LOCAL_HELP_KB[topic][subtopic];
+        let score = 0;
+        
+        const words = q.split(/\s+/);
+        words.forEach(w => {
+          if (w.length > 2) {
+            if (topic.toLowerCase().includes(w)) score += 2;
+            if (subtopic.toLowerCase().includes(w)) score += 3;
+            if (text.toLowerCase().includes(w)) score += 1;
+          }
+        });
+
+        if (score > highestScore) {
+          highestScore = score;
+          bestMatch = `[${topic} - ${subtopic}]\n\n${text}`;
+        }
+      }
+    }
+
+    if (highestScore > 0) {
+      setAiResponse(bestMatch);
+      setAiIsOffline(true);
+    } else {
+      setAiResponse("Não encontrei uma resposta exata para a sua pergunta na base local offline. Por favor, verifique sua conexão com a internet para consultar o Agente de IA online completo.");
+      setAiIsOffline(true);
+    }
+  };
+
+  const handleAskAi = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!aiQuestion.trim()) return;
+
+    setAiLoading(true);
+    setAiResponse('');
+    setAiIsOffline(false);
+
+    if (typeof window !== 'undefined' && !navigator.onLine) {
+      searchLocalKB(aiQuestion);
+      setAiLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/ask-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: aiQuestion,
+          topic: aiTopic,
+          subtopic: aiSubtopic
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error('API failed');
+      }
+
+      const data = await res.json();
+      if (data.answer) {
+        setAiResponse(data.answer);
+      } else {
+        searchLocalKB(aiQuestion);
+      }
+    } catch (err) {
+      console.warn("Ask AI failed, falling back to local KB:", err);
+      searchLocalKB(aiQuestion);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   useEffect(() => {
     const handlePrompt = (e: any) => {
       e.preventDefault();
@@ -782,6 +932,63 @@ function MainApp({
     window.addEventListener('beforeinstallprompt', handlePrompt);
     return () => window.removeEventListener('beforeinstallprompt', handlePrompt);
   }, []);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && currentUser?.id) {
+      const completed = localStorage.getItem(`elite_coach_tour_completed_${currentUser.id}`);
+      if (completed !== 'true') {
+        const timer = setTimeout(() => {
+          setCurrentTourStep(0);
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (currentTourStep === null) {
+      document.querySelectorAll('[data-tour]').forEach(el => {
+        el.classList.remove('ring-4', 'ring-[#dfbf80]', 'ring-offset-2', 'ring-offset-black', 'scale-105', 'z-[60]', 'relative');
+      });
+      return;
+    }
+
+    const step = tourSteps[currentTourStep];
+    if (!step) return;
+
+    document.querySelectorAll('[data-tour]').forEach(el => {
+      el.classList.remove('ring-4', 'ring-[#dfbf80]', 'ring-offset-2', 'ring-offset-black', 'scale-105', 'z-[60]', 'relative');
+    });
+
+    const targetEl = document.querySelector(`[data-tour="${step.target}"]`) || document.querySelector(`[data-tour="${step.target}-mobile"]`);
+    if (targetEl) {
+      targetEl.classList.add('ring-4', 'ring-[#dfbf80]', 'ring-offset-2', 'ring-offset-black', 'scale-105', 'z-[60]', 'relative');
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [currentTourStep]);
+
+  const handleNextTourStep = () => {
+    if (currentTourStep === null) return;
+    if (currentTourStep < tourSteps.length - 1) {
+      setCurrentTourStep(currentTourStep + 1);
+    } else {
+      handleCompleteTour();
+    }
+  };
+
+  const handlePrevTourStep = () => {
+    if (currentTourStep === null) return;
+    if (currentTourStep > 0) {
+      setCurrentTourStep(currentTourStep - 1);
+    }
+  };
+
+  const handleCompleteTour = () => {
+    if (currentUser?.id) {
+      localStorage.setItem(`elite_coach_tour_completed_${currentUser.id}`, 'true');
+    }
+    setCurrentTourStep(null);
+  };
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
@@ -859,6 +1066,7 @@ function MainApp({
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
+              data-tour={item.id === 'dashboard' ? 'dashboard' : item.id === 'alunos' ? 'alunos' : item.id === 'protocolos' ? 'criar-treino' : undefined}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
                 activeTab === item.id 
                   ? 'bg-primary/10 text-primary border border-primary/20 shadow-[inset_0_0_15px_rgba(212,175,55,0.05)]' 
@@ -896,6 +1104,7 @@ function MainApp({
               setActiveTab(item.id);
               setShowMobileMoreMenu(false);
             }}
+            data-tour={item.id === 'dashboard' ? 'dashboard-mobile' : item.id === 'alunos' ? 'alunos-mobile' : item.id === 'protocolos' ? 'criar-treino-mobile' : undefined}
             className={`flex flex-col items-center justify-center flex-1 h-full py-1 text-center transition-all ${
               activeTab === item.id && !showMobileMoreMenu
                 ? 'text-primary' 
@@ -1056,6 +1265,7 @@ function MainApp({
               {/* Notification Bell */}
               <button 
                 onClick={() => setShowNotificationsModal(true)}
+                data-tour="notifications"
                 className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-primary transition-colors hover:bg-surface-high relative"
               >
                  <Bell className="w-4 h-4" />
@@ -1099,40 +1309,42 @@ function MainApp({
         {/* Scrollable Content Wrapper (Fixed overall layout, scroll only in center) */}
         <div className="flex-1 flex flex-col justify-between overflow-hidden p-4 md:p-8 pb-20 md:pb-8">
            {/* Center Content Panel */}
-           <div className="flex-1 overflow-y-auto pr-0 sm:pr-1">
-              <AnimatePresence mode="wait">
-                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-                    {activeTab === 'dashboard' && <DashboardView />}
-                    {activeTab === 'alunos' && (
-                      <AlunosView 
-                        currentUser={currentUser} 
-                        redirectStudentId={redirectStudentId}
-                        redirectTab={redirectTab}
-                        clearRedirect={() => {
-                          setRedirectStudentId(null);
-                          setRedirectTab(null);
-                        }}
-                      />
-                    )}
-                    {activeTab === 'protocolos' && <ProtocolosView />}
-                    {activeTab === 'biblioteca' && <BibliotecaView currentUser={currentUser} />}
-                    {activeTab === 'financeiro' && <FinanceiroView currentUser={currentUser} />}
-                    {activeTab === 'config' && <ConfigView currentUser={currentUser} onUserUpdate={(updatedUser: any) => setCurrentUser(updatedUser)} />}
-                    {activeTab === 'inspecoes' && <InspecoesView currentUser={currentUser} />}
-                 </motion.div>
-              </AnimatePresence>
-           </div>
-
-            {/* Global Page Footer */}
-            <footer className="py-1.5 mt-2 border-t border-surface-highest/20 text-center shrink-0 z-10 bg-surface/80 backdrop-blur-sm">
-              <div className="text-[7.5px] sm:text-[9px] text-zinc-500 font-medium tracking-wide whitespace-nowrap overflow-x-auto scrollbar-none flex items-center justify-center gap-1 sm:gap-1.5 px-2">
-                <span>© 2026 - Todos os direitos reservados</span>
-                <span className="text-[#dfbf80]/30 shrink-0">|</span>
-                <span>JIMMP Info</span>
-                <span className="text-[#dfbf80]/30 shrink-0">|</span>
-                <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.2.0</span>
+           <div className="flex-1 overflow-y-auto pr-0 sm:pr-1 flex flex-col justify-between">
+              <div>
+                 <AnimatePresence mode="wait">
+                    <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+                       {activeTab === 'dashboard' && <DashboardView />}
+                       {activeTab === 'alunos' && (
+                         <AlunosView 
+                           currentUser={currentUser} 
+                           redirectStudentId={redirectStudentId}
+                           redirectTab={redirectTab}
+                           clearRedirect={() => {
+                             setRedirectStudentId(null);
+                             setRedirectTab(null);
+                           }}
+                         />
+                       )}
+                       {activeTab === 'protocolos' && <ProtocolosView />}
+                       {activeTab === 'biblioteca' && <BibliotecaView currentUser={currentUser} />}
+                       {activeTab === 'financeiro' && <FinanceiroView currentUser={currentUser} />}
+                       {activeTab === 'config' && <ConfigView currentUser={currentUser} onUserUpdate={(updatedUser: any) => setCurrentUser(updatedUser)} />}
+                       {activeTab === 'inspecoes' && <InspecoesView currentUser={currentUser} />}
+                    </motion.div>
+                 </AnimatePresence>
               </div>
-            </footer>
+
+              {/* Global Page Footer */}
+              <footer className="py-1.5 mt-4 border-t border-surface-highest/20 text-center shrink-0 z-10 bg-surface/80 backdrop-blur-sm">
+                <div className="text-[7.5px] sm:text-[9px] text-zinc-500 font-medium tracking-wide whitespace-nowrap overflow-x-auto scrollbar-none flex items-center justify-center gap-1 sm:gap-1.5 px-2">
+                  <span>© 2026 - Todos os direitos reservados</span>
+                  <span className="text-[#dfbf80]/30 shrink-0">|</span>
+                  <span>JIMMP Info</span>
+                  <span className="text-[#dfbf80]/30 shrink-0">|</span>
+                  <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.2.0</span>
+                </div>
+              </footer>
+           </div>
         </div>
       </main>
 
@@ -1363,15 +1575,277 @@ function MainApp({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Floating AI Agent Button */}
+      <div className="fixed bottom-24 right-6 z-[80]" data-tour="ai-agent">
+        <button 
+          onClick={() => setShowAiAgent(true)}
+          className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-primary-dim text-black flex items-center justify-center shadow-[0_4px_20px_rgba(212,175,55,0.4)] hover:scale-110 active:scale-95 transition-all duration-200 group relative"
+          title="Agente de Ajuda IA 24h"
+        >
+          <Sparkles className="w-5 h-5 animate-pulse" />
+          <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-surface-high border border-surface-highest text-white text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            Ajuda IA 24h
+          </span>
+        </button>
+      </div>
+
+      {/* AI Agent Drawer */}
+      <AnimatePresence>
+        {showAiAgent && (
+          <>
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAiAgent(false)}
+              className="fixed inset-0 bg-black z-[85] cursor-pointer"
+            />
+            
+            {/* Drawer Body */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 right-0 w-full max-w-md bg-surface-container border-l border-surface-highest/60 shadow-[0_0_50px_rgba(0,0,0,0.8)] z-[95] flex flex-col"
+            >
+              {/* Header */}
+              <div className="p-4 border-b border-surface-highest/80 flex items-center justify-between bg-surface/50 backdrop-blur">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                    <Sparkles className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">Agente de IA 24h</h3>
+                    <p className="text-[9px] text-[#dfbf80] font-bold uppercase tracking-widest">Elite Coach Assistant</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowAiAgent(false)}
+                  className="p-1.5 text-zinc-400 hover:text-white rounded-lg bg-surface-high border border-surface-highest"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Drawer Content */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-none">
+                {aiResponse ? (
+                  <div className="space-y-4">
+                    {/* Topic Indicator */}
+                    {aiTopic && (
+                      <div className="flex items-center gap-1.5 text-[9px] text-[#dfbf80] font-bold uppercase tracking-widest">
+                        <span>{aiTopic}</span>
+                        {aiSubtopic && (
+                          <>
+                            <ChevronRight className="w-3 h-3 text-zinc-500" />
+                            <span>{aiSubtopic}</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* AI Speech Bubble */}
+                    <div className="p-4 rounded-2xl bg-surface border border-surface-highest/80 text-zinc-200 text-xs leading-relaxed space-y-3 shadow-inner">
+                      <p className="whitespace-pre-line font-medium">{aiResponse}</p>
+                      
+                      {aiIsOffline && (
+                        <div className="text-[9px] text-amber-400/80 font-bold uppercase tracking-wider flex items-center gap-1 mt-2">
+                          ⚠️ Modo Offline (Consulta à Base Local)
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={() => {
+                          setAiResponse('');
+                          setAiTopic('');
+                          setAiSubtopic('');
+                        }}
+                        className="px-3 py-2 bg-surface hover:bg-surface-high border border-surface-highest text-zinc-300 font-bold uppercase tracking-wider text-[9px] rounded-lg transition-all"
+                      >
+                        Voltar ao Menu
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-3 bg-surface rounded-xl border border-surface-highest/60">
+                      <p className="text-[11px] text-zinc-400 font-medium leading-relaxed">
+                        Selecione um tópico abaixo para explicações instantâneas ou digite sua dúvida personalizada no campo de busca.
+                      </p>
+                    </div>
+
+                    {/* Topics Menu */}
+                    <div className="space-y-2">
+                      <h4 className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-2">Tópicos do Sistema</h4>
+                      {Object.keys(LOCAL_HELP_KB).map((topic) => (
+                        <div key={topic} className="space-y-1">
+                          <span className="text-[10px] text-[#dfbf80] font-bold uppercase tracking-wider block mt-2 px-1">
+                            {topic}
+                          </span>
+                          <div className="grid grid-cols-1 gap-1.5">
+                            {Object.keys(LOCAL_HELP_KB[topic]).map((subtopic) => (
+                              <button
+                                key={subtopic}
+                                onClick={() => {
+                                  setAiTopic(topic);
+                                  setAiSubtopic(subtopic);
+                                  setAiResponse(LOCAL_HELP_KB[topic][subtopic]);
+                                  setAiIsOffline(true);
+                                }}
+                                className="w-full text-left p-2.5 rounded-lg bg-surface-high border border-surface-highest/60 hover:border-primary/30 hover:bg-primary/5 transition-all text-[11px] text-zinc-300 hover:text-white font-medium flex items-center justify-between"
+                              >
+                                <span>{subtopic}</span>
+                                <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0 ml-2" />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Drawer Footer / Input Box */}
+              <div className="p-4 border-t border-surface-highest bg-surface/50 backdrop-blur">
+                <form onSubmit={handleAskAi} className="space-y-2">
+                  <textarea 
+                    value={aiQuestion}
+                    onChange={(e) => setAiQuestion(e.target.value)}
+                    placeholder="Qual sua dúvida sobre o Elite Coach?"
+                    rows={2}
+                    className="w-full bg-surface-high border border-surface-highest rounded-xl p-3 text-xs text-white placeholder-zinc-500 outline-none focus:border-primary/50 transition-colors resize-none scrollbar-none font-medium"
+                  />
+                  <div className="flex justify-between items-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAiResponse('');
+                        setAiTopic('');
+                        setAiSubtopic('');
+                        setAiQuestion('');
+                      }}
+                      className="text-[9px] text-zinc-500 hover:text-zinc-300 font-bold uppercase tracking-wider"
+                    >
+                      Limpar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={aiLoading || !aiQuestion.trim()}
+                      className="px-4 py-2 bg-primary text-black font-bold uppercase tracking-wider text-[10px] rounded-lg hover:bg-primary-dim transition-all shadow-[0_0_12px_rgba(212,175,55,0.2)] disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {aiLoading ? 'Pensando...' : 'Perguntar'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Onboarding Tour Modal Overlay */}
+      {currentTourStep !== null && (
+        <div className="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-surface-container border border-[#dfbf80]/30 shadow-[0_0_30px_rgba(223,191,128,0.15)] rounded-2xl p-6 max-w-sm w-full relative z-[100] overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 right-0 h-1 bg-[#dfbf80]/20">
+              <div 
+                className="bg-[#dfbf80] h-full transition-all duration-300" 
+                style={{ width: `${((currentTourStep + 1) / tourSteps.length) * 100}%` }}
+              />
+            </div>
+            <button 
+              onClick={handleCompleteTour}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-white"
+              title="Pular Tour"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            
+            <div className="mt-2 space-y-3">
+              <span className="text-[9px] text-[#dfbf80] font-mono uppercase tracking-[0.2em] font-bold block">
+                Passo {currentTourStep + 1} de {tourSteps.length}
+              </span>
+              <h4 className="text-sm font-bold text-white font-heading tracking-wide uppercase">
+                {tourSteps[currentTourStep].title}
+              </h4>
+              <p className="text-xs text-zinc-300 leading-relaxed font-medium">
+                {tourSteps[currentTourStep].content}
+              </p>
+            </div>
+            
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-surface-highest">
+              <button 
+                onClick={handleCompleteTour}
+                className="text-[10px] text-zinc-500 hover:text-zinc-300 font-bold uppercase tracking-wider transition-colors"
+              >
+                Pular
+              </button>
+              <div className="flex gap-2">
+                {currentTourStep > 0 && (
+                  <button 
+                    onClick={handlePrevTourStep}
+                    className="px-3 py-1.5 bg-surface hover:bg-surface-high border border-surface-highest text-zinc-300 font-bold uppercase tracking-wider text-[10px] rounded-lg transition-all"
+                  >
+                    Voltar
+                  </button>
+                )}
+                <button 
+                  onClick={handleNextTourStep}
+                  className="px-3 py-1.5 bg-primary text-black font-bold uppercase tracking-wider text-[10px] rounded-lg hover:bg-primary-dim transition-all shadow-[0_0_10px_rgba(212,175,55,0.15)]"
+                >
+                  {currentTourStep === tourSteps.length - 1 ? 'Concluir' : 'Próximo'}
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }
 
 
+function stripLargeImages(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => stripLargeImages(item));
+  }
+  if (typeof obj === 'object') {
+    const copy: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        const val = obj[key];
+        if (typeof val === 'string' && (val.startsWith('data:image/') || val.length > 5000 || key.startsWith('photo_'))) {
+          copy[key] = '';
+        } else {
+          copy[key] = stripLargeImages(val);
+        }
+      }
+    }
+    return copy;
+  }
+  return obj;
+}
+
 function PublicEvolutionView({ token }: { token: string }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [data, setData] = useState<any>(null);
+
+  const dataRef = useRef(data);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   // Posture grid states
   const [activePostureAngle, setActivePostureAngle] = useState<'front' | 'back' | 'side'>('front');
@@ -1462,7 +1936,10 @@ function PublicEvolutionView({ token }: { token: string }) {
       // If offline, bypass network call and use cache directly
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         if (cachedData) {
-          setData(cachedData);
+          const currentData = dataRef.current;
+          if (JSON.stringify(cachedData) !== JSON.stringify(currentData)) {
+            setData(cachedData);
+          }
           setError('');
         } else {
           setError('Você está offline e não possui dados salvos localmente.');
@@ -1478,7 +1955,10 @@ function PublicEvolutionView({ token }: { token: string }) {
       if (err) {
         if (cachedData || data) {
           console.warn('Network request failed, falling back to cache:', err.message);
-          if (cachedData && !data) setData(cachedData);
+          const currentData = dataRef.current;
+          if (cachedData && JSON.stringify(cachedData) !== JSON.stringify(currentData)) {
+            setData(cachedData);
+          }
           setError('');
         } else {
           setError(err.message);
@@ -1486,20 +1966,27 @@ function PublicEvolutionView({ token }: { token: string }) {
       } else if (res && !res.success) {
         setError(res.message || 'Link inválido ou expirado.');
       } else if (res) {
-        setData(res);
-        setError('');
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify(res));
-          } catch (cacheErr) {
-            console.error('Error saving to localStorage cache:', cacheErr);
+        const currentData = dataRef.current;
+        if (JSON.stringify(res) !== JSON.stringify(currentData)) {
+          setData(res);
+          setError('');
+          if (typeof window !== 'undefined') {
+            try {
+              const cleanRes = stripLargeImages(res);
+              localStorage.setItem(cacheKey, JSON.stringify(cleanRes));
+            } catch (cacheErr) {
+              console.error('Error saving to localStorage cache:', cacheErr);
+            }
           }
         }
       }
     } catch (e: any) {
       if (cachedData || data) {
         console.warn('Network error, falling back to cache:', e.message);
-        if (cachedData && !data) setData(cachedData);
+        const currentData = dataRef.current;
+        if (cachedData && JSON.stringify(cachedData) !== JSON.stringify(currentData)) {
+          setData(cachedData);
+        }
         setError('');
       } else {
         setError(e.message || 'Erro de conexão ao buscar os dados.');
