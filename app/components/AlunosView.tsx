@@ -10,9 +10,12 @@ import CustomAlertModal from './CustomAlertModal';
 
 interface AlunosViewProps {
   currentUser: User | null;
+  redirectStudentId?: string | number | null;
+  redirectTab?: 'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance' | null;
+  clearRedirect?: () => void;
 }
 
-export default function AlunosView({ currentUser }: AlunosViewProps) {
+export default function AlunosView({ currentUser, redirectStudentId, redirectTab, clearRedirect }: AlunosViewProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -447,6 +450,25 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
     }
     return () => stopCamera();
   }, [selectedStudent]);
+
+  // Redirect selection handler
+  useEffect(() => {
+    if (redirectStudentId && students.length > 0) {
+      const studentIdStr = redirectStudentId.toString();
+      const found = students.find(s => s.id.toString() === studentIdStr);
+      if (found) {
+        setSelectedStudent(found);
+        if (redirectTab) {
+          setTimeout(() => {
+            setActiveProfileTab(redirectTab);
+          }, 50);
+        }
+      }
+      if (clearRedirect) {
+        clearRedirect();
+      }
+    }
+  }, [redirectStudentId, redirectTab, students, clearRedirect]);
 
   const defaultAnamnesis = (studentId: string | number): Anamnesis => ({
     student_id: studentId.toString(),
@@ -1223,7 +1245,7 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
            <ChevronRight className="w-4 h-4 rotate-180" /> Voltar
         </button>
         
-        <div className="bg-surface-container border border-surface-highest rounded-xl p-6">
+        <div className="bg-surface-container border border-surface-highest rounded-xl p-4 sm:p-6 overflow-hidden max-w-full">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 border-b border-surface-highest/40 pb-4">
               <div className="flex items-center gap-4">
                 <div className="relative w-16 h-16 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(223,191,128,0.2)]">
@@ -1299,13 +1321,13 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
              })()
            )}
            {/* Tab Seletor Premium */}
-           <div className="flex border-b border-surface-highest mb-6">
+           <div className="flex flex-row flex-nowrap border-b border-surface-highest mb-6 overflow-x-auto whitespace-nowrap scrollbar-none w-full">
              <button
                onClick={() => {
                  setActiveProfileTab('general');
                  stopCamera();
                }}
-               className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+               className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 whitespace-nowrap shrink-0 ${
                  activeProfileTab === 'general'
                    ? 'text-primary border-primary bg-primary/5'
                    : 'text-zinc-400 border-transparent hover:text-white'
@@ -1318,7 +1340,7 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                  setActiveProfileTab('anamnesis');
                  stopCamera();
                }}
-               className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+               className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 whitespace-nowrap shrink-0 ${
                  activeProfileTab === 'anamnesis'
                    ? 'text-primary border-primary bg-primary/5'
                    : 'text-zinc-400 border-transparent hover:text-white'
@@ -1331,7 +1353,7 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                   setActiveProfileTab('goals');
                   stopCamera();
                 }}
-                className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+                className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 whitespace-nowrap shrink-0 ${
                   activeProfileTab === 'goals'
                     ? 'text-primary border-primary bg-primary/5'
                     : 'text-zinc-400 border-transparent hover:text-white'
@@ -1344,7 +1366,7 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                    setActiveProfileTab('schedule');
                    stopCamera();
                  }}
-                 className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+                 className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 whitespace-nowrap shrink-0 ${
                    activeProfileTab === 'schedule'
                      ? 'text-primary border-primary bg-primary/5'
                      : 'text-zinc-400 border-transparent hover:text-white'
@@ -1357,7 +1379,7 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                     setActiveProfileTab('attendance');
                     stopCamera();
                   }}
-                  className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 ${
+                  className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 whitespace-nowrap shrink-0 ${
                     activeProfileTab === 'attendance'
                       ? 'text-primary border-primary bg-primary/5'
                       : 'text-zinc-400 border-transparent hover:text-white'

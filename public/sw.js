@@ -1,4 +1,4 @@
-const CACHE_NAME = 'elite-coach-cache-v1';
+const CACHE_NAME = 'elite-coach-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',
@@ -13,6 +13,7 @@ self.addEventListener('install', (event) => {
       return cache.addAll(ASSETS_TO_CACHE);
     })
   );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
@@ -25,34 +26,50 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (event) => {
-  // Apenas intercepta requisições HTTP/HTTPS (ignora chrome-extension://, etc.)
-  if (!event.request.url.startsWith('http:') && !event.request.url.startsWith('https:')) {
+  const request = event.request;
+
+  // Intercept only GET requests
+  if (request.method !== 'GET') {
     return;
   }
 
-  // Verifica se a requisição é de um dos ativos estáticos definidos no ASSETS_TO_CACHE
-  const requestUrl = new URL(event.request.url);
-  const isCacheableAsset = ASSETS_TO_CACHE.some((asset) => {
-    if (asset === '/') {
-      return requestUrl.pathname === '/';
-    }
-    return requestUrl.pathname.endsWith(asset) || event.request.url.includes(asset);
-  });
+  const url = new URL(request.url);
 
-  // Se não for um ativo estático do PWA (como treinos, chunks do Next.js, webpack, etc.), carrega direto da rede
-  if (!isCacheableAsset) {
+  // Exclude Supabase and local API routes from caching
+  if (url.pathname.startsWith('/api/') || request.url.includes('supabase.co') || url.pathname.includes('/api/')) {
     return;
   }
 
+  // Network-First with cache fallback strategy
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      // Retorna o cache se encontrar, caso contrário busca na rede
-      return cachedResponse || fetch(event.request);
-    })
+    fetch(request)
+      .then((networkResponse) => {
+        // Cache successful responses for system assets and static files
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(request, responseToCache);
+          });
+        }
+        return networkResponse;
+      })
+      .catch(() => {
+        // Fallback to cache
+        return caches.match(request, { ignoreSearch: true }).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+          // If navigation request, return cached root '/' shell
+          if (request.mode === 'navigate') {
+            return caches.match('/', { ignoreSearch: true });
+          }
+          return Promise.reject('offline');
+        });
+      })
   );
 });

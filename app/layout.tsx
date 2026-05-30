@@ -31,13 +31,6 @@ export default function RootLayout({children}: {children: React.ReactNode}) {
         <script dangerouslySetInnerHTML={{ __html: `
           if ('serviceWorker' in navigator) {
             window.addEventListener('load', function() {
-              // Limpa caches antigos do PWA para evitar conflito com versões anteriores no localhost
-              caches.keys().then(function(names) {
-                for (let name of names) {
-                  caches.delete(name);
-                }
-              });
-
               navigator.serviceWorker.register('/sw.js').then(function(reg) {
                 console.log('SW registrado com sucesso:', reg.scope);
                 reg.update();

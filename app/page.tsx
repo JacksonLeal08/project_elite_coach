@@ -51,6 +51,61 @@ export default function App() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
 
+  // Notification redirect states
+  const [redirectStudentId, setRedirectStudentId] = useState<string | number | null>(null);
+  const [redirectTab, setRedirectTab] = useState<'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance' | null>(null);
+  const [allStudents, setAllStudents] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
+
+  const fetchAllStudents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('id, name');
+      if (data) {
+        setAllStudents(data);
+      }
+    } catch (e) {
+      console.error('Error fetching students list:', e);
+    }
+  };
+
+  useEffect(() => {
+    if (showNotificationsModal) {
+      fetchAllStudents();
+    }
+  }, [showNotificationsModal]);
+
+  const handleNotificationDetails = (n: any) => {
+    // Try to find if any student's name is mentioned in the message/title
+    const found = allStudents.find(s => 
+      n.message.toLowerCase().includes(s.name.toLowerCase()) || 
+      n.title.toLowerCase().includes(s.name.toLowerCase())
+    );
+
+    // Determine target sub-tab based on message contents
+    let targetTab: 'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance' = 'general';
+    const msgLower = n.message.toLowerCase();
+    const titleLower = n.title.toLowerCase();
+    
+    if (msgLower.includes('ciente') || msgLower.includes('cronograma') || titleLower.includes('cronograma')) {
+      targetTab = 'goals';
+    } else if (msgLower.includes('retorno') || msgLower.includes('agend') || titleLower.includes('retorno') || msgLower.includes('sugeri')) {
+      targetTab = 'schedule';
+    } else if (msgLower.includes('treino') || msgLower.includes('conclui') || msgLower.includes('frequencia') || msgLower.includes('assiduidad')) {
+      targetTab = 'attendance';
+    }
+
+    if (found) {
+      setRedirectStudentId(found.id);
+      setRedirectTab(targetTab);
+    }
+    
+    // Always navigate to Alunos view and close modal
+    setActiveTab('alunos');
+    setShowNotificationsModal(false);
+  };
+
   const fetchNotifications = async () => {
     try {
       const { data, error } = await supabase
@@ -659,6 +714,13 @@ export default function App() {
       handleMarkAsRead={handleMarkAsRead}
       handleMarkAllAsRead={handleMarkAllAsRead}
       handleDeleteNotification={handleDeleteNotification}
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      redirectStudentId={redirectStudentId}
+      redirectTab={redirectTab}
+      setRedirectStudentId={setRedirectStudentId}
+      setRedirectTab={setRedirectTab}
+      handleNotificationDetails={handleNotificationDetails}
     />
   );
 }
@@ -674,7 +736,14 @@ function MainApp({
   setShowNotificationsModal,
   handleMarkAsRead,
   handleMarkAllAsRead,
-  handleDeleteNotification
+  handleDeleteNotification,
+  activeTab,
+  setActiveTab,
+  redirectStudentId,
+  redirectTab,
+  setRedirectStudentId,
+  setRedirectTab,
+  handleNotificationDetails
 }: { 
   currentUser: User | null, 
   setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>, 
@@ -686,10 +755,16 @@ function MainApp({
   setShowNotificationsModal: React.Dispatch<React.SetStateAction<boolean>>,
   handleMarkAsRead: (id: string) => Promise<void>,
   handleMarkAllAsRead: () => Promise<void>,
-  handleDeleteNotification: (id: string) => Promise<void>
+  handleDeleteNotification: (id: string) => Promise<void>,
+  activeTab: string,
+  setActiveTab: React.Dispatch<React.SetStateAction<string>>,
+  redirectStudentId: string | number | null,
+  redirectTab: 'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance' | null,
+  setRedirectStudentId: React.Dispatch<React.SetStateAction<string | number | null>>,
+  setRedirectTab: React.Dispatch<React.SetStateAction<'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance' | null>>,
+  handleNotificationDetails: (n: any) => void
 }) {
 
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [time, setTime] = useState<string>('');
   const [date, setDate] = useState<string>('');
   const [showZoom, setShowZoom] = useState<boolean>(false);
@@ -1028,7 +1103,17 @@ function MainApp({
               <AnimatePresence mode="wait">
                  <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
                     {activeTab === 'dashboard' && <DashboardView />}
-                    {activeTab === 'alunos' && <AlunosView currentUser={currentUser} />}
+                    {activeTab === 'alunos' && (
+                      <AlunosView 
+                        currentUser={currentUser} 
+                        redirectStudentId={redirectStudentId}
+                        redirectTab={redirectTab}
+                        clearRedirect={() => {
+                          setRedirectStudentId(null);
+                          setRedirectTab(null);
+                        }}
+                      />
+                    )}
                     {activeTab === 'protocolos' && <ProtocolosView />}
                     {activeTab === 'biblioteca' && <BibliotecaView currentUser={currentUser} />}
                     {activeTab === 'financeiro' && <FinanceiroView currentUser={currentUser} />}
@@ -1238,6 +1323,13 @@ function MainApp({
                         </span>
                         
                         <div className="flex gap-2">
+                          <button
+                            onClick={() => handleNotificationDetails(n)}
+                            className="text-[9px] text-primary hover:underline uppercase font-bold"
+                            title="Ver detalhes do aviso"
+                          >
+                            Detalhe
+                          </button>
                           {!n.read && (
                             <button
                               onClick={() => handleMarkAsRead(n.id)}
@@ -1349,23 +1441,69 @@ function PublicEvolutionView({ token }: { token: string }) {
   };
 
   const fetchData = async (showLoading = false) => {
+    const cacheKey = `elite_coach_public_cache_${token}`;
+    let cachedData: any = null;
+    if (typeof window !== 'undefined') {
+      try {
+        const cachedStr = localStorage.getItem(cacheKey);
+        if (cachedStr) {
+          cachedData = JSON.parse(cachedStr);
+        }
+      } catch (err) {
+        console.error('Error reading localStorage cache:', err);
+      }
+    }
+
     try {
-      if (showLoading || !data) {
+      if (showLoading || (!data && !cachedData)) {
         setLoading(true);
       }
+
+      // If offline, bypass network call and use cache directly
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (cachedData) {
+          setData(cachedData);
+          setError('');
+        } else {
+          setError('Você está offline e não possui dados salvos localmente.');
+        }
+        setLoading(false);
+        return;
+      }
+
       const { data: res, error: err } = await supabase.rpc('get_public_student_evolution', {
         p_token: token
       });
 
       if (err) {
-        setError(err.message);
+        if (cachedData || data) {
+          console.warn('Network request failed, falling back to cache:', err.message);
+          if (cachedData && !data) setData(cachedData);
+          setError('');
+        } else {
+          setError(err.message);
+        }
       } else if (res && !res.success) {
         setError(res.message || 'Link inválido ou expirado.');
-      } else {
+      } else if (res) {
         setData(res);
+        setError('');
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify(res));
+          } catch (cacheErr) {
+            console.error('Error saving to localStorage cache:', cacheErr);
+          }
+        }
       }
     } catch (e: any) {
-      setError(e.message || 'Erro de conexão ao buscar os dados.');
+      if (cachedData || data) {
+        console.warn('Network error, falling back to cache:', e.message);
+        if (cachedData && !data) setData(cachedData);
+        setError('');
+      } else {
+        setError(e.message || 'Erro de conexão ao buscar os dados.');
+      }
     } finally {
       setLoading(false);
     }
