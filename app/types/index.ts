@@ -24,17 +24,18 @@ export interface Student {
   status: string;
   imc: number;
   badges: Badge[];
-  photo_url?: string;
-  photo_front_url?: string;
-  photo_back_url?: string;
-  photo_side_url?: string;
-  phone_number?: string;
-  telegram_chat_id?: string;
-  weight_target?: number;
-  body_fat_target?: number;
-  muscle_target?: number;
-  freq_target?: number;
-  share_token?: string;
+  photo_url?: string | null;
+  photo_front_url?: string | null;
+  photo_back_url?: string | null;
+  photo_side_url?: string | null;
+  phone_number?: string | null;
+  telegram_chat_id?: string | null;
+  weight_target?: number | null;
+  body_fat_target?: number | null;
+  muscle_target?: number | null;
+  freq_target?: number | null;
+  share_token?: string | null;
+  photo_avatar_url?: string | null;
 }
 
 export interface Anamnesis {
@@ -82,6 +83,8 @@ export interface HistoryEntry {
   date: string;
   startDate?: string;
   endDate?: string;
+  acknowledged?: boolean;
+  acknowledgmentNotes?: string;
 }
 
 export interface ProfileConfig {
@@ -152,10 +155,12 @@ export interface EvaluationSchedule {
   student_id: string;
   scheduled_date: string;
   scheduled_time: string;
-  status: 'Agendado' | 'Realizado' | 'Cancelado';
+  status: 'Pendente' | 'Confirmado' | 'Sugerido' | 'Realizado' | 'Cancelado' | 'Agendado';
   notes?: string;
   created_at: string;
   student_name?: string;
+  suggested_date?: string;
+  suggested_time?: string;
 }
 
 export interface WorkoutProgress {

@@ -5,6 +5,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, L
 import { Student, User, Anamnesis, StudentGoal } from '../types';
 import { supabase } from '../utils/supabase';
 import { exportAnamnesisPDF, exportPosturePDF, exportEvolutionPDF, exportFrequencyPDF } from '../utils/pdf';
+import { queueOfflineOperation, runOfflineSync } from '../utils/offline';
 import CustomAlertModal from './CustomAlertModal';
 
 interface AlunosViewProps {
@@ -71,7 +72,8 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
     biotype: 'Mesomorfo',
     status: 'Ativo',
     phone_number: '',
-    telegram_chat_id: ''
+    telegram_chat_id: '',
+    photo_avatar_url: ''
   });
 
   // Edit Student Form Modal States
@@ -84,7 +86,8 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
     biotype: 'Mesomorfo',
     status: 'Ativo',
     phone_number: '',
-    telegram_chat_id: ''
+    telegram_chat_id: '',
+    photo_avatar_url: ''
   });
 
   const [studentPhone, setStudentPhone] = useState<string>('');
@@ -120,6 +123,12 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
   const [workoutProgress, setWorkoutProgress] = useState<any[]>([]);
   const [loadingProgress, setLoadingProgress] = useState<boolean>(false);
   const [latestWorkout, setLatestWorkout] = useState<any | null>(null);
+
+  // Custom states for avatar upload and schedule suggestions
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [sugDateInput, setSugDateInput] = useState<string>('');
+  const [sugTimeInput, setSugTimeInput] = useState<string>('');
+  const [suggestingScheduleId, setSuggestingScheduleId] = useState<string | null>(null);
 
   // Postural Grid State
   const [activeAngle, setActiveAngle] = useState<'front' | 'back' | 'side'>('front');
@@ -387,7 +396,27 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
   useEffect(() => {
     fetchStudents();
     fetchPayments();
-  }, []);
+
+    const handleOnline = async () => {
+      const res = await runOfflineSync();
+      if (res.syncedCount > 0) {
+        fetchStudents();
+        fetchPayments();
+        if (selectedStudent) {
+          fetchStudentSchedules(selectedStudent.id);
+        }
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    if (navigator.onLine) {
+      handleOnline();
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [selectedStudent]);
 
   useEffect(() => {
     if (selectedStudent) {
@@ -596,15 +625,26 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
 
     setSavingSchedule(true);
     try {
+      const schedulePayload = {
+        student_id: selectedStudent.id,
+        scheduled_date: newSchedule.date,
+        scheduled_time: newSchedule.time,
+        status: 'Agendado',
+        notes: newSchedule.notes || null
+      };
+
+      if (!navigator.onLine) {
+        queueOfflineOperation('add_schedule', schedulePayload);
+        showCustomAlert('Modo Offline', 'Retorno agendado localmente! Sincronização automática pendente.', 'info');
+        setNewSchedule({ date: '', time: '', notes: '' });
+        setSchedules(prev => [...prev, { ...schedulePayload, id: 'temp_' + Date.now(), created_at: new Date().toISOString() }]);
+        setSavingSchedule(false);
+        return;
+      }
+
       const { data: scheduleData, error: scheduleError } = await supabase
         .from('evaluation_schedules')
-        .insert([{
-          student_id: selectedStudent.id,
-          scheduled_date: newSchedule.date,
-          scheduled_time: newSchedule.time,
-          status: 'Agendado',
-          notes: newSchedule.notes || null
-        }])
+        .insert([schedulePayload])
         .select()
         .single();
 
@@ -661,7 +701,94 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
     }
   };
 
+  const handleConfirmSchedule = async (scheduleId: string) => {
+    if (!navigator.onLine) {
+      queueOfflineOperation('update_schedule_status', {
+        id: scheduleId,
+        update: { status: 'Confirmado' }
+      });
+      showCustomAlert('Modo Offline', 'Confirmação registrada localmente! Sincronização automática pendente.', 'info');
+      setSchedules(prev => prev.map(s => s.id === scheduleId ? { ...s, status: 'Confirmado' } : s));
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from('evaluation_schedules')
+        .update({ status: 'Confirmado' })
+        .eq('id', scheduleId);
+
+      if (error) {
+        showCustomAlert('Erro', 'Erro ao confirmar agendamento: ' + error.message, 'error');
+      } else {
+        showCustomAlert('Sucesso', 'Agendamento confirmado com sucesso!', 'success');
+        if (selectedStudent) {
+          fetchStudentSchedules(selectedStudent.id);
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      showCustomAlert('Erro', 'Erro ao confirmar agendamento.', 'error');
+    }
+  };
+
+  const handleSuggestSchedule = async (scheduleId: string) => {
+    if (!sugDateInput || !sugTimeInput) {
+      showCustomAlert('Aviso', 'Preencha a data e o horário sugeridos!', 'warning');
+      return;
+    }
+    if (!navigator.onLine) {
+      queueOfflineOperation('update_schedule_status', {
+        id: scheduleId,
+        update: {
+          status: 'Sugerido',
+          suggested_date: sugDateInput,
+          suggested_time: sugTimeInput
+        }
+      });
+      showCustomAlert('Modo Offline', 'Sugestão registrada localmente! Sincronização automática pendente.', 'info');
+      setSchedules(prev => prev.map(s => s.id === scheduleId ? { ...s, status: 'Sugerido', suggested_date: sugDateInput, suggested_time: sugTimeInput } : s));
+      setSuggestingScheduleId(null);
+      setSugDateInput('');
+      setSugTimeInput('');
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from('evaluation_schedules')
+        .update({
+          status: 'Sugerido',
+          suggested_date: sugDateInput,
+          suggested_time: sugTimeInput
+        })
+        .eq('id', scheduleId);
+
+      if (error) {
+        showCustomAlert('Erro', 'Erro ao sugerir data: ' + error.message, 'error');
+      } else {
+        showCustomAlert('Sucesso', 'Nova data sugerida enviada ao aluno!', 'success');
+        setSuggestingScheduleId(null);
+        setSugDateInput('');
+        setSugTimeInput('');
+        if (selectedStudent) {
+          fetchStudentSchedules(selectedStudent.id);
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      showCustomAlert('Erro', 'Erro ao sugerir nova data.', 'error');
+    }
+  };
+
   const handleUpdateScheduleStatus = async (scheduleId: string, newStatus: 'Realizado' | 'Cancelado') => {
+    if (!navigator.onLine) {
+      queueOfflineOperation('update_schedule_status', {
+        id: scheduleId,
+        update: { status: newStatus }
+      });
+      showCustomAlert('Modo Offline', `Status marcado como ${newStatus.toLowerCase()} localmente! Sincronização automática pendente.`, 'info');
+      setSchedules(prev => prev.map(s => s.id === scheduleId ? { ...s, status: newStatus } : s));
+      return;
+    }
     try {
       const { error } = await supabase
         .from('evaluation_schedules')
@@ -872,6 +999,21 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
     reader.readAsDataURL(file);
   };
 
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      if (isEdit) {
+        setEditStudent(prev => ({ ...prev, photo_avatar_url: base64 }));
+      } else {
+        setNewStudent(prev => ({ ...prev, photo_avatar_url: base64 }));
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleAddStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStudent.name || !newStudent.age || !newStudent.goal) {
@@ -883,27 +1025,39 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
       return showCustomAlert('Aviso', 'Idade precisa ser um número válido!', 'warning');
     }
 
+    const studentPayload = {
+      name: newStudent.name,
+      age: ageNum,
+      goal: newStudent.goal,
+      biotype: newStudent.biotype,
+      status: newStudent.status,
+      badges: [],
+      imc: 22.5,
+      phone_number: newStudent.phone_number || null,
+      telegram_chat_id: newStudent.telegram_chat_id || null,
+      photo_avatar_url: newStudent.photo_avatar_url || null
+    };
+
+    if (!navigator.onLine) {
+      queueOfflineOperation('add_student', studentPayload);
+      showCustomAlert('Modo Offline', 'Aluno cadastrado localmente! Sincronização automática pendente.', 'info');
+      setShowNewStudentModal(false);
+      setNewStudent({ name: '', age: '', goal: '', biotype: 'Mesomorfo', status: 'Ativo', phone_number: '', telegram_chat_id: '', photo_avatar_url: '' });
+      setStudents(prev => [...prev, { ...studentPayload, id: 'temp_' + Date.now() }]);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('students')
-        .insert([{
-          name: newStudent.name,
-          age: ageNum,
-          goal: newStudent.goal,
-          biotype: newStudent.biotype,
-          status: newStudent.status,
-          badges: [],
-          imc: 22.5,
-          phone_number: newStudent.phone_number || null,
-          telegram_chat_id: newStudent.telegram_chat_id || null
-        }]);
+        .insert([studentPayload]);
 
       if (error) {
         showCustomAlert('Erro', 'Erro ao cadastrar aluno: ' + error.message, 'error');
       } else {
         showCustomAlert('Sucesso', 'Aluno cadastrado com sucesso!', 'success');
         setShowNewStudentModal(false);
-        setNewStudent({ name: '', age: '', goal: '', biotype: 'Mesomorfo', status: 'Ativo', phone_number: '', telegram_chat_id: '' });
+        setNewStudent({ name: '', age: '', goal: '', biotype: 'Mesomorfo', status: 'Ativo', phone_number: '', telegram_chat_id: '', photo_avatar_url: '' });
         fetchStudents();
       }
     } catch (err: any) {
@@ -923,18 +1077,44 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
       return showCustomAlert('Aviso', 'Idade precisa ser um número válido!', 'warning');
     }
 
+    const updatePayload = {
+      name: editStudent.name,
+      age: ageNum,
+      goal: editStudent.goal,
+      biotype: editStudent.biotype,
+      status: editStudent.status,
+      phone_number: editStudent.phone_number || null,
+      telegram_chat_id: editStudent.telegram_chat_id || null,
+      photo_avatar_url: editStudent.photo_avatar_url || null
+    };
+
+    if (!navigator.onLine) {
+      queueOfflineOperation('update_student_profile', {
+        id: editStudent.id,
+        update: updatePayload
+      });
+      showCustomAlert('Modo Offline', 'Alterações do aluno registradas localmente! Sincronização automática pendente.', 'info');
+      setShowEditStudentModal(false);
+      const updatedStudent = {
+        ...selectedStudent!,
+        name: editStudent.name,
+        age: ageNum,
+        goal: editStudent.goal,
+        biotype: editStudent.biotype,
+        status: editStudent.status,
+        phone_number: editStudent.phone_number || undefined,
+        telegram_chat_id: editStudent.telegram_chat_id || undefined,
+        photo_avatar_url: editStudent.photo_avatar_url || undefined
+      };
+      setSelectedStudent(updatedStudent);
+      setStudents(prev => prev.map(s => s.id.toString() === editStudent.id ? { ...s, ...updatePayload } : s));
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('students')
-        .update({
-          name: editStudent.name,
-          age: ageNum,
-          goal: editStudent.goal,
-          biotype: editStudent.biotype,
-          status: editStudent.status,
-          phone_number: editStudent.phone_number || null,
-          telegram_chat_id: editStudent.telegram_chat_id || null
-        })
+        .update(updatePayload)
         .eq('id', editStudent.id);
 
       if (error) {
@@ -950,7 +1130,8 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
           biotype: editStudent.biotype,
           status: editStudent.status,
           phone_number: editStudent.phone_number || undefined,
-          telegram_chat_id: editStudent.telegram_chat_id || undefined
+          telegram_chat_id: editStudent.telegram_chat_id || undefined,
+          photo_avatar_url: editStudent.photo_avatar_url || undefined
         };
         setSelectedStudent(updatedStudent);
         fetchStudents();
@@ -1044,9 +1225,18 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
         
         <div className="bg-surface-container border border-surface-highest rounded-xl p-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 border-b border-surface-highest/40 pb-4">
-              <div>
-                <h1 className="font-heading font-bold text-3xl text-white">{selectedStudent.name}</h1>
-                <p className="text-zinc-400 capitalize mt-1 text-sm">{selectedStudent.goal} • {selectedStudent.age} anos • {selectedStudent.biotype}</p>
+              <div className="flex items-center gap-4">
+                <div className="relative w-16 h-16 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(223,191,128,0.2)]">
+                  {selectedStudent.photo_avatar_url ? (
+                    <img src={selectedStudent.photo_avatar_url} alt={selectedStudent.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xl font-bold text-[#dfbf80]">{selectedStudent.name.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+                <div>
+                  <h1 className="font-heading font-bold text-3xl text-white">{selectedStudent.name}</h1>
+                  <p className="text-zinc-400 capitalize mt-1 text-sm">{selectedStudent.goal} • {selectedStudent.age} anos • {selectedStudent.biotype}</p>
+                </div>
               </div>
               <div className="flex gap-2 shrink-0">
                 <button
@@ -1059,7 +1249,8 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                       biotype: selectedStudent.biotype,
                       status: selectedStudent.status,
                       phone_number: selectedStudent.phone_number || '',
-                      telegram_chat_id: selectedStudent.telegram_chat_id || ''
+                      telegram_chat_id: selectedStudent.telegram_chat_id || '',
+                      photo_avatar_url: selectedStudent.photo_avatar_url || ''
                     });
                     setShowEditStudentModal(true);
                   }}
@@ -2233,39 +2424,126 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                   ) : (
                     <div className="space-y-3">
                       {schedules.map(sch => (
-                        <div key={sch.id} className="bg-surface border border-surface-highest/60 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                          <div className="space-y-1 text-xs">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-bold text-white font-mono">
-                                {sch.scheduled_date.split('-').reverse().join('/')} às {sch.scheduled_time.slice(0, 5)}
-                              </span>
-                              <span className={`px-2 py-0.5 border rounded text-[9px] font-bold uppercase tracking-widest ${
-                                sch.status === 'Agendado' ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' :
-                                sch.status === 'Realizado' ? 'text-[#00ff41] bg-[#00ff41]/10 border-[#00ff41]/20' :
-                                'text-red-400 bg-red-500/10 border-red-500/20'
-                              }`}>
-                                {sch.status}
-                              </span>
+                        <div key={sch.id} className="bg-surface border border-surface-highest/60 p-4 rounded-xl flex flex-col justify-between gap-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="space-y-1 text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold text-white font-mono">
+                                  {sch.scheduled_date.split('-').reverse().join('/')} às {sch.scheduled_time.slice(0, 5)}
+                                </span>
+                                <span className={`px-2 py-0.5 border rounded text-[9px] font-bold uppercase tracking-widest ${
+                                  sch.status === 'Agendado' || sch.status === 'Confirmado' ? 'text-green-400 bg-green-500/10 border-green-500/20' :
+                                  sch.status === 'Pendente' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+                                  sch.status === 'Sugerido' ? 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' :
+                                  sch.status === 'Realizado' ? 'text-primary bg-primary/10 border-primary/20' :
+                                  'text-red-400 bg-red-500/10 border-red-500/20'
+                                }`}>
+                                  {sch.status === 'Confirmado' ? '✓ Confirmado' : sch.status === 'Sugerido' ? '⚡ Proposta Enviada' : sch.status}
+                                </span>
+                              </div>
+                              {sch.status === 'Sugerido' && sch.suggested_date && (
+                                <p className="text-[10px] text-cyan-400 font-bold uppercase mt-1">
+                                  Sugestão: {sch.suggested_date.split('-').reverse().join('/')} às {sch.suggested_time?.slice(0, 5)}
+                                </p>
+                              )}
+                              {sch.notes && (
+                                <p className="text-xs text-zinc-400 italic mt-1">“{sch.notes}”</p>
+                              )}
                             </div>
-                            {sch.notes && (
-                              <p className="text-xs text-zinc-400 italic mt-1">“{sch.notes}”</p>
-                            )}
+
+                            <div className="flex flex-wrap items-center gap-2 shrink-0 self-end sm:self-auto">
+                              {sch.status === 'Pendente' && (
+                                <>
+                                  <button
+                                    onClick={() => handleConfirmSchedule(sch.id)}
+                                    className="px-2.5 py-1 bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                  >
+                                    Confirmar
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSuggestingScheduleId(sch.id);
+                                      setSugDateInput(sch.scheduled_date);
+                                      setSugTimeInput(sch.scheduled_time.slice(0, 5));
+                                    }}
+                                    className="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                  >
+                                    Propor Nova Data
+                                  </button>
+                                  <button
+                                    onClick={() => handleUpdateScheduleStatus(sch.id, 'Cancelado')}
+                                    className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                  >
+                                    Recusar
+                                  </button>
+                                </>
+                              )}
+
+                              {(sch.status === 'Confirmado' || sch.status === 'Agendado') && (
+                                <>
+                                  <button
+                                    onClick={() => handleUpdateScheduleStatus(sch.id, 'Realizado')}
+                                    className="px-2.5 py-1 bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                  >
+                                    Concluir
+                                  </button>
+                                  <button
+                                    onClick={() => handleUpdateScheduleStatus(sch.id, 'Cancelado')}
+                                    className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </>
+                              )}
+
+                              {sch.status === 'Sugerido' && (
+                                <button
+                                  onClick={() => handleUpdateScheduleStatus(sch.id, 'Cancelado')}
+                                  className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                >
+                                  Cancelar Proposta
+                                </button>
+                              )}
+                            </div>
                           </div>
 
-                          {sch.status === 'Agendado' && (
-                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                              <button
-                                onClick={() => handleUpdateScheduleStatus(sch.id, 'Realizado')}
-                                className="px-2.5 py-1 bg-[#00ff41]/10 border border-[#00ff41]/20 text-[#00ff41] hover:bg-[#00ff41]/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
-                              >
-                                Concluir
-                              </button>
-                              <button
-                                onClick={() => handleUpdateScheduleStatus(sch.id, 'Cancelado')}
-                                className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
-                              >
-                                Cancelar
-                              </button>
+                          {suggestingScheduleId === sch.id && (
+                            <div className="mt-2 p-4 bg-surface-high border border-surface-highest rounded-xl space-y-3">
+                              <h4 className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Sugerir Nova Data/Horário de Retorno</h4>
+                              <div className="flex flex-col sm:flex-row gap-3">
+                                <div className="flex-1">
+                                  <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1">Nova Data</label>
+                                  <input 
+                                    type="date" 
+                                    value={sugDateInput} 
+                                    onChange={e => setSugDateInput(e.target.value)} 
+                                    className="w-full bg-surface border border-surface-highest rounded px-3 py-1.5 text-white font-mono text-xs outline-none focus:border-primary"
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1">Novo Horário</label>
+                                  <input 
+                                    type="time" 
+                                    value={sugTimeInput} 
+                                    onChange={e => setSugTimeInput(e.target.value)} 
+                                    className="w-full bg-surface border border-surface-highest rounded px-3 py-1.5 text-white font-mono text-xs outline-none focus:border-primary"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex justify-end gap-2 text-xs font-bold uppercase tracking-wider">
+                                <button 
+                                  onClick={() => handleSuggestSchedule(sch.id)}
+                                  className="px-3 py-1.5 bg-primary text-black rounded hover:bg-primary-dim transition-colors text-[10px]"
+                                >
+                                  Enviar Proposta
+                                </button>
+                                <button 
+                                  onClick={() => setSuggestingScheduleId(null)}
+                                  className="px-3 py-1.5 bg-surface border border-surface-highest text-zinc-400 hover:text-white rounded transition-colors text-[10px]"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -2569,6 +2847,25 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                </button>
                <h3 className="text-xl font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2">Editar Dados do Aluno</h3>
                <form onSubmit={handleEditStudentSubmit} className="space-y-4">
+                 <div className="flex flex-col items-center justify-center mb-4">
+                   <div className="relative group cursor-pointer w-20 h-20 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shadow-[0_0_15px_rgba(223,191,128,0.2)]">
+                     {editStudent.photo_avatar_url ? (
+                       <img src={editStudent.photo_avatar_url} alt="Avatar Preview" className="w-full h-full object-cover" />
+                     ) : (
+                       <Camera className="w-6 h-6 text-zinc-500 group-hover:text-[#dfbf80] transition-colors" />
+                     )}
+                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                       <span className="text-[9px] text-white font-bold uppercase tracking-wider">Upload</span>
+                     </div>
+                     <input
+                       type="file"
+                       accept="image/*"
+                       onChange={(e) => handleAvatarChange(e, true)}
+                       className="absolute inset-0 opacity-0 cursor-pointer"
+                     />
+                   </div>
+                   <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-1.5">Foto de Perfil</span>
+                 </div>
                  <div>
                    <label className="text-xs text-zinc-400 uppercase font-bold">Nome do Aluno *</label>
                    <input required type="text" value={editStudent.name} onChange={e=>setEditStudent({...editStudent, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: João da Silva"/>
@@ -2756,6 +3053,25 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
             </button>
             <h3 className="text-xl font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2">Cadastrar Novo Aluno</h3>
             <form onSubmit={handleAddStudentSubmit} className="space-y-4">
+              <div className="flex flex-col items-center justify-center mb-4">
+                <div className="relative group cursor-pointer w-20 h-20 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shadow-[0_0_15px_rgba(223,191,128,0.2)]">
+                  {newStudent.photo_avatar_url ? (
+                    <img src={newStudent.photo_avatar_url} alt="Avatar Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <Camera className="w-6 h-6 text-zinc-500 group-hover:text-[#dfbf80] transition-colors" />
+                  )}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <span className="text-[9px] text-white font-bold uppercase tracking-wider">Upload</span>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleAvatarChange(e, false)}
+                    className="absolute inset-0 opacity-0 cursor-pointer"
+                  />
+                </div>
+                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-1.5">Foto de Perfil</span>
+              </div>
               <div>
                 <label className="text-xs text-zinc-400 uppercase font-bold">Nome do Aluno *</label>
                 <input required type="text" value={newStudent.name} onChange={e=>setNewStudent({...newStudent, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: João da Silva"/>

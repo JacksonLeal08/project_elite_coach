@@ -12,6 +12,7 @@ import BibliotecaView from './components/BibliotecaView';
 import FinanceiroView from './components/FinanceiroView';
 import { supabase } from './utils/supabase';
 import { User } from './types';
+import { getOfflineQueue, queueOfflineOperation, runOfflineSync } from './utils/offline';
 
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'login' | 'app' | 'goodbye' | 'reset_password' | 'public_evolution'>('loading');
@@ -1302,6 +1303,14 @@ function PublicEvolutionView({ token }: { token: string }) {
   const [schedSuccess, setSchedSuccess] = useState<string>('');
   const [schedError, setSchedError] = useState<string>('');
 
+  // Offline and notification states
+  const [isOnline, setIsOnline] = useState<boolean>(typeof window !== 'undefined' ? navigator.onLine : true);
+  const [offlineCount, setOfflineCount] = useState<number>(0);
+  const [showPublicAlerts, setShowPublicAlerts] = useState<boolean>(false);
+  const [ackNotes, setAckNotes] = useState<string>('');
+  const [acknowledging, setAcknowledging] = useState<boolean>(false);
+  const [respondingSchId, setRespondingSchId] = useState<string | null>(null);
+
   const getEmbedUrl = (url: string) => {
     if (!url) return '';
     if (url.includes('youtube.com/embed/')) return url;
@@ -1313,6 +1322,27 @@ function PublicEvolutionView({ token }: { token: string }) {
       videoId = params.get('v') || '';
     }
     return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+  };
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const { data: res, error: err } = await supabase.rpc('get_public_student_evolution', {
+        p_token: token
+      });
+
+      if (err) {
+        setError(err.message);
+      } else if (res && !res.success) {
+        setError(res.message || 'Link inválido ou expirado.');
+      } else {
+        setData(res);
+      }
+    } catch (e: any) {
+      setError(e.message || 'Erro de conexão ao buscar os dados.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -1339,28 +1369,37 @@ function PublicEvolutionView({ token }: { token: string }) {
   }, []);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const { data: res, error: err } = await supabase.rpc('get_public_student_evolution', {
-          p_token: token
-        });
-
-        if (err) {
-          setError(err.message);
-        } else if (res && !res.success) {
-          setError(res.message || 'Link inválido ou expirado.');
-        } else {
-          setData(res);
-        }
-      } catch (e: any) {
-        setError(e.message || 'Erro de conexão ao buscar os dados.');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, [token]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const updateStatus = () => {
+      setIsOnline(navigator.onLine);
+      const queue = getOfflineQueue();
+      setOfflineCount(queue.length);
+    };
+
+    const handleOnline = async () => {
+      updateStatus();
+      const res = await runOfflineSync();
+      if (res.syncedCount > 0) {
+        fetchData();
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', updateStatus);
+    window.addEventListener('offline_queue_changed', updateStatus);
+
+    updateStatus();
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', updateStatus);
+      window.removeEventListener('offline_queue_changed', updateStatus);
+    };
+  }, []);
 
 
   if (loading) {
@@ -1506,6 +1545,105 @@ function PublicEvolutionView({ token }: { token: string }) {
     return `${weekStart.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })} - ${weekEnd.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' })}`;
   };
 
+  const handleAcknowledgeProtocol = async (notes: string) => {
+    if (!latest_workout) return;
+    setAcknowledging(true);
+    try {
+      if (!navigator.onLine) {
+        queueOfflineOperation('acknowledge_protocol', {
+          p_token: token,
+          p_protocol_id: latest_workout.id,
+          p_notes: notes
+        });
+        setData((prev: any) => ({
+          ...prev,
+          latest_workout: {
+            ...prev.latest_workout,
+            acknowledged: true,
+            acknowledgment_notes: notes
+          }
+        }));
+        setAcknowledging(false);
+        return;
+      }
+
+      const { data: res, error: err } = await supabase.rpc('acknowledge_public_protocol', {
+        p_token: token,
+        p_protocol_id: latest_workout.id,
+        p_notes: notes
+      });
+
+      if (err) {
+        console.error('Error acknowledging protocol:', err);
+      } else {
+        setData((prev: any) => ({
+          ...prev,
+          latest_workout: {
+            ...prev.latest_workout,
+            acknowledged: true,
+            acknowledgment_notes: notes
+          }
+        }));
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAcknowledging(false);
+    }
+  };
+
+  const handleRespondPublicSchedule = async (scheduleId: string, action: 'accept' | 'decline') => {
+    setRespondingSchId(scheduleId);
+    try {
+      if (!navigator.onLine) {
+        queueOfflineOperation('respond_schedule', {
+          p_token: token,
+          p_schedule_id: scheduleId,
+          p_action: action
+        });
+        
+        setData((prev: any) => {
+          const updatedSchedules = prev.schedules.map((s: any) => {
+            if (s.id === scheduleId) {
+              if (action === 'accept') {
+                return {
+                  ...s,
+                  status: 'Confirmado',
+                  scheduled_date: s.suggested_date || s.scheduled_date,
+                  scheduled_time: s.suggested_time || s.scheduled_time,
+                  suggested_date: null,
+                  suggested_time: null
+                };
+              } else {
+                return { ...s, status: 'Cancelado' };
+              }
+            }
+            return s;
+          });
+          return { ...prev, schedules: updatedSchedules };
+        });
+        setRespondingSchId(null);
+        return;
+      }
+
+      const { data: res, error: err } = await supabase.rpc('respond_public_schedule', {
+        p_token: token,
+        p_schedule_id: scheduleId,
+        p_action: action
+      });
+
+      if (err) {
+        console.error('Error responding public schedule:', err);
+      } else {
+        fetchData();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRespondingSchId(null);
+    }
+  };
+
   const handleToggleExercise = async (exerciseName: string, wDayIdx: number, wWeekIdx: number) => {
     if (!latest_workout) return;
     
@@ -1546,6 +1684,54 @@ function PublicEvolutionView({ token }: { token: string }) {
     }
     
     try {
+      if (!navigator.onLine) {
+        queueOfflineOperation('save_progress', {
+          p_token: token,
+          p_protocol_id: latest_workout.id,
+          p_workout_date: activeDayDateKey,
+          p_day_name: activeDayName,
+          p_checked_exercises: newChecked,
+          p_total_exercises: totalExercises,
+          p_status: newStatus
+        });
+        
+        setData((prev: any) => {
+          const oldProgress = prev.workout_progress || [];
+          const exists = oldProgress.some((p: any) => p.workout_date === activeDayDateKey && p.day_name === activeDayName);
+          
+          let newProgress;
+          if (exists) {
+            newProgress = oldProgress.map((p: any) => 
+              (p.workout_date === activeDayDateKey && p.day_name === activeDayName)
+                ? { ...p, checked_exercises: newChecked, status: newStatus, total_exercises: totalExercises, updated_at: new Date().toISOString() }
+                 : p
+            );
+          } else {
+            newProgress = [
+              ...oldProgress,
+              {
+                workout_date: activeDayDateKey,
+                day_name: activeDayName,
+                checked_exercises: newChecked,
+                total_exercises: totalExercises,
+                status: newStatus,
+                protocol_id: latest_workout.id,
+                student_id: student.id,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }
+            ];
+          }
+          return { ...prev, workout_progress: newProgress };
+        });
+        
+        if (newStatus === 'REALIZADO') {
+          setShowCelebration(true);
+          setTimeout(() => setShowCelebration(false), 4000);
+        }
+        return;
+      }
+
       const { error: rpcError } = await supabase.rpc('save_public_workout_progress', {
         p_token: token,
         p_protocol_id: latest_workout.id,
@@ -1627,12 +1813,39 @@ function PublicEvolutionView({ token }: { token: string }) {
     setSchedSuccess('');
     
     try {
-      const { data: res, error: err } = await supabase.rpc('schedule_public_evaluation', {
+      const evaluationPayload = {
         p_token: token,
         p_scheduled_date: schedDate,
         p_scheduled_time: schedTime,
         p_notes: schedNotes
-      });
+      };
+
+      if (!navigator.onLine) {
+        queueOfflineOperation('schedule_evaluation', evaluationPayload);
+        setSchedSuccess('Agendamento solicitado localmente! Fila de sincronização ativa.');
+        
+        setData((prev: any) => ({
+          ...prev,
+          schedules: [
+            ...(prev.schedules || []),
+            {
+              scheduled_date: schedDate,
+              scheduled_time: schedTime,
+              notes: schedNotes,
+              status: 'Agendado',
+              created_at: new Date().toISOString()
+            }
+          ]
+        }));
+        
+        setSchedDate('');
+        setSchedTime('');
+        setSchedNotes('');
+        setScheduling(false);
+        return;
+      }
+
+      const { data: res, error: err } = await supabase.rpc('schedule_public_evaluation', evaluationPayload);
       
       if (err || (res && !res.success)) {
         setSchedError(err?.message || res?.message || 'Falha ao agendar retorno.');
@@ -1684,8 +1897,40 @@ function PublicEvolutionView({ token }: { token: string }) {
   };
 
 
+  const unreadAlerts: any[] = [];
+  if (latest_workout && !latest_workout.acknowledged) {
+    unreadAlerts.push({
+      id: 'new_protocol',
+      type: 'protocol',
+      title: 'Novo Cronograma Liberado!',
+      message: `Seu treinador liberou um novo cronograma: "${latest_workout.objective}".`
+    });
+  }
+  if (data?.schedules) {
+    data.schedules.forEach((s: any, sIdx: number) => {
+      if (s.status === 'Sugerido') {
+        unreadAlerts.push({
+          id: `suggested_schedule_${sIdx}`,
+          type: 'schedule',
+          title: 'Nova Data Sugerida pelo Professor',
+          message: `O professor sugeriu reagendar para ${new Date(s.suggested_date + 'T12:00:00').toLocaleDateString('pt-BR')} às ${s.suggested_time?.slice(0, 5)}.`
+        });
+      }
+    });
+  }
+
   return (
     <div className="min-h-screen bg-black text-white pb-16">
+      {/* Offline warning bar */}
+      {(!isOnline || offlineCount > 0) && (
+        <div className={`text-center py-2 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all ${
+          !isOnline ? 'bg-red-500/20 text-red-400 border-b border-red-500/30' : 'bg-amber-500/20 text-amber-400 border-b border-amber-500/30'
+        }`}>
+          <span>{!isOnline ? '📴 Modo Offline Ativo' : '⏳ Sincronização Pendente'}</span>
+          {offlineCount > 0 && <span className="px-1.5 py-0.5 rounded bg-black/40 text-[10px]">{offlineCount} itens</span>}
+        </div>
+      )}
+
       {/* Premium Header */}
       <header className="border-b border-surface-highest bg-surface-container/50 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -1698,24 +1943,115 @@ function PublicEvolutionView({ token }: { token: string }) {
               <span className="text-[#dfbf80] text-[9px] font-bold tracking-[0.2em] uppercase">Evolução do Aluno</span>
             </div>
           </div>
-          <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 px-3 py-1 bg-surface-high border border-surface-highest rounded-full">
-            <Sparkles className="w-3.5 h-3.5 text-[#dfbf80] animate-pulse" /> Acesso Seguro
+          <div className="flex items-center gap-3">
+            <div className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider flex items-center gap-1.5 px-3 py-1 bg-surface-high border border-surface-highest rounded-full">
+              <Sparkles className="w-3.5 h-3.5 text-[#dfbf80] animate-pulse" /> Acesso Seguro
+            </div>
+
+            <div className="relative">
+              <button 
+                onClick={() => setShowPublicAlerts(prev => !prev)}
+                className="w-8 h-8 rounded-full flex items-center justify-center bg-surface-high hover:bg-surface-highest text-zinc-400 hover:text-primary transition-all relative border border-surface-highest/60"
+              >
+                <Bell className="w-4 h-4" />
+                {unreadAlerts.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 animate-pulse border border-black" />
+                )}
+              </button>
+              
+              {/* Alert box dropdown */}
+              <AnimatePresence>
+                {showPublicAlerts && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute right-0 mt-2 w-64 bg-surface-container border border-surface-highest rounded-xl p-4 shadow-2xl z-50 text-xs space-y-3"
+                  >
+                    <h4 className="font-bold text-white uppercase tracking-wider border-b border-surface-highest/60 pb-1.5">Avisos e Notificações</h4>
+                    {unreadAlerts.length === 0 ? (
+                      <p className="text-zinc-500 italic py-2">Nenhum aviso pendente.</p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {unreadAlerts.map(alert => (
+                          <div key={alert.id} className="p-2 rounded bg-surface border border-surface-highest/40 space-y-1">
+                            <span className="font-bold text-[#dfbf80] text-[10px] block uppercase">{alert.title}</span>
+                            <p className="text-zinc-400 text-[10px] leading-relaxed">{alert.message}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 mt-8 space-y-8 animate-fade-in">
         {/* Welcome Section */}
-        <div className="text-center md:text-left">
-          <h2 className="text-3xl font-heading font-extrabold text-white tracking-tight">Olá, <span className="text-primary">{student.name}</span>!</h2>
-          <p className="text-zinc-400 text-sm mt-1">Acompanhe aqui o histórico completo das suas avaliações físicas, metas corporais e progresso postural.</p>
+        <div className="text-center md:text-left flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center justify-center md:justify-start gap-4">
+            <div className="w-16 h-16 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(223,191,128,0.2)]">
+              {student.photo_avatar_url ? (
+                <img src={student.photo_avatar_url} alt={student.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-2xl font-bold text-[#dfbf80]">{student.name.charAt(0).toUpperCase()}</span>
+              )}
+            </div>
+            <div className="text-left">
+              <h2 className="text-3xl font-heading font-extrabold text-white tracking-tight">Olá, <span className="text-[#dfbf80]">{student.name}</span>!</h2>
+              <p className="text-zinc-400 text-sm mt-0.5">Acompanhe aqui o seu histórico de evolução e treino ativo.</p>
+            </div>
+          </div>
         </div>
+
+        {/* Suggested Schedules Card */}
+        {data?.schedules && data.schedules.some((s: any) => s.status === 'Sugerido') && (
+          <div className="space-y-3">
+            {data.schedules.filter((s: any) => s.status === 'Sugerido').map((s: any, sIdx: number) => (
+              <div 
+                key={sIdx} 
+                className="bg-gradient-to-r from-cyan-950/20 to-surface-container border border-cyan-500/30 p-5 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[0_4px_20px_rgba(6,182,212,0.05)]"
+              >
+                <div className="space-y-1">
+                  <span className="text-[10px] text-cyan-400 font-bold uppercase tracking-widest block">Proposta de Retorno/Avaliação</span>
+                  <h4 className="text-sm font-bold text-white leading-tight">
+                    O treinador sugeriu reagendar para o dia <span className="font-mono text-cyan-300">{new Date(s.suggested_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span> às <span className="font-mono text-cyan-300">{s.suggested_time?.slice(0, 5)}</span>.
+                  </h4>
+                  {s.notes && <p className="text-zinc-400 text-xs italic">“{s.notes}”</p>}
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    disabled={respondingSchId === s.id}
+                    onClick={() => handleRespondPublicSchedule(s.id, 'accept')}
+                    className="px-4 py-2 bg-cyan-500 text-black hover:bg-cyan-400 font-bold uppercase tracking-wider text-xs rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Aceitar Nova Data
+                  </button>
+                  <button
+                    disabled={respondingSchId === s.id}
+                    onClick={() => handleRespondPublicSchedule(s.id, 'decline')}
+                    className="px-4 py-2 bg-surface hover:bg-surface-high border border-surface-highest text-zinc-300 hover:text-white font-bold uppercase tracking-wider text-xs rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Recusar Proposta
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Profile Card & Biomarker Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="md:col-span-1 bg-surface-container border border-surface-highest rounded-2xl p-6 flex flex-col items-center text-center justify-center">
-            <div className="w-16 h-16 bg-[#dfbf80]/10 border border-[#dfbf80]/30 rounded-full flex items-center justify-center text-[#dfbf80] mb-4 text-xl font-bold uppercase">
-              {student.name.charAt(0)}
+            <div className="w-16 h-16 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(223,191,128,0.2)] mb-4">
+              {student.photo_avatar_url ? (
+                <img src={student.photo_avatar_url} alt={student.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xl font-bold text-[#dfbf80]">{student.name.charAt(0).toUpperCase()}</span>
+              )}
             </div>
             <h3 className="font-heading font-bold text-white text-base leading-tight truncate w-full">{student.name}</h3>
             <p className="text-zinc-400 text-xs mt-1 capitalize">{student.goal}</p>
@@ -2434,6 +2770,90 @@ function PublicEvolutionView({ token }: { token: string }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Ciente do Cronograma Popup Overlay */}
+      {latest_workout && !latest_workout.acknowledged && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-full max-w-lg bg-surface-container border border-surface-highest rounded-2xl p-6 shadow-[0_0_50px_rgba(223,191,128,0.15)] flex flex-col max-h-[90vh]"
+          >
+            <div className="text-center mb-6 shrink-0">
+              <div className="mx-auto w-12 h-12 rounded-full bg-[#dfbf80]/10 border border-[#dfbf80]/20 flex items-center justify-center text-[#dfbf80] mb-3">
+                <Dumbbell className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-heading font-black text-white tracking-wide uppercase">Novo Cronograma Liberado!</h3>
+              <p className="text-xs text-zinc-400 mt-1">Sua nova planilha de treinamentos foi montada.</p>
+            </div>
+
+            {/* Delay/remaining days check and messages */}
+            {(() => {
+              const startDate = latest_workout.start_date ? new Date(latest_workout.start_date + 'T12:00:00') : null;
+              const today = new Date();
+              today.setHours(0,0,0,0);
+              let dayMessage = '';
+              let isDelay = false;
+              if (startDate) {
+                startDate.setHours(0,0,0,0);
+                const diffTime = startDate.getTime() - today.getTime();
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                if (diffDays > 0) {
+                  dayMessage = `📅 O treinamento está planejado para iniciar em ${diffDays} dia(s).`;
+                } else if (diffDays < 0) {
+                  dayMessage = `⚠️ Há um atraso de ${Math.abs(diffDays)} dia(s) para o aceite deste cronograma.`;
+                  isDelay = true;
+                } else {
+                  dayMessage = `🔥 Seu cronograma começa HOJE!`;
+                }
+              }
+              return (
+                <div className={`p-3 text-center text-xs rounded-xl border mb-4 font-bold ${
+                  isDelay ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-[#dfbf80]/10 border-[#dfbf80]/20 text-[#dfbf80]'
+                }`}>
+                  {dayMessage || 'Cronograma pronto para início imediato.'}
+                </div>
+              );
+            })()}
+
+            {/* Weekly workout grid summary (scroll-occluded) */}
+            <div className="flex-1 overflow-y-auto pr-1 scrollbar-none border border-surface-highest/60 rounded-xl p-4 bg-surface/50 mb-6 space-y-4">
+              <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block border-b border-surface-highest/60 pb-1.5">Resumo das Semanas</span>
+              
+              <div className="space-y-3">
+                {latest_workout.workout_data?.days?.map((day: any, dIdx: number) => (
+                  <div key={dIdx} className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-white uppercase">{day.dayName}</span>
+                    <span className="text-zinc-400 text-[10.5px] truncate max-w-[200px]">
+                      {day.exercises.map((e: any) => e.name).join(', ')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Proposal feedback input form for beginning/dates adjustments */}
+            <div className="space-y-3 mb-6 shrink-0">
+              <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Observações ou sugestões de ajuste (opcional)</label>
+              <textarea 
+                value={ackNotes} 
+                onChange={e => setAckNotes(e.target.value)} 
+                placeholder="Ex: Gostaria de alterar o início para segunda-feira, ou alterar os dias de descanso..." 
+                className="w-full bg-surface border border-surface-highest rounded-lg p-2.5 text-xs text-white placeholder-zinc-500 h-16 resize-none outline-none focus:border-primary"
+              />
+            </div>
+
+            {/* Action button to save ciente and close the modal */}
+            <button
+              onClick={() => handleAcknowledgeProtocol(ackNotes)}
+              disabled={acknowledging}
+              className="w-full py-3 bg-[#dfbf80] hover:bg-[#d4af37] text-black font-extrabold uppercase tracking-widest text-xs rounded-xl shadow-[0_0_20px_rgba(223,191,128,0.3)] transition-all shrink-0 disabled:opacity-50"
+            >
+              {acknowledging ? 'Confirmando...' : 'Estou Ciente e Concordo com o Cronograma'}
+            </button>
+          </motion.div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="mt-16 text-center text-[8px] text-zinc-600 font-medium tracking-widest select-none uppercase py-6 border-t border-surface-highest/30">
