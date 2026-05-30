@@ -2479,13 +2479,56 @@ export default function AlunosView({ currentUser }: AlunosViewProps) {
                                 </>
                               )}
 
-                              {(sch.status === 'Confirmado' || sch.status === 'Agendado') && (
+                              {sch.status === 'Agendado' && (
+                                <>
+                                  <button
+                                    onClick={() => handleConfirmSchedule(sch.id)}
+                                    className="px-2.5 py-1 bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                  >
+                                    Confirmar
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSuggestingScheduleId(sch.id);
+                                      setSugDateInput(sch.scheduled_date);
+                                      setSugTimeInput(sch.scheduled_time.slice(0, 5));
+                                    }}
+                                    className="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                  >
+                                    Propor Nova Data
+                                  </button>
+                                  <button
+                                    onClick={() => handleUpdateScheduleStatus(sch.id, 'Realizado')}
+                                    className="px-2.5 py-1 bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                  >
+                                    Concluir
+                                  </button>
+                                  <button
+                                    onClick={() => handleUpdateScheduleStatus(sch.id, 'Cancelado')}
+                                    className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                  >
+                                    Cancelar
+                                  </button>
+                                </>
+                              )}
+
+                              {sch.status === 'Confirmado' && (
                                 <>
                                   <button
                                     onClick={() => handleUpdateScheduleStatus(sch.id, 'Realizado')}
                                     className="px-2.5 py-1 bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
                                   >
                                     Concluir
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSuggestingScheduleId(sch.id);
+                                      setSugDateInput(sch.scheduled_date);
+                                      setSugTimeInput(sch.scheduled_time.slice(0, 5));
+                                    }}
+                                    className="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                  >
+                                    Propor Nova Data
                                   </button>
                                   <button
                                     onClick={() => handleUpdateScheduleStatus(sch.id, 'Cancelado')}

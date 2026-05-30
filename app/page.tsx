@@ -1310,6 +1310,30 @@ function PublicEvolutionView({ token }: { token: string }) {
   const [ackNotes, setAckNotes] = useState<string>('');
   const [acknowledging, setAcknowledging] = useState<boolean>(false);
   const [respondingSchId, setRespondingSchId] = useState<string | null>(null);
+  
+  // Notification dismissal local storage state
+  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('elite_coach_dismissed_alerts');
+      if (stored) {
+        try {
+          setDismissedAlerts(JSON.parse(stored));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    }
+  }, []);
+
+  const handleDismissAlert = (alertId: string) => {
+    const updated = [...dismissedAlerts, alertId];
+    setDismissedAlerts(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('elite_coach_dismissed_alerts', JSON.stringify(updated));
+    }
+  };
 
   const getEmbedUrl = (url: string) => {
     if (!url) return '';
@@ -1324,9 +1348,11 @@ function PublicEvolutionView({ token }: { token: string }) {
     return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
   };
 
-  const fetchData = async () => {
+  const fetchData = async (showLoading = false) => {
     try {
-      setLoading(true);
+      if (showLoading || !data) {
+        setLoading(true);
+      }
       const { data: res, error: err } = await supabase.rpc('get_public_student_evolution', {
         p_token: token
       });
@@ -1369,7 +1395,11 @@ function PublicEvolutionView({ token }: { token: string }) {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    fetchData(true);
+    const interval = setInterval(() => {
+      fetchData(false);
+    }, 10000); // Silent background polling every 10 seconds to catch trainer updates
+    return () => clearInterval(interval);
   }, [token]);
 
   useEffect(() => {
@@ -1832,7 +1862,7 @@ function PublicEvolutionView({ token }: { token: string }) {
               scheduled_date: schedDate,
               scheduled_time: schedTime,
               notes: schedNotes,
-              status: 'Agendado',
+              status: 'Pendente',
               created_at: new Date().toISOString()
             }
           ]
@@ -1860,7 +1890,7 @@ function PublicEvolutionView({ token }: { token: string }) {
               scheduled_date: schedDate,
               scheduled_time: schedTime,
               notes: schedNotes,
-              status: 'Agendado',
+              status: 'Pendente',
               created_at: new Date().toISOString()
             }
           ]
@@ -1899,22 +1929,48 @@ function PublicEvolutionView({ token }: { token: string }) {
 
   const unreadAlerts: any[] = [];
   if (latest_workout && !latest_workout.acknowledged) {
-    unreadAlerts.push({
-      id: 'new_protocol',
-      type: 'protocol',
-      title: 'Novo Cronograma Liberado!',
-      message: `Seu treinador liberou um novo cronograma: "${latest_workout.objective}".`
-    });
+    const alertId = `new_protocol_${latest_workout.id}`;
+    if (!dismissedAlerts.includes(alertId)) {
+      unreadAlerts.push({
+        id: alertId,
+        type: 'protocol',
+        title: '🏋️‍♂️ Novo Cronograma Liberado!',
+        message: `Seu treinador liberou um novo cronograma: "${latest_workout.objective}".`
+      });
+    }
   }
   if (data?.schedules) {
     data.schedules.forEach((s: any, sIdx: number) => {
       if (s.status === 'Sugerido') {
-        unreadAlerts.push({
-          id: `suggested_schedule_${sIdx}`,
-          type: 'schedule',
-          title: 'Nova Data Sugerida pelo Professor',
-          message: `O professor sugeriu reagendar para ${new Date(s.suggested_date + 'T12:00:00').toLocaleDateString('pt-BR')} às ${s.suggested_time?.slice(0, 5)}.`
-        });
+        const alertId = `suggested_schedule_${s.id || sIdx}`;
+        if (!dismissedAlerts.includes(alertId)) {
+          unreadAlerts.push({
+            id: alertId,
+            type: 'schedule_suggested',
+            title: '⚡ Nova Data Sugerida',
+            message: `O professor sugeriu reagendar para ${new Date(s.suggested_date + 'T12:00:00').toLocaleDateString('pt-BR')} às ${s.suggested_time?.slice(0, 5)}.`
+          });
+        }
+      } else if (s.status === 'Confirmado') {
+        const alertId = `confirmed_schedule_${s.id || sIdx}`;
+        if (!dismissedAlerts.includes(alertId)) {
+          unreadAlerts.push({
+            id: alertId,
+            type: 'schedule_confirmed',
+            title: '✅ Agendamento Confirmado',
+            message: `Seu agendamento para o dia ${new Date(s.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')} às ${s.scheduled_time?.slice(0, 5)} foi confirmado pelo treinador.`
+          });
+        }
+      } else if (s.status === 'Cancelado') {
+        const alertId = `cancelled_schedule_${s.id || sIdx}`;
+        if (!dismissedAlerts.includes(alertId)) {
+          unreadAlerts.push({
+            id: alertId,
+            type: 'schedule_cancelled',
+            title: '❌ Agendamento Cancelado',
+            message: `O agendamento do dia ${new Date(s.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')} às ${s.scheduled_time?.slice(0, 5)} foi cancelado pelo treinador.`
+          });
+        }
       }
     });
   }
@@ -1974,9 +2030,19 @@ function PublicEvolutionView({ token }: { token: string }) {
                     ) : (
                       <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
                         {unreadAlerts.map(alert => (
-                          <div key={alert.id} className="p-2 rounded bg-surface border border-surface-highest/40 space-y-1">
-                            <span className="font-bold text-[#dfbf80] text-[10px] block uppercase">{alert.title}</span>
-                            <p className="text-zinc-400 text-[10px] leading-relaxed">{alert.message}</p>
+                          <div key={alert.id} className="p-2.5 rounded bg-surface border border-surface-highest/40 space-y-1 relative group">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDismissAlert(alert.id);
+                              }}
+                              className="absolute top-1.5 right-1.5 text-zinc-500 hover:text-white transition-colors"
+                              title="Marcar como lida"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="font-bold text-[#dfbf80] text-[10px] block uppercase pr-4">{alert.title}</span>
+                            <p className="text-zinc-400 text-[10.5px] leading-relaxed pr-4">{alert.message}</p>
                           </div>
                         ))}
                       </div>
@@ -2779,10 +2845,15 @@ function PublicEvolutionView({ token }: { token: string }) {
             animate={{ scale: 1, opacity: 1 }}
             className="w-full max-w-lg bg-surface-container border border-surface-highest rounded-2xl p-6 shadow-[0_0_50px_rgba(223,191,128,0.15)] flex flex-col max-h-[90vh]"
           >
-            <div className="text-center mb-6 shrink-0">
-              <div className="mx-auto w-12 h-12 rounded-full bg-[#dfbf80]/10 border border-[#dfbf80]/20 flex items-center justify-center text-[#dfbf80] mb-3">
-                <Dumbbell className="w-6 h-6" />
+            <div className="text-center mb-6 shrink-0 flex flex-col items-center">
+              <div className="w-16 h-16 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(223,191,128,0.2)] mb-3">
+                {student.photo_avatar_url ? (
+                  <img src={student.photo_avatar_url} alt={student.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-2xl font-bold text-[#dfbf80]">{student.name.charAt(0).toUpperCase()}</span>
+                )}
               </div>
+              <h4 className="text-xs text-[#dfbf80] font-bold tracking-widest uppercase mb-1">{student.name}</h4>
               <h3 className="text-xl font-heading font-black text-white tracking-wide uppercase">Novo Cronograma Liberado!</h3>
               <p className="text-xs text-zinc-400 mt-1">Sua nova planilha de treinamentos foi montada.</p>
             </div>
