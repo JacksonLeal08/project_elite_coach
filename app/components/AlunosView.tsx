@@ -26,6 +26,73 @@ const isColumnMismatchError = (error: any): boolean => {
   );
 };
 
+const extractMissingColumn = (error: any): string | null => {
+  if (!error) return null;
+  const message = error.message || '';
+  const match1 = message.match(/Could not find the '([^']+)' column/i);
+  if (match1) return match1[1];
+  const match2 = message.match(/column "([^"]+)"/i);
+  if (match2) return match2[1];
+  const match3 = message.match(/column '([^']+)'/i);
+  if (match3) return match3[1];
+  return null;
+};
+
+const safeSupabaseWrite = async (
+  operation: 'insert' | 'update' | 'upsert',
+  table: string,
+  payload: any,
+  options?: { eqColumn?: string; eqValue?: any; onConflict?: string }
+): Promise<{ data: any; error: any; prunedColumns: string[] }> => {
+  let currentPayload = { ...payload };
+  const prunedColumns: string[] = [];
+  let attempts = 0;
+  const maxAttempts = 10;
+
+  while (attempts < maxAttempts) {
+    let queryObj: any;
+    if (operation === 'insert') {
+      queryObj = supabase.from(table).insert([currentPayload]).select();
+    } else if (operation === 'update') {
+      queryObj = supabase.from(table).update(currentPayload);
+      if (options?.eqColumn && options?.eqValue !== undefined) {
+        queryObj = queryObj.eq(options.eqColumn, options.eqValue);
+      }
+      queryObj = queryObj.select();
+    } else {
+      queryObj = supabase.from(table).upsert(currentPayload, { onConflict: options?.onConflict }).select();
+    }
+
+    const { data, error } = await queryObj;
+
+    if (error && isColumnMismatchError(error)) {
+      const missingCol = extractMissingColumn(error);
+      if (missingCol && missingCol in currentPayload) {
+        console.warn(`[Supabase Prune] Column '${missingCol}' does not exist on table '${table}'. Pruning and retrying.`);
+        delete currentPayload[missingCol];
+        prunedColumns.push(missingCol);
+        attempts++;
+        continue;
+      }
+    }
+    return { data, error, prunedColumns };
+  }
+
+  let queryObj: any;
+  if (operation === 'insert') {
+    queryObj = supabase.from(table).insert([payload]);
+  } else if (operation === 'update') {
+    queryObj = supabase.from(table).update(payload);
+    if (options?.eqColumn && options?.eqValue !== undefined) {
+      queryObj = queryObj.eq(options.eqColumn, options.eqValue);
+    }
+  } else {
+    queryObj = supabase.from(table).upsert(payload, { onConflict: options?.onConflict });
+  }
+  const { data, error } = await queryObj;
+  return { data, error, prunedColumns };
+};
+
 const isSchedulePast = (dateStr: string, timeStr: string) => {
   try {
     const today = new Date();
@@ -1316,19 +1383,6 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
       state: newStudent.state || null
     };
 
-    const corePayload = {
-      name: newStudent.name,
-      age: ageCalculated,
-      goal: newStudent.goal,
-      biotype: newStudent.biotype,
-      status: newStudent.status,
-      badges: [],
-      imc: newStudent.weight && newStudent.height ? parseFloat((parseFloat(newStudent.weight) / Math.pow(parseFloat(newStudent.height), 2)).toFixed(1)) : 22.5,
-      phone_number: newStudent.phone_number || null,
-      telegram_chat_id: newStudent.telegram_chat_id || null,
-      photo_avatar_url: newStudent.photo_avatar_url || null
-    };
-
     if (!navigator.onLine) {
       queueOfflineOperation('add_student', fullPayload);
       showCustomAlert('Modo Offline', 'Aluno cadastrado localmente! Sincronização automática pendente.', 'info');
@@ -1342,31 +1396,25 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
     let hadMigrationError = false;
 
     try {
-      const { data: resData, error: insertError } = await supabase
-        .from('students')
-        .insert([fullPayload])
-        .select();
+      const { data: resData, error: insertError, prunedColumns: studentPruned } = await safeSupabaseWrite(
+        'insert',
+        'students',
+        fullPayload
+      );
 
       if (insertError) {
-        if (isColumnMismatchError(insertError)) {
-          hadMigrationError = true;
-          const { data: fallbackData, error: fallbackError } = await supabase
-            .from('students')
-            .insert([corePayload])
-            .select();
-
-          if (fallbackError) {
-            return showCustomAlert('Erro', 'Erro ao cadastrar aluno: ' + fallbackError.message, 'error');
-          }
-          insertedStudent = fallbackData?.[0];
-        } else {
-          return showCustomAlert('Erro', 'Erro ao cadastrar aluno: ' + insertError.message, 'error');
-        }
-      } else {
-        insertedStudent = resData?.[0];
+        return showCustomAlert('Erro', 'Erro ao cadastrar aluno: ' + insertError.message, 'error');
       }
 
+      insertedStudent = resData?.[0];
+
       if (insertedStudent) {
+        // If we pruned any column other than 'is_whatsapp', we consider it a migration error
+        const isCriticalPrune = studentPruned.filter(col => col !== 'is_whatsapp').length > 0;
+        if (isCriticalPrune) {
+          hadMigrationError = true;
+        }
+
         // 1. Insert Anamnesis
         const anamnesisPayload = {
           student_id: insertedStudent.id,
@@ -1380,24 +1428,17 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
           activity_level: newStudent.activity_level
         };
 
-        const anamnesisCorePayload = {
-          student_id: insertedStudent.id,
-          medical_restrictions: newStudent.medical_history || 'Nenhuma',
-          flexibility_level: 'Moderada',
-          water_intake: 2.0,
-          dietary_habits: 'Misto',
-          surgical_history: newStudent.injuries || 'Nenhuma',
-          medications: newStudent.medications || 'Nenhuma',
-          cardio_condition: newStudent.medical_history || 'Nenhuma'
-        };
+        const { error: anamnesisErr, prunedColumns: anamnesisPruned } = await safeSupabaseWrite(
+          'insert',
+          'anamnesis',
+          anamnesisPayload
+        );
 
-        const { error: anamnesisErr } = await supabase
-          .from('anamnesis')
-          .insert([anamnesisPayload]);
-
-        if (isColumnMismatchError(anamnesisErr)) {
+        if (anamnesisErr) {
+          console.error('Error inserting anamnesis:', anamnesisErr);
+        }
+        if (anamnesisPruned.length > 0) {
           hadMigrationError = true;
-          await supabase.from('anamnesis').insert([anamnesisCorePayload]);
         }
 
         // 2. Insert Biometrics (if provided)
@@ -1423,24 +1464,17 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
             feedback: 'Avaliação inicial cadastrada via wizard'
           };
 
-          const biometricCorePayload = {
-            student_id: insertedStudent.id,
-            weight: newStudent.weight ? parseFloat(newStudent.weight) : null,
-            body_fat: newStudent.body_fat ? parseFloat(newStudent.body_fat) : null,
-            skeletal_muscle: newStudent.lean_mass ? parseFloat(newStudent.lean_mass) : null,
-            heart_rate: 70,
-            energy: 8,
-            sleep: 8,
-            feedback: 'Avaliação inicial cadastrada via wizard'
-          };
+          const { error: bioErr, prunedColumns: bioPruned } = await safeSupabaseWrite(
+            'insert',
+            'field_inspections',
+            biometricPayload
+          );
 
-          const { error: bioErr } = await supabase
-            .from('field_inspections')
-            .insert([biometricPayload]);
-
-          if (isColumnMismatchError(bioErr)) {
+          if (bioErr) {
+            console.error('Error inserting biometrics:', bioErr);
+          }
+          if (bioPruned.length > 0) {
             hadMigrationError = true;
-            await supabase.from('field_inspections').insert([biometricCorePayload]);
           }
         }
 
@@ -1456,21 +1490,17 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
           training_location: newStudent.training_location
         };
 
-        const goalsCorePayload = {
-          student_id: insertedStudent.id,
-          weight_target: newStudent.weight ? parseFloat(newStudent.weight) : null,
-          body_fat_target: newStudent.body_fat ? parseFloat(newStudent.body_fat) : null,
-          muscle_target: newStudent.lean_mass ? parseFloat(newStudent.lean_mass) : null,
-          freq_target: parseInt(newStudent.freq_target) || 3
-        };
+        const { error: goalsErr, prunedColumns: goalsPruned } = await safeSupabaseWrite(
+          'insert',
+          'student_goals',
+          goalsPayload
+        );
 
-        const { error: goalsErr } = await supabase
-          .from('student_goals')
-          .insert([goalsPayload]);
-
-        if (isColumnMismatchError(goalsErr)) {
+        if (goalsErr) {
+          console.error('Error inserting goals:', goalsErr);
+        }
+        if (goalsPruned.length > 0) {
           hadMigrationError = true;
-          await supabase.from('student_goals').insert([goalsCorePayload]);
         }
 
         // 4. Final Alert / Success modal
@@ -1528,17 +1558,6 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
       is_whatsapp: editStudent.is_whatsapp
     };
 
-    const corePayload = {
-      name: editStudent.name,
-      age: ageCalculated,
-      goal: editStudent.goal,
-      biotype: editStudent.biotype,
-      status: editStudent.status,
-      phone_number: editStudent.phone_number || null,
-      telegram_chat_id: editStudent.telegram_chat_id || null,
-      photo_avatar_url: editStudent.photo_avatar_url || null
-    };
-
     if (!navigator.onLine) {
       queueOfflineOperation('update_student_profile', {
         id: editStudent.id,
@@ -1556,25 +1575,21 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
 
     try {
       // 1. Update Student Table
-      const { error: studentErr } = await supabase
-        .from('students')
-        .update(fullPayload)
-        .eq('id', editStudent.id);
+      const { error: studentErr, prunedColumns: studentPruned } = await safeSupabaseWrite(
+        'update',
+        'students',
+        fullPayload,
+        { eqColumn: 'id', eqValue: editStudent.id }
+      );
 
       if (studentErr) {
-        if (isColumnMismatchError(studentErr)) {
-          hadMigrationError = true;
-          const { error: coreErr } = await supabase
-            .from('students')
-            .update(corePayload)
-            .eq('id', editStudent.id);
+        return showCustomAlert('Erro', 'Erro ao atualizar dados: ' + studentErr.message, 'error');
+      }
 
-          if (coreErr) {
-            return showCustomAlert('Erro', 'Erro ao atualizar dados: ' + coreErr.message, 'error');
-          }
-        } else {
-          return showCustomAlert('Erro', 'Erro ao atualizar dados: ' + studentErr.message, 'error');
-        }
+      // If we pruned any column other than 'is_whatsapp', we consider it a migration error
+      const isCriticalPrune = studentPruned.filter(col => col !== 'is_whatsapp').length > 0;
+      if (isCriticalPrune) {
+        hadMigrationError = true;
       }
 
       // 2. Upsert Anamnesis
@@ -1590,26 +1605,18 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
         activity_level: editStudent.activity_level
       };
 
-      const anamnesisCorePayload = {
-        student_id: editStudent.id,
-        medical_restrictions: editStudent.medical_history || 'Nenhuma',
-        flexibility_level: anamnesis?.flexibility_level || 'Moderada',
-        water_intake: anamnesis?.water_intake || 2.0,
-        dietary_habits: editStudent.dietary_habits || 'Misto',
-        surgical_history: editStudent.injuries || 'Nenhuma',
-        medications: editStudent.medications || 'Nenhuma',
-        cardio_condition: editStudent.medical_history || 'Nenhuma'
-      };
+      const { error: anamnesisErr, prunedColumns: anamnesisPruned } = await safeSupabaseWrite(
+        'upsert',
+        'anamnesis',
+        anamnesisPayload,
+        { onConflict: 'student_id' }
+      );
 
-      const { error: anamnesisErr } = await supabase
-        .from('anamnesis')
-        .upsert(anamnesisPayload, { onConflict: 'student_id' });
-
-      if (isColumnMismatchError(anamnesisErr)) {
+      if (anamnesisErr) {
+        console.error('Error upserting anamnesis:', anamnesisErr);
+      }
+      if (anamnesisPruned.length > 0) {
         hadMigrationError = true;
-        await supabase
-          .from('anamnesis')
-          .upsert(anamnesisCorePayload, { onConflict: 'student_id' });
       }
 
       // 3. Update or Insert last field inspection (biometrics)
@@ -1631,48 +1638,38 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
           left_thigh: editStudent.left_thigh ? parseFloat(editStudent.left_thigh) : null
         };
 
-        const biometricCorePayload = {
-          student_id: editStudent.id,
-          weight: editStudent.weight ? parseFloat(editStudent.weight) : null,
-          body_fat: editStudent.body_fat ? parseFloat(editStudent.body_fat) : null,
-          skeletal_muscle: editStudent.lean_mass ? parseFloat(editStudent.lean_mass) : null,
-        };
-
         if (evaluations.length > 0) {
-          const { error: bioErr } = await supabase
-            .from('field_inspections')
-            .update(biometricPayload)
-            .eq('id', evaluations[0].id);
+          const { error: bioErr, prunedColumns: bioPruned } = await safeSupabaseWrite(
+            'update',
+            'field_inspections',
+            biometricPayload,
+            { eqColumn: 'id', eqValue: evaluations[0].id }
+          );
 
-          if (isColumnMismatchError(bioErr)) {
+          if (bioErr) {
+            console.error('Error updating biometrics:', bioErr);
+          }
+          if (bioPruned.length > 0) {
             hadMigrationError = true;
-            await supabase
-              .from('field_inspections')
-              .update(biometricCorePayload)
-              .eq('id', evaluations[0].id);
           }
         } else {
-          const { error: bioErr } = await supabase
-            .from('field_inspections')
-            .insert([{
+          const { error: bioErr, prunedColumns: bioPruned } = await safeSupabaseWrite(
+            'insert',
+            'field_inspections',
+            {
               ...biometricPayload,
               heart_rate: 70,
               energy: 8,
               sleep: 8,
               feedback: 'Avaliação cadastrada via edição'
-            }]);
+            }
+          );
 
-          if (isColumnMismatchError(bioErr)) {
+          if (bioErr) {
+            console.error('Error inserting biometrics:', bioErr);
+          }
+          if (bioPruned.length > 0) {
             hadMigrationError = true;
-            await supabase
-              .from('field_inspections')
-              .insert([{
-                ...biometricCorePayload,
-                heart_rate: 70,
-                energy: 8,
-                sleep: 8,
-                feedback: 'Avaliação cadastrada via edição'
-              }]);
           }
         }
       }
@@ -1690,24 +1687,18 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
         updated_at: new Date().toISOString()
       };
 
-      const goalsCorePayload = {
-        student_id: editStudent.id,
-        weight_target: editStudent.weight ? parseFloat(editStudent.weight) : null,
-        body_fat_target: editStudent.body_fat ? parseFloat(editStudent.body_fat) : null,
-        muscle_target: editStudent.lean_mass ? parseFloat(editStudent.lean_mass) : null,
-        freq_target: parseInt(editStudent.freq_target) || 3,
-        updated_at: new Date().toISOString()
-      };
+      const { error: goalsErr, prunedColumns: goalsPruned } = await safeSupabaseWrite(
+        'upsert',
+        'student_goals',
+        goalsPayload,
+        { onConflict: 'student_id' }
+      );
 
-      const { error: goalsErr } = await supabase
-        .from('student_goals')
-        .upsert(goalsPayload, { onConflict: 'student_id' });
-
-      if (isColumnMismatchError(goalsErr)) {
+      if (goalsErr) {
+        console.error('Error upserting goals:', goalsErr);
+      }
+      if (goalsPruned.length > 0) {
         hadMigrationError = true;
-        await supabase
-          .from('student_goals')
-          .upsert(goalsCorePayload, { onConflict: 'student_id' });
       }
 
       if (hadMigrationError) {
