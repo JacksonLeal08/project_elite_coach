@@ -19,6 +19,10 @@ module.exports = {
           high: "var(--color-surface-high)",
           highest: "var(--color-surface-highest)",
         }
+      },
+      fontFamily: {
+        sans: ["var(--font-family-body)", "sans-serif"],
+        title: ["var(--font-family-title)", "sans-serif"],
       }
     },
   },

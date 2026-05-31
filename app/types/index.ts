@@ -105,6 +105,16 @@ export interface ProfileConfig {
   whatsapp?: string;
   logoUrl?: string;
   pdfTemplate: string;
+  colorPrimary?: string;
+  colorPrimaryDim?: string;
+  colorSurface?: string;
+  colorSurfaceContainer?: string;
+  colorSurfaceHigh?: string;
+  colorSurfaceHighest?: string;
+  fontTitle?: string;
+  fontBody?: string;
+  textScale?: string;
+  borderRadius?: string;
 }
 
 export interface ProgressionData {

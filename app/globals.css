@@ -10,6 +10,9 @@
     --color-surface-container: #12241c;
     --color-surface-high: #1a3428;
     --color-surface-highest: #224233;
+    --font-family-title: var(--font-montserrat), sans-serif;
+    --font-family-body: var(--font-inter), sans-serif;
+    --radius-factor: 0.5rem;
   }
 
   .light-theme {
@@ -21,6 +24,47 @@
     --color-surface-highest: #d4d4d8;
   }
 }
+
+/* Custom layout rules for dynamic white-label theme customization */
+h1, h2, h3, h4, h5, h6, .font-title {
+  font-family: var(--font-family-title), var(--font-montserrat), sans-serif !important;
+}
+
+body {
+  font-family: var(--font-family-body), var(--font-inter), sans-serif !important;
+}
+
+/* Apply radius factor to custom components */
+.rounded-theme,
+button,
+input,
+select,
+textarea,
+[class*="rounded-lg"],
+[class*="rounded-md"] {
+  border-radius: var(--radius-factor) !important;
+}
+
+/* Text Size scales globally or scoped */
+.text-scale-compact {
+  font-size: 0.8125rem !important; /* ~13px */
+}
+.text-scale-compact h1 { font-size: 1.5rem !important; }
+.text-scale-compact h2 { font-size: 1.35rem !important; }
+.text-scale-compact h3 { font-size: 1.15rem !important; }
+.text-scale-compact p, .text-scale-compact span, .text-scale-compact div, .text-scale-compact td { font-size: 0.8125rem !important; }
+
+.text-scale-standard {
+  font-size: 0.875rem !important; /* ~14px */
+}
+
+.text-scale-large {
+  font-size: 0.9375rem !important; /* ~15px */
+}
+.text-scale-large h1 { font-size: 1.75rem !important; }
+.text-scale-large h2 { font-size: 1.55rem !important; }
+.text-scale-large h3 { font-size: 1.35rem !important; }
+.text-scale-large p, .text-scale-large span, .text-scale-large div, .text-scale-large td { font-size: 0.9375rem !important; }
 
 body {
   background-color: var(--color-surface);

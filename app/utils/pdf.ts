@@ -1,6 +1,45 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { HistoryEntry, Student, Anamnesis, StudentGoal } from '../types';
+const getProfileAndColors = () => {
+  let profile = {
+    name: 'Treinador',
+    instagram: '',
+    whatsapp: '',
+    logoUrl: '',
+    pdfTemplate: '1',
+    colorPrimary: '#d4af37'
+  };
+  
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('elite_coach_profile');
+    if (saved) {
+      try {
+        profile = JSON.parse(saved);
+      } catch (e) {
+        console.error('Error parsing profile configuration', e);
+      }
+    }
+  }
+
+  const hexToRgb = (hex: string): [number, number, number] => {
+    const defaultColor: [number, number, number] = [212, 175, 55]; // Classic Gold
+    if (!hex || !hex.startsWith('#')) return defaultColor;
+    try {
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      if (isNaN(r) || isNaN(g) || isNaN(b)) return defaultColor;
+      return [r, g, b];
+    } catch {
+      return defaultColor;
+    }
+  };
+
+  const primaryRgb = hexToRgb(profile.colorPrimary || '#d4af37');
+  return { profile, primaryRgb, isDark: profile.pdfTemplate === '2' };
+};
+
 
 export const generatePDFAndShare = async (
   item: Pick<
@@ -23,26 +62,7 @@ export const generatePDFAndShare = async (
 
   const doc = new jsPDF();
   
-  let profile = {
-    name: 'Treinador',
-    instagram: '',
-    whatsapp: '',
-    logoUrl: '',
-    pdfTemplate: '1'
-  };
-  
-  if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('elite_coach_profile');
-    if (saved) {
-      try {
-        profile = JSON.parse(saved);
-      } catch (e) {
-        console.error('Error parsing profile configuration', e);
-      }
-    }
-  }
-  
-  const isDark = profile.pdfTemplate === '2';
+  const { profile, primaryRgb, isDark } = getProfileAndColors();
   
   // Page bg
   if (isDark) {
@@ -52,7 +72,7 @@ export const generatePDFAndShare = async (
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
-  doc.setTextColor(212, 175, 55); // Gold
+  doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.text((profile.name || 'Treinador').toUpperCase() + " - PROTOCOLO DE TREINO", 14, 22);
   
   doc.setFontSize(11);
@@ -98,7 +118,7 @@ export const generatePDFAndShare = async (
          (libEx: any) => libEx.name.toLowerCase().trim() === ex.name.toLowerCase().trim() && libEx.video_url
        );
        const cellName = match
-         ? { content: `${ex.name} 🎥`, styles: { textColor: [212, 175, 55] as [number, number, number], fontStyle: 'bold' as const } }
+         ? { content: `${ex.name} 🎥`, styles: { textColor: primaryRgb as [number, number, number], fontStyle: 'bold' as const } }
          : ex.name;
        return [cellName, ex.sets, ex.reps, ex.rest, ex.notes || '-'];
      });
@@ -108,7 +128,7 @@ export const generatePDFAndShare = async (
        head: [['Exercício', 'Séries', 'Reps', 'Descanso', 'Notas']],
        body: tableData,
        theme: isDark ? 'grid' : 'grid',
-       headStyles: { fillColor: isDark ? [40, 40, 40] : [212, 175, 55], textColor: isDark ? [212, 175, 55] : [0,0,0], fontStyle: 'bold' },
+       headStyles: { fillColor: isDark ? [40, 40, 40] : primaryRgb, textColor: isDark ? primaryRgb : [0,0,0], fontStyle: 'bold' },
        styles: { fontSize: 10, cellPadding: 4, textColor: isDark ? [220, 220, 220] : [40, 40, 40], fillColor: isDark ? [30, 30, 30] : [255, 255, 255] },
        alternateRowStyles: { fillColor: isDark ? [40, 40, 40] : [250, 248, 239] },
        didDrawCell: (data) => {
@@ -209,6 +229,7 @@ export const generatePDFAndShare = async (
 
 export const exportAnamnesisPDF = async (student: Student, anamnesis: Anamnesis | null) => {
   const doc = new jsPDF();
+  const { profile, primaryRgb } = getProfileAndColors();
   
   // Header Config (Premium Dark-Gold)
   doc.setFillColor(10, 20, 16); // surface: #0a1410
@@ -216,14 +237,14 @@ export const exportAnamnesisPDF = async (student: Student, anamnesis: Anamnesis 
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
-  doc.setTextColor(212, 175, 55); // Gold
-  doc.text("ELITE COACH", 14, 25);
+  doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
+  doc.text((profile.name || "ELITE COACH").toUpperCase(), 14, 25);
   doc.setFontSize(14);
   doc.setTextColor(255, 255, 255);
   doc.text("FICHA CLÍNICA & ANAMNESE", 14, 32);
   
   // Divider
-  doc.setDrawColor(212, 175, 55);
+  doc.setDrawColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.setLineWidth(1);
   doc.line(14, 36, 196, 36);
   
@@ -254,7 +275,7 @@ export const exportAnamnesisPDF = async (student: Student, anamnesis: Anamnesis 
   doc.setTextColor(180, 180, 180);
   doc.text("STATUS:", 110, 51);
   doc.setFont("helvetica", "normal");
-  doc.setTextColor(212, 175, 55);
+  doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.text(student.status, 132, 51);
   
   // Divider
@@ -276,11 +297,11 @@ export const exportAnamnesisPDF = async (student: Student, anamnesis: Anamnesis 
     head: [['Campo de Análise', 'Detalhes Clínicos']],
     body: anamnesisData,
     theme: 'grid',
-    headStyles: { fillColor: [26, 52, 40], textColor: [212, 175, 55], fontStyle: 'bold' },
+    headStyles: { fillColor: [26, 52, 40], textColor: primaryRgb, fontStyle: 'bold' },
     styles: { fontSize: 10, cellPadding: 6, textColor: [220, 220, 220], fillColor: [18, 36, 28] },
     alternateRowStyles: { fillColor: [10, 20, 16] },
     columnStyles: {
-      0: { cellWidth: 60, fontStyle: 'bold', textColor: [212, 175, 55] },
+      0: { cellWidth: 60, fontStyle: 'bold', textColor: primaryRgb },
       1: { cellWidth: 122 }
     }
   });
@@ -302,20 +323,21 @@ export const exportAnamnesisPDF = async (student: Student, anamnesis: Anamnesis 
 
 export const exportPosturePDF = async (student: Student) => {
   const doc = new jsPDF();
+  const { profile, primaryRgb } = getProfileAndColors();
   
   doc.setFillColor(10, 20, 16); // surface: #0a1410
   doc.rect(0, 0, 210, 297, 'F');
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
-  doc.setTextColor(212, 175, 55); // Gold
-  doc.text("ELITE COACH", 14, 25);
+  doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
+  doc.text((profile.name || "ELITE COACH").toUpperCase(), 14, 25);
   doc.setFontSize(14);
   doc.setTextColor(255, 255, 255);
   doc.text("AVALIAÇÃO POSTURAL MULTI-ÂNGULO", 14, 32);
   
   // Divider
-  doc.setDrawColor(212, 175, 55);
+  doc.setDrawColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.setLineWidth(1);
   doc.line(14, 36, 196, 36);
   
@@ -353,7 +375,7 @@ export const exportPosturePDF = async (student: Student) => {
     // Label above image
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.setTextColor(212, 175, 55);
+    doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
     doc.text(angle.label, angle.x + (imgW / 2) - 10, imgY - 4);
     
     if (photoData && photoData.startsWith('data:image/')) {
@@ -390,7 +412,7 @@ export const exportPosturePDF = async (student: Student) => {
   const notesY = imgY + imgH + 15;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
-  doc.setTextColor(212, 175, 55);
+  doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.text("ANÁLISE E OBSERVAÇÕES POSTURAIS", 14, notesY);
   
   doc.setDrawColor(34, 66, 51);
@@ -416,20 +438,21 @@ export const exportPosturePDF = async (student: Student) => {
 
 export const exportEvolutionPDF = async (student: Student, evaluations: any[], goals: StudentGoal | null) => {
   const doc = new jsPDF();
+  const { profile, primaryRgb } = getProfileAndColors();
   
   doc.setFillColor(10, 20, 16); // surface: #0a1410
   doc.rect(0, 0, 210, 297, 'F');
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
-  doc.setTextColor(212, 175, 55); // Gold
-  doc.text("ELITE COACH", 14, 25);
+  doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
+  doc.text((profile.name || "ELITE COACH").toUpperCase(), 14, 25);
   doc.setFontSize(14);
   doc.setTextColor(255, 255, 255);
   doc.text("RELATÓRIO DE EVOLUÇÃO CORPORAL & METAS", 14, 32);
   
   // Divider
-  doc.setDrawColor(212, 175, 55);
+  doc.setDrawColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.setLineWidth(1);
   doc.line(14, 36, 196, 36);
   
@@ -498,7 +521,7 @@ export const exportEvolutionPDF = async (student: Student, evaluations: any[], g
     head: [['Data', 'Peso (kg)', 'Gordura (%)', 'Massa Muscular (kg)', 'FC (BPM)', 'Energia', 'Sono']],
     body: tableData,
     theme: 'grid',
-    headStyles: { fillColor: [26, 52, 40], textColor: [212, 175, 55], fontStyle: 'bold' },
+    headStyles: { fillColor: [26, 52, 40], textColor: primaryRgb, fontStyle: 'bold' },
     styles: { fontSize: 9, cellPadding: 5, textColor: [220, 220, 220], fillColor: [18, 36, 28] },
     alternateRowStyles: { fillColor: [10, 20, 16] }
   });
@@ -508,6 +531,7 @@ export const exportEvolutionPDF = async (student: Student, evaluations: any[], g
 
 export const exportFrequencyPDF = async (student: Student, latestWorkout: any, workoutProgress: any[]) => {
   const doc = new jsPDF();
+  const { profile, primaryRgb } = getProfileAndColors();
   
   // Header Config (Premium Dark-Gold)
   doc.setFillColor(10, 20, 16); // surface: #0a1410
@@ -515,14 +539,14 @@ export const exportFrequencyPDF = async (student: Student, latestWorkout: any, w
   
   doc.setFont("helvetica", "bold");
   doc.setFontSize(22);
-  doc.setTextColor(212, 175, 55); // Gold
-  doc.text("ELITE COACH", 14, 25);
+  doc.setTextColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
+  doc.text((profile.name || "ELITE COACH").toUpperCase(), 14, 25);
   doc.setFontSize(14);
   doc.setTextColor(255, 255, 255);
   doc.text("EXTRATO DE ASSIDUIDADE & FREQUÊNCIA", 14, 32);
   
   // Divider
-  doc.setDrawColor(212, 175, 55);
+  doc.setDrawColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
   doc.setLineWidth(1);
   doc.line(14, 36, 196, 36);
   
@@ -628,7 +652,7 @@ export const exportFrequencyPDF = async (student: Student, latestWorkout: any, w
     head: [['Semana', 'Treino', 'Data Programada', 'Status', 'Exercícios Concluídos']],
     body: tableRows,
     theme: 'grid',
-    headStyles: { fillColor: [26, 52, 40], textColor: [212, 175, 55], fontStyle: 'bold' },
+    headStyles: { fillColor: [26, 52, 40], textColor: primaryRgb, fontStyle: 'bold' },
     styles: { fontSize: 9, cellPadding: 5, textColor: [220, 220, 220], fillColor: [18, 36, 28] },
     alternateRowStyles: { fillColor: [10, 20, 16] },
     columnStyles: {

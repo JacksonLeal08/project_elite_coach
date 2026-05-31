@@ -18,6 +18,115 @@ export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'login' | 'app' | 'goodbye' | 'reset_password' | 'public_evolution'>('loading');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [publicToken, setPublicToken] = useState<string>('');
+
+  const [brandSettings, setBrandSettings] = useState<any>({
+    name: 'Elite Coach',
+    specialty: 'Premium',
+    instagram: '@elitecoach',
+    whatsapp: '+55 11 99999-9999',
+    logoUrl: '/logo.png',
+    pdfTemplate: '1',
+    colorPrimary: '#d4af37',
+    colorPrimaryDim: '#b5952f',
+    colorSurface: '#0a1410',
+    colorSurfaceContainer: '#12241c',
+    colorSurfaceHigh: '#1a3428',
+    colorSurfaceHighest: '#224233',
+    fontTitle: 'Montserrat',
+    fontBody: 'Inter',
+    textScale: 'Padrão',
+    borderRadius: 'Moderno'
+  });
+
+  const loadGoogleFont = (fontName: string) => {
+    if (typeof window === 'undefined') return;
+    const id = `gfont-${fontName.replace(/\s+/g, '-').toLowerCase()}`;
+    if (document.getElementById(id)) return;
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${fontName.replace(/\s+/g, '+')}:wght@300;400;500;600;700;800;900&display=swap`;
+    document.head.appendChild(link);
+  };
+
+  const applyBrandStyles = (settings: any) => {
+    if (typeof window === 'undefined') return;
+    const root = document.documentElement;
+
+    if (settings.colorPrimary) root.style.setProperty('--color-primary', settings.colorPrimary);
+    if (settings.colorPrimaryDim) root.style.setProperty('--color-primary-dim', settings.colorPrimaryDim);
+    if (settings.colorSurface) root.style.setProperty('--color-surface', settings.colorSurface);
+    if (settings.colorSurfaceContainer) root.style.setProperty('--color-surface-container', settings.colorSurfaceContainer);
+    if (settings.colorSurfaceHigh) root.style.setProperty('--color-surface-high', settings.colorSurfaceHigh);
+    if (settings.colorSurfaceHighest) root.style.setProperty('--color-surface-highest', settings.colorSurfaceHighest);
+
+    if (settings.fontTitle) {
+      loadGoogleFont(settings.fontTitle);
+      root.style.setProperty('--font-family-title', `"${settings.fontTitle}", var(--font-montserrat), sans-serif`);
+    }
+    if (settings.fontBody) {
+      loadGoogleFont(settings.fontBody);
+      root.style.setProperty('--font-family-body', `"${settings.fontBody}", var(--font-inter), sans-serif`);
+    }
+
+    if (settings.borderRadius) {
+      let radius = '0.5rem';
+      if (settings.borderRadius === 'Afiado') radius = '0px';
+      if (settings.borderRadius === 'Redondo') radius = '9999px';
+      root.style.setProperty('--radius-factor', radius);
+    }
+
+    root.classList.remove('text-scale-compact', 'text-scale-standard', 'text-scale-large');
+    if (settings.textScale === 'Compacto') {
+      root.classList.add('text-scale-compact');
+    } else if (settings.textScale === 'Grande') {
+      root.classList.add('text-scale-large');
+    } else {
+      root.classList.add('text-scale-standard');
+    }
+  };
+
+  const fetchBrandSettings = async () => {
+    try {
+      const { data, error } = await supabase.from('system_settings').select('*');
+      if (data && data.length > 0) {
+        const settingsMap: any = {};
+        data.forEach((item: any) => {
+          settingsMap[item.key] = item.value;
+        });
+
+        const updated = {
+          name: settingsMap['brand_name'] || 'Elite Coach',
+          specialty: settingsMap['brand_specialty'] || 'Premium',
+          instagram: settingsMap['brand_instagram'] || '@elitecoach',
+          whatsapp: settingsMap['brand_whatsapp'] || '+55 11 99999-9999',
+          logoUrl: settingsMap['brand_logo_url'] || '/logo.png',
+          pdfTemplate: settingsMap['brand_pdf_template'] || '1',
+          colorPrimary: settingsMap['brand_color_primary'] || '#d4af37',
+          colorPrimaryDim: settingsMap['brand_color_primary_dim'] || '#b5952f',
+          colorSurface: settingsMap['brand_color_surface'] || '#0a1410',
+          colorSurfaceContainer: settingsMap['brand_color_surface_container'] || '#12241c',
+          colorSurfaceHigh: settingsMap['brand_color_surface_high'] || '#1a3428',
+          colorSurfaceHighest: settingsMap['brand_color_surface_highest'] || '#224233',
+          fontTitle: settingsMap['brand_font_title'] || 'Montserrat',
+          fontBody: settingsMap['brand_font_body'] || 'Inter',
+          textScale: settingsMap['brand_text_scale'] || 'Padrão',
+          borderRadius: settingsMap['brand_border_radius'] || 'Moderno'
+        };
+
+        setBrandSettings(updated);
+        applyBrandStyles(updated);
+        document.title = updated.name;
+      } else {
+        applyBrandStyles(brandSettings);
+        document.title = brandSettings.name;
+      }
+    } catch (e) {
+      console.error('Error fetching brand settings:', e);
+      applyBrandStyles(brandSettings);
+      document.title = brandSettings.name;
+    }
+  };
   
   // Login Logic
   const [email, setEmail] = useState<string>('');
@@ -257,6 +366,7 @@ export default function App() {
 
   useEffect(() => {
     console.log('App.tsx useEffect mounted');
+    fetchBrandSettings();
     if (typeof window !== 'undefined') {
       const themeKey = currentUser?.id ? `elite_coach_theme_${currentUser.id}` : 'elite_coach_theme';
       const savedTheme = localStorage.getItem(themeKey) || localStorage.getItem('elite_coach_theme') || 'dark';
@@ -469,20 +579,20 @@ export default function App() {
                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                className="w-[360px] h-[360px] sm:w-[400px] sm:h-[400px] mb-2 flex items-center justify-center"
             >
-               <img src="/logo.png" alt="Logo Jaira Leal" className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+               <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             </motion.div>
             
-            <div className="mt-2 w-full h-5 rounded-full p-[2px] relative border border-[#dfbf80]/40 shadow-lg" style={{ backgroundColor: '#0a1a10' }}>
+            <div className="mt-2 w-full h-5 rounded-full p-[2px] relative border border-primary/40 shadow-lg" style={{ backgroundColor: 'var(--color-surface)' }}>
                <motion.div 
                  initial={{ width: "100%" }} 
                  animate={{ width: 0 }} 
                  transition={{ duration: 2.0, ease: "easeInOut" }} 
                  className="h-full rounded-full relative overflow-hidden"
-                 style={{ background: 'linear-gradient(90deg, #dfbf80 0%, #18462b 100%)', boxShadow: '0 0 12px rgba(223,191,128,0.3)' }}
+                 style={{ background: 'linear-gradient(90deg, var(--color-primary) 0%, var(--color-surface-container) 100%)', boxShadow: '0 0 12px var(--color-primary)' }}
                />
                <div className="absolute inset-0 rounded-full border border-white/10 pointer-events-none"></div>
             </div>
-            <p className="mt-5 text-[#dfbf80] text-sm sm:text-base font-semibold tracking-wide drop-shadow-md">Até breve, Coach! Saindo do sistema...</p>
+            <p className="mt-5 text-primary text-sm sm:text-base font-semibold tracking-wide drop-shadow-md">Até breve! Saindo do sistema...</p>
         </motion.div>
       </div>
     );
@@ -500,23 +610,23 @@ export default function App() {
                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
                className="w-[360px] h-[360px] sm:w-[400px] sm:h-[400px] mb-2 flex items-center justify-center"
             >
-               <img src="/logo.png" alt="Logo Jaira Leal" className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+               <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
                <div className="hidden flex-col items-center justify-center">
-                 <span className="text-6xl mb-2 drop-shadow-md">💃</span>
+                 <span className="text-6xl mb-2 drop-shadow-md">💪</span>
                </div>
             </motion.div>
             
-            <div className="mt-2 w-full h-5 rounded-full p-[2px] relative border border-[#dfbf80]/40 shadow-lg" style={{ backgroundColor: '#0a1a10' }}>
+            <div className="mt-2 w-full h-5 rounded-full p-[2px] relative border border-primary/40 shadow-lg" style={{ backgroundColor: 'var(--color-surface)' }}>
                <motion.div 
                  initial={{ width: 0 }} 
                  animate={{ width: "80%" }} 
                  transition={{ duration: 2.5, ease: "easeInOut" }} 
                  className="h-full rounded-full relative overflow-hidden"
-                 style={{ background: 'linear-gradient(90deg, #18462b 0%, #dfbf80 100%)', boxShadow: '0 0 12px rgba(223,191,128,0.3)' }}
+                 style={{ background: 'linear-gradient(90deg, var(--color-surface-container) 0%, var(--color-primary) 100%)', boxShadow: '0 0 12px var(--color-primary)' }}
                />
                <div className="absolute inset-0 rounded-full border border-white/10 pointer-events-none"></div>
             </div>
-            <p className="mt-5 text-[#dfbf80] text-sm sm:text-base font-semibold tracking-wide drop-shadow-md">Loading your personalized training plan...</p>
+            <p className="mt-5 text-primary text-sm sm:text-base font-semibold tracking-wide drop-shadow-md">Carregando a melhor experiência...</p>
         </motion.div>
       </div>
     );
@@ -534,15 +644,15 @@ export default function App() {
            
            <div className="flex flex-col items-center mb-6 mt-[-10px]">
               <div className="w-[360px] h-[240px] sm:w-[380px] sm:h-[260px] mb-2 flex items-center justify-center">
-                 <img src="/logo.png" alt="Logo Jaira Leal" className="w-full h-full object-contain" style={{ filter: 'drop-shadow(20px 7px 7px white)' }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+                 <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain" style={{ filter: 'drop-shadow(20px 7px 7px white)' }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
                  <div className="hidden flex-col items-center justify-center">
-                     <span className="text-4xl drop-shadow-sm">💃</span>
+                     <span className="text-4xl drop-shadow-sm">💪</span>
                  </div>
               </div>
            </div>
 
            <div className="text-center mb-6">
-             <h3 className="text-[#0b2817] text-[15px] font-extrabold tracking-widest uppercase drop-shadow-sm">Bem-Vindo</h3>
+             <h3 className="text-primary text-[15px] font-extrabold tracking-widest uppercase drop-shadow-sm">{brandSettings.name}</h3>
            </div>
 
            <form onSubmit={handleLogin} className="space-y-4">
@@ -653,12 +763,12 @@ export default function App() {
           <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="relative z-10 w-full max-w-[420px] backdrop-blur-[16px] rounded-[32px] overflow-hidden border border-white/20 p-8 sm:p-10" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 100%)', boxShadow: '0 30px 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.1)' }}>
              <div className="flex flex-col items-center mb-6 mt-[-10px]">
                 <div className="w-[360px] h-[240px] sm:w-[380px] sm:h-[260px] mb-2 flex items-center justify-center">
-                   <img src="/logo.png" alt="Logo Jaira Leal" className="w-full h-full object-contain" style={{ filter: 'drop-shadow(20px 7px 7px white)' }} />
+                   <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain" style={{ filter: 'drop-shadow(20px 7px 7px white)' }} />
                 </div>
              </div>
 
              <div className="text-center mb-6">
-               <h3 className="text-[#0b2817] text-[15px] font-extrabold tracking-widest uppercase drop-shadow-sm">Redefinir Senha</h3>
+               <h3 className="text-primary text-[15px] font-extrabold tracking-widest uppercase drop-shadow-sm">{brandSettings.name}</h3>
                <p className="text-xs text-zinc-300 mt-1">Defina sua nova senha de acesso abaixo</p>
              </div>
 
@@ -713,7 +823,7 @@ export default function App() {
 
    if (authState === 'public_evolution') {
      return (
-       <PublicEvolutionView token={publicToken} />
+       <PublicEvolutionView token={publicToken} brandSettings={brandSettings} />
      );
    }
 
@@ -737,6 +847,8 @@ export default function App() {
       setRedirectStudentId={setRedirectStudentId}
       setRedirectTab={setRedirectTab}
       handleNotificationDetails={handleNotificationDetails}
+      brandSettings={brandSettings}
+      fetchBrandSettings={fetchBrandSettings}
     />
   );
 }
@@ -819,7 +931,9 @@ function MainApp({
   redirectTab,
   setRedirectStudentId,
   setRedirectTab,
-  handleNotificationDetails
+  handleNotificationDetails,
+  brandSettings,
+  fetchBrandSettings
 }: { 
   currentUser: User | null, 
   setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>, 
@@ -838,7 +952,9 @@ function MainApp({
   redirectTab: 'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance' | null,
   setRedirectStudentId: React.Dispatch<React.SetStateAction<string | number | null>>,
   setRedirectTab: React.Dispatch<React.SetStateAction<'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance' | null>>,
-  handleNotificationDetails: (n: any) => void
+  handleNotificationDetails: (n: any) => void,
+  brandSettings: any,
+  fetchBrandSettings: () => Promise<void>
 }) {
 
   const [time, setTime] = useState<string>('');
@@ -1147,15 +1263,13 @@ function MainApp({
     <div className="min-h-screen flex bg-surface">
       {/* Sidebar for Desktop */}
       <aside className="hidden md:flex md:w-64 border-r border-surface-highest bg-surface-container flex-col shrink-0">
-        <div className="p-5 border-b border-surface-highest flex items-center">
-          <div className="w-full flex items-center gap-3">
-             <div className="h-[48px] w-[48px] bg-gradient-to-br from-[#dfbf80]/20 to-[#dfbf80]/5 rounded-xl border border-[#dfbf80]/30 shadow-[0_0_15px_rgba(223,191,128,0.15)] flex items-center justify-center p-1.5 backdrop-blur-md shrink-0">
-               <img src="/logo.png" alt="Logo Jaira Leal" className="h-full w-full object-contain" style={{ filter: 'drop-shadow(0 2px 4px rgba(255,255,255,0.2))' }} />
-             </div>
-             <div className="flex flex-col overflow-hidden">
-                <span className="font-heading font-black text-white text-[13px] tracking-widest uppercase truncate leading-tight drop-shadow-sm">Elite Coach</span>
-                <span className="text-[#dfbf80] text-[10px] font-bold tracking-[0.2em] uppercase mt-0.5 truncate drop-shadow-sm">Premium</span>
-             </div>
+        <div className="p-6 border-b border-surface-highest flex flex-col items-center justify-center text-center">
+          <div className="h-[72px] w-[72px] flex items-center justify-center mb-3 shrink-0">
+             <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="h-full w-full object-contain filter drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]" />
+          </div>
+          <div className="flex flex-col items-center overflow-hidden">
+             <span className="font-title font-black text-white text-[14px] tracking-widest uppercase leading-tight drop-shadow-sm truncate max-w-[200px]">{brandSettings.name}</span>
+             <span className="text-primary text-[9px] font-bold tracking-[0.25em] uppercase mt-1 drop-shadow-sm truncate max-w-[200px]">{brandSettings.specialty}</span>
           </div>
         </div>
 
@@ -1177,16 +1291,16 @@ function MainApp({
           ))}
         </nav>
 
-        <div className="p-4 border-t border-surface-highest bg-surface-high/30 flex flex-col gap-2">
+        <div className="p-4 border-t border-surface-highest bg-surface-high/10 flex flex-col gap-2">
           {/* Digital Clock & Date */}
-          <div className="text-center py-3 px-2 bg-surface rounded-xl border border-surface-highest/60 font-mono shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]">
-            <div className="text-[9px] font-bold text-[#dfbf80] uppercase tracking-[0.2em] mb-1 select-none">
+          <div className="text-center py-2 select-none">
+            <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-[0.2em] mb-1">
               Horário do Sistema
             </div>
-            <div className="text-xl font-black tracking-widest text-[#00ff41] select-none drop-shadow-[0_0_8px_rgba(0,255,65,0.4)]">
+            <div className="text-2xl font-bold tracking-wider text-white font-title">
               {time || '00:00:00'}
             </div>
-            <div className="text-[10px] text-zinc-400 font-medium mt-1.5 select-none truncate">
+            <div className="text-[10px] text-zinc-400 font-medium mt-1 truncate">
               {date || 'Quinta-feira, 28 de maio 2026'}
             </div>
           </div>
@@ -1428,7 +1542,7 @@ function MainApp({
                        {activeTab === 'protocolos' && <ProtocolosView />}
                        {activeTab === 'biblioteca' && <BibliotecaView currentUser={currentUser} />}
                        {activeTab === 'financeiro' && <FinanceiroView currentUser={currentUser} />}
-                       {activeTab === 'config' && <ConfigView currentUser={currentUser} onUserUpdate={(updatedUser: any) => setCurrentUser(updatedUser)} />}
+                       {activeTab === 'config' && <ConfigView currentUser={currentUser} onUserUpdate={(updatedUser: any) => setCurrentUser(updatedUser)} brandSettings={brandSettings} fetchBrandSettings={fetchBrandSettings} />}
                        {activeTab === 'inspecoes' && <InspecoesView currentUser={currentUser} />}
                     </motion.div>
                  </AnimatePresence>
@@ -1966,7 +2080,7 @@ function stripLargeImages(obj: any): any {
   return obj;
 }
 
-function PublicEvolutionView({ token }: { token: string }) {
+function PublicEvolutionView({ token, brandSettings }: { token: string, brandSettings: any }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [data, setData] = useState<any>(null);
@@ -2221,6 +2335,12 @@ function PublicEvolutionView({ token }: { token: string }) {
   }, [token]);
 
   useEffect(() => {
+    if (data?.student?.name && brandSettings?.name) {
+      document.title = `${data.student.name} - ${brandSettings.name}`;
+    }
+  }, [data, brandSettings]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     const updateStatus = () => {
       setIsOnline(navigator.onLine);
@@ -2275,11 +2395,11 @@ function PublicEvolutionView({ token }: { token: string }) {
              className="w-[260px] h-[260px] sm:w-[320px] sm:h-[320px] mb-4 flex items-center justify-center animate-fade-in"
           >
              <img 
-               src="/logo.png" 
-               alt="Logo Jaira Leal" 
-               className="w-full h-full object-contain" 
-               onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} 
-             />
+                src={brandSettings?.logoUrl || "/logo.png"} 
+                alt={brandSettings?.name || "Logo"} 
+                className="w-full h-full object-contain" 
+                onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} 
+              />
              <div className="hidden flex-col items-center justify-center">
                <span className="text-6xl mb-2 drop-shadow-md">💃</span>
              </div>
@@ -2818,12 +2938,12 @@ function PublicEvolutionView({ token }: { token: string }) {
       <header className="border-b border-surface-highest bg-surface-container/50 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 bg-gradient-to-br from-[#dfbf80]/20 to-[#dfbf80]/5 rounded-lg border border-[#dfbf80]/30 flex items-center justify-center p-1 backdrop-blur-md">
-              <img src="/logo.png" alt="Logo Jaira Leal" className="h-full w-full object-contain" />
+            <div className="h-10 w-10 flex items-center justify-center shrink-0">
+              <img src={brandSettings?.logoUrl || "/logo.png"} alt={brandSettings?.name || "Logo"} className="h-full w-full object-contain filter drop-shadow-[0_1px_5px_rgba(255,255,255,0.1)]" />
             </div>
             <div>
-              <h1 className="font-heading font-black text-white text-[11px] sm:text-xs tracking-widest uppercase leading-tight">Elite Coach</h1>
-              <span className="text-[#dfbf80] text-[9px] font-bold tracking-[0.2em] uppercase">Evolução do Aluno</span>
+              <h1 className="font-title font-black text-white text-[11px] sm:text-xs tracking-widest uppercase leading-tight">{brandSettings?.name || "Elite Coach"}</h1>
+              <span className="text-primary text-[9px] font-bold tracking-[0.2em] uppercase">Evolução do Aluno</span>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -3975,7 +4095,7 @@ function PublicEvolutionView({ token }: { token: string }) {
 
       {/* Footer */}
       <footer className="mt-16 text-center text-[8px] text-zinc-600 font-medium tracking-widest select-none uppercase py-6 border-t border-surface-highest/30">
-        © 2026 - Todos os direitos reservados | Jaira Leal Personal | Elite Coach Premium
+        © 2026 - Todos os direitos reservados | {brandSettings?.name || "Elite Coach"} | Gestão Inteligente
       </footer>
     </div>
   );

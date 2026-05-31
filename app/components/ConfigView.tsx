@@ -9,9 +9,11 @@ import { supabase } from '../utils/supabase';
 interface ConfigViewProps {
   currentUser: User | null;
   onUserUpdate?: (user: User) => void;
+  brandSettings?: any;
+  fetchBrandSettings?: () => Promise<void>;
 }
 
-export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProps) {
+export default function ConfigView({ currentUser, onUserUpdate, brandSettings, fetchBrandSettings }: ConfigViewProps) {
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState<boolean>(true);
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Treinador', password: '', expires_at: '', username: '' });
@@ -101,6 +103,27 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
   const [dbWarning, setDbWarning] = useState<string>('');
   
   const [profile, setProfile] = useState<ProfileConfig>(() => {
+    if (brandSettings) {
+      return {
+        name: brandSettings.name || 'Elite Coach',
+        email: brandSettings.email || 'miller@elitecoach.com',
+        specialty: brandSettings.specialty || 'Premium',
+        instagram: brandSettings.instagram || '@elitecoach',
+        whatsapp: brandSettings.whatsapp || '+55 11 99999-9999',
+        logoUrl: brandSettings.logoUrl || '/logo.png',
+        pdfTemplate: brandSettings.pdfTemplate || '1',
+        colorPrimary: brandSettings.colorPrimary || '#d4af37',
+        colorPrimaryDim: brandSettings.colorPrimaryDim || '#b5952f',
+        colorSurface: brandSettings.colorSurface || '#0a1410',
+        colorSurfaceContainer: brandSettings.colorSurfaceContainer || '#12241c',
+        colorSurfaceHigh: brandSettings.colorSurfaceHigh || '#1a3428',
+        colorSurfaceHighest: brandSettings.colorSurfaceHighest || '#224233',
+        fontTitle: brandSettings.fontTitle || 'Montserrat',
+        fontBody: brandSettings.fontBody || 'Inter',
+        textScale: brandSettings.textScale || 'Padrão',
+        borderRadius: brandSettings.borderRadius || 'Moderno'
+      };
+    }
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('elite_coach_profile');
       if (saved) {
@@ -112,15 +135,291 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
       }
     }
     return {
-      name: 'Coach Miller',
+      name: 'Elite Coach',
       email: 'miller@elitecoach.com',
-      specialty: 'Strength & Conditioning',
-      instagram: '@coachmiller',
+      specialty: 'Premium',
+      instagram: '@elitecoach',
       whatsapp: '+55 11 99999-9999',
       logoUrl: '/logo.png',
-      pdfTemplate: '1'
+      pdfTemplate: '1',
+      colorPrimary: '#d4af37',
+      colorPrimaryDim: '#b5952f',
+      colorSurface: '#0a1410',
+      colorSurfaceContainer: '#12241c',
+      colorSurfaceHigh: '#1a3428',
+      colorSurfaceHighest: '#224233',
+      fontTitle: 'Montserrat',
+      fontBody: 'Inter',
+      textScale: 'Padrão',
+      borderRadius: 'Moderno'
     };
   });
+
+  useEffect(() => {
+    if (brandSettings) {
+      setProfile({
+        name: brandSettings.name || 'Elite Coach',
+        email: brandSettings.email || 'miller@elitecoach.com',
+        specialty: brandSettings.specialty || 'Premium',
+        instagram: brandSettings.instagram || '@elitecoach',
+        whatsapp: brandSettings.whatsapp || '+55 11 99999-9999',
+        logoUrl: brandSettings.logoUrl || '/logo.png',
+        pdfTemplate: brandSettings.pdfTemplate || '1',
+        colorPrimary: brandSettings.colorPrimary || '#d4af37',
+        colorPrimaryDim: brandSettings.colorPrimaryDim || '#b5952f',
+        colorSurface: brandSettings.colorSurface || '#0a1410',
+        colorSurfaceContainer: brandSettings.colorSurfaceContainer || '#12241c',
+        colorSurfaceHigh: brandSettings.colorSurfaceHigh || '#1a3428',
+        colorSurfaceHighest: brandSettings.colorSurfaceHighest || '#224233',
+        fontTitle: brandSettings.fontTitle || 'Montserrat',
+        fontBody: brandSettings.fontBody || 'Inter',
+        textScale: brandSettings.textScale || 'Padrão',
+        borderRadius: brandSettings.borderRadius || 'Moderno'
+      });
+    }
+  }, [brandSettings]);
+
+  const [extractedPrimary, setExtractedPrimary] = useState<string>('#d4af37');
+  const [extractedPrimaryDim, setExtractedPrimaryDim] = useState<string>('#b5952f');
+  const [activeThemeName, setActiveThemeName] = useState<string>('Clássico Elite');
+
+  // Load fonts helper
+  const loadGoogleFont = (fontName: string) => {
+    if (typeof window === 'undefined') return;
+    const id = `gfont-${fontName.replace(/\s+/g, '-').toLowerCase()}`;
+    if (document.getElementById(id)) return;
+    const link = document.createElement('link');
+    link.id = id;
+    link.rel = 'stylesheet';
+    link.href = `https://fonts.googleapis.com/css2?family=${fontName.replace(/\s+/g, '+')}:wght@300;400;500;600;700;800;900&display=swap`;
+    document.head.appendChild(link);
+  };
+
+  const hslToHex = (h: number, s: number, l: number) => {
+    let r, g, b;
+    if (s === 0) {
+      r = g = b = l;
+    } else {
+      const hue2rgb = (p: number, q: number, t: number) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1/6) return p + (q - p) * 6 * t;
+        if (t < 1/2) return q;
+        if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+        return p;
+      };
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1/3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1/3);
+    }
+    const toHex = (x: number) => {
+      const hex = Math.round(x * 255).toString(16);
+      return hex.length === 1 ? '0' + hex : hex;
+    };
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  };
+
+  const generateThemesFromPrimary = (primaryColor: string, primaryDimColor: string) => {
+    let rVal = parseInt(primaryColor.slice(1, 3), 16) / 255;
+    let gVal = parseInt(primaryColor.slice(3, 5), 16) / 255;
+    let bVal = parseInt(primaryColor.slice(5, 7), 16) / 255;
+
+    let max = Math.max(rVal, gVal, bVal), min = Math.min(rVal, gVal, bVal);
+    let h = 0, s = 0, l = (max + min) / 2;
+
+    if (max !== min) {
+      let d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case rVal: h = (gVal - bVal) / d + (gVal < bVal ? 6 : 0); break;
+        case gVal: h = (bVal - rVal) / d + 2; break;
+        case bVal: h = (rVal - gVal) / d + 4; break;
+      }
+      h /= 6;
+    }
+
+    return {
+      immersivo: {
+        name: 'Imersivo Premium',
+        primary: primaryColor,
+        primaryDim: primaryDimColor,
+        surface: hslToHex(h, 0.25, 0.05),
+        surfaceContainer: hslToHex(h, 0.20, 0.09),
+        surfaceHigh: hslToHex(h, 0.18, 0.14),
+        surfaceHighest: hslToHex(h, 0.15, 0.20),
+        secondary: hslToHex((h + 0.5) % 1, 0.25, 0.25),
+        tertiary: hslToHex((h + 0.15) % 1, 0.40, 0.75),
+        neutral: hslToHex(h, 0.05, 0.45)
+      },
+      minimalista: {
+        name: 'Minimalista Escuro',
+        primary: primaryColor,
+        primaryDim: primaryDimColor,
+        surface: '#09090b',
+        surfaceContainer: '#18181b',
+        surfaceHigh: '#27272a',
+        surfaceHighest: '#3f3f46',
+        secondary: '#52525b',
+        tertiary: '#a1a1aa',
+        neutral: '#71717a'
+      },
+      esportivo: {
+        name: 'Esportivo Vibrante',
+        primary: primaryColor,
+        primaryDim: primaryDimColor,
+        surface: '#020617',
+        surfaceContainer: '#0f172a',
+        surfaceHigh: '#1e293b',
+        surfaceHighest: '#334155',
+        secondary: '#475569',
+        tertiary: '#94a3b8',
+        neutral: '#64748b'
+      },
+      classico: {
+        name: 'Clássico Elite',
+        primary: '#d4af37',
+        primaryDim: '#b5952f',
+        surface: '#0a1410',
+        surfaceContainer: '#12241c',
+        surfaceHigh: '#1a3428',
+        surfaceHighest: '#224233',
+        secondary: '#1a2238',
+        tertiary: '#ffd5ae',
+        neutral: '#6e7a6a'
+      }
+    };
+  };
+
+  const themes = generateThemesFromPrimary(extractedPrimary, extractedPrimaryDim);
+
+  const selectTheme = (themeKey: 'immersivo' | 'minimalista' | 'esportivo' | 'classico') => {
+    const selected = themes[themeKey];
+    setActiveThemeName(selected.name);
+    setProfile(prev => ({
+      ...prev,
+      colorPrimary: selected.primary,
+      colorPrimaryDim: selected.primaryDim,
+      colorSurface: selected.surface,
+      colorSurfaceContainer: selected.surfaceContainer,
+      colorSurfaceHigh: selected.surfaceHigh,
+      colorSurfaceHighest: selected.surfaceHighest
+    }));
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64Data = reader.result as string;
+      setProfile(prev => ({ ...prev, logoUrl: base64Data }));
+      
+      const img = new Image();
+      img.src = base64Data;
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return;
+          canvas.width = 30;
+          canvas.height = 30;
+          ctx.drawImage(img, 0, 0, 30, 30);
+          const imgData = ctx.getImageData(0, 0, 30, 30).data;
+          
+          let rSum = 0, gSum = 0, bSum = 0, count = 0;
+          for (let i = 0; i < imgData.length; i += 4) {
+            const r = imgData[i];
+            const g = imgData[i+1];
+            const b = imgData[i+2];
+            const a = imgData[i+3];
+            if (a < 150) continue;
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            if (max - min > 15) {
+              rSum += r;
+              gSum += g;
+              bSum += b;
+              count++;
+            }
+          }
+          
+          let primaryHex = '#d4af37';
+          if (count > 0) {
+            const rAvg = Math.round(rSum / count);
+            const gAvg = Math.round(gSum / count);
+            const bAvg = Math.round(bSum / count);
+            primaryHex = '#' + [rAvg, gAvg, bAvg].map(x => {
+              const hex = x.toString(16);
+              return hex.length === 1 ? '0' + hex : hex;
+            }).join('');
+          } else {
+            let rTotal = 0, gTotal = 0, bTotal = 0, totalCount = 0;
+            for (let i = 0; i < imgData.length; i += 4) {
+              const r = imgData[i];
+              const g = imgData[i+1];
+              const b = imgData[i+2];
+              const a = imgData[i+3];
+              if (a >= 200 && r > 30 && r < 230) {
+                rTotal += r;
+                gTotal += g;
+                bTotal += b;
+                totalCount++;
+              }
+            }
+            if (totalCount > 0) {
+              const rAvg = Math.round(rTotal / totalCount);
+              const gAvg = Math.round(gTotal / totalCount);
+              const bAvg = Math.round(bTotal / totalCount);
+              primaryHex = '#' + [rAvg, gAvg, bAvg].map(x => {
+                const hex = x.toString(16);
+                return hex.length === 1 ? '0' + hex : hex;
+              }).join('');
+            }
+          }
+
+          const rVal = parseInt(primaryHex.slice(1, 3), 16);
+          const gVal = parseInt(primaryHex.slice(3, 5), 16);
+          const bVal = parseInt(primaryHex.slice(5, 7), 16);
+          const darken = (c: number) => Math.max(0, Math.round(c * 0.82));
+          const dimHex = '#' + [darken(rVal), darken(gVal), darken(bVal)].map(x => {
+            const hex = x.toString(16);
+            return hex.length === 1 ? '0' + hex : hex;
+          }).join('');
+
+          setExtractedPrimary(primaryHex);
+          setExtractedPrimaryDim(dimHex);
+
+          const updatedThemes = generateThemesFromPrimary(primaryHex, dimHex);
+          setActiveThemeName(updatedThemes.immersivo.name);
+          setProfile(prev => ({
+            ...prev,
+            colorPrimary: updatedThemes.immersivo.primary,
+            colorPrimaryDim: updatedThemes.immersivo.primaryDim,
+            colorSurface: updatedThemes.immersivo.surface,
+            colorSurfaceContainer: updatedThemes.immersivo.surfaceContainer,
+            colorSurfaceHigh: updatedThemes.immersivo.surfaceHigh,
+            colorSurfaceHighest: updatedThemes.immersivo.surfaceHighest
+          }));
+          showCustomAlert('IA Coleta', 'Cores extraídas da logo com sucesso! 4 Temas premium gerados e visualizáveis no dashboard.', 'success');
+        } catch (err) {
+          console.error(err);
+        }
+      };
+    };
+    reader.readAsDataURL(file);
+  };
+
+  useEffect(() => {
+    if (profile.colorPrimary) {
+      setExtractedPrimary(profile.colorPrimary);
+      if (profile.colorPrimaryDim) {
+        setExtractedPrimaryDim(profile.colorPrimaryDim);
+      }
+    }
+  }, [profile.colorPrimary]);
 
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(true);
@@ -228,9 +527,45 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
     fetchExerciseLibrary();
   }, []);
 
-  const saveProfile = () => {
-    localStorage.setItem('elite_coach_profile', JSON.stringify(profile));
-    showCustomAlert('Sucesso', 'Configurações salvas com sucesso!', 'success');
+  const saveProfile = async () => {
+    try {
+      localStorage.setItem('elite_coach_profile', JSON.stringify(profile));
+
+      const settingsToUpsert = [
+        { key: 'brand_name', value: profile.name || 'Elite Coach' },
+        { key: 'brand_specialty', value: profile.specialty || 'Premium' },
+        { key: 'brand_instagram', value: profile.instagram || '@elitecoach' },
+        { key: 'brand_whatsapp', value: profile.whatsapp || '+55 11 99999-9999' },
+        { key: 'brand_logo_url', value: profile.logoUrl || '/logo.png' },
+        { key: 'brand_pdf_template', value: profile.pdfTemplate || '1' },
+        { key: 'brand_color_primary', value: profile.colorPrimary || '#d4af37' },
+        { key: 'brand_color_primary_dim', value: profile.colorPrimaryDim || '#b5952f' },
+        { key: 'brand_color_surface', value: profile.colorSurface || '#0a1410' },
+        { key: 'brand_color_surface_container', value: profile.colorSurfaceContainer || '#12241c' },
+        { key: 'brand_color_surface_high', value: profile.colorSurfaceHigh || '#1a3428' },
+        { key: 'brand_color_surface_highest', value: profile.colorSurfaceHighest || '#224233' },
+        { key: 'brand_font_title', value: profile.fontTitle || 'Montserrat' },
+        { key: 'brand_font_body', value: profile.fontBody || 'Inter' },
+        { key: 'brand_text_scale', value: profile.textScale || 'Padrão' },
+        { key: 'brand_border_radius', value: profile.borderRadius || 'Moderno' }
+      ];
+
+      const { error } = await supabase.from('system_settings').upsert(settingsToUpsert);
+
+      if (error) {
+        console.error('Error saving settings to Supabase:', error);
+        showCustomAlert('Erro', 'As configurações foram salvas localmente, mas não puderam ser gravadas no banco de dados.', 'warning');
+      } else {
+        showCustomAlert('Sucesso', 'Configurações e temas salvos e aplicados com sucesso!', 'success');
+      }
+
+      if (fetchBrandSettings) {
+        await fetchBrandSettings();
+      }
+    } catch (e: any) {
+      console.error(e);
+      showCustomAlert('Erro', 'Ocorreu um erro inesperado ao salvar.', 'error');
+    }
   };
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -620,34 +955,357 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
                   <input type="text" value={profile.whatsapp || ''} onChange={e=>setProfile({...profile, whatsapp: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
                 </div>
               </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">URL da Logo (PDF)</label>
-                  <div className="group relative">
-                    <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help" />
-                    <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-950 text-[10px] text-zinc-300 rounded border border-surface-highest shadow-xl z-50 pointer-events-none">
-                      Link público da imagem ou logo para os relatórios.
+              {/* Estilo e Identidade Visual (White-Label) */}
+              <div className="border-t border-surface-highest/60 pt-6 mt-6 space-y-6">
+                <h4 className="font-heading font-semibold text-white text-md flex items-center gap-2">
+                  🎨 Identidade Visual e Estilo da Marca
+                </h4>
+                
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left Column: Controls */}
+                  <div className="space-y-4">
+                    {/* Logo Uploader */}
+                    <div>
+                      <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider block mb-2">Logotipo do Sistema</label>
+                      <div className="flex items-center gap-4 bg-surface-high/30 p-4 rounded-xl border border-surface-highest/60">
+                        <div className="h-16 w-16 bg-surface border border-surface-highest/60 rounded flex items-center justify-center p-2 shrink-0">
+                          {profile.logoUrl ? (
+                            <img src={profile.logoUrl} alt="Logo" className="max-h-full max-w-full object-contain" />
+                          ) : (
+                            <span className="text-xs text-zinc-500 italic">Sem Logo</span>
+                          )}
+                        </div>
+                        <div>
+                          <label className="px-3 py-1.5 bg-surface border border-surface-highest hover:border-primary/50 text-zinc-300 hover:text-white rounded text-xs font-bold uppercase tracking-wider cursor-pointer transition-colors block text-center">
+                            Fazer Upload da Logo
+                            <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                          </label>
+                          <p className="text-[10px] text-zinc-500 mt-1">A IA extrairá a paleta de cores automaticamente.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Specialty */}
+                    <div>
+                      <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider block mb-1">Especialidade / Subtítulo</label>
+                      <input type="text" value={profile.specialty || ''} onChange={e=>setProfile({...profile, specialty: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 text-white text-sm outline-none focus:border-primary transition-colors" placeholder="Ex: High-Performance Coach" />
+                    </div>
+
+                    {/* Fonts Choice */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider block mb-1">Fonte de Títulos</label>
+                        <select value={profile.fontTitle || 'Montserrat'} onChange={e=>{ loadGoogleFont(e.target.value); setProfile({...profile, fontTitle: e.target.value}); }} className="w-full bg-surface-high border border-surface-highest rounded p-3 text-white text-sm outline-none focus:border-primary transition-colors">
+                          <option value="Montserrat">Montserrat</option>
+                          <option value="Inter">Inter</option>
+                          <option value="Outfit">Outfit</option>
+                          <option value="Poppins">Poppins</option>
+                          <option value="Playfair Display">Playfair Display</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider block mb-1">Fonte do Texto</label>
+                        <select value={profile.fontBody || 'Inter'} onChange={e=>{ loadGoogleFont(e.target.value); setProfile({...profile, fontBody: e.target.value}); }} className="w-full bg-surface-high border border-surface-highest rounded p-3 text-white text-sm outline-none focus:border-primary transition-colors">
+                          <option value="Inter">Inter</option>
+                          <option value="Montserrat">Montserrat</option>
+                          <option value="Outfit">Outfit</option>
+                          <option value="Poppins">Poppins</option>
+                          <option value="Playfair Display">Playfair Display</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Scale and Radius */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider block mb-1">Tamanho da Fonte (Escala)</label>
+                        <select value={profile.textScale || 'Padrão'} onChange={e=>setProfile({...profile, textScale: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 text-white text-sm outline-none focus:border-primary transition-colors">
+                          <option value="Compacto">Compacto</option>
+                          <option value="Padrão">Padrão</option>
+                          <option value="Grande">Grande</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider block mb-1">Estilo de Arredondamento</label>
+                        <select value={profile.borderRadius || 'Moderno'} onChange={e=>setProfile({...profile, borderRadius: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 text-white text-sm outline-none focus:border-primary transition-colors">
+                          <option value="Afiado">Afiado (Quadrado)</option>
+                          <option value="Moderno">Moderno (Arredondado)</option>
+                          <option value="Redondo">Redondo (Pílula)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Modelo Visual PDF */}
+                    <div>
+                      <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider block mb-1">Modelo Visual do Relatório PDF</label>
+                      <select value={profile.pdfTemplate} onChange={e=>setProfile({...profile, pdfTemplate: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 text-white text-sm outline-none focus:border-primary transition-colors">
+                        <option value="1">Modelo 1 - Clássico (Dourado/Branco)</option>
+                        <option value="2">Modelo 2 - Moderno Escuro (Minimalista)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Theme Selector Cards */}
+                  <div className="space-y-4">
+                    <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider block mb-1">Temas Inteligentes Extraídos</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {(['immersivo', 'minimalista', 'esportivo', 'classico'] as const).map((key) => {
+                        const t = themes[key];
+                        const isSelected = activeThemeName === t.name;
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => selectTheme(key)}
+                            className={`p-3 rounded-xl border text-left flex flex-col justify-between transition-all ${
+                              isSelected 
+                                ? 'border-primary bg-primary/10 shadow-[0_0_15px_rgba(212,175,55,0.1)]' 
+                                : 'border-surface-highest/60 bg-surface-high/30 hover:bg-surface-high'
+                            }`}
+                          >
+                            <span className="text-[11px] font-bold text-white tracking-wide block mb-2">{t.name}</span>
+                            <div className="flex gap-1">
+                              <span className="w-4 h-4 rounded-full border border-white/10" style={{ backgroundColor: t.primary }} />
+                              <span className="w-4 h-4 rounded-full border border-white/10" style={{ backgroundColor: t.surface }} />
+                              <span className="w-4 h-4 rounded-full border border-white/10" style={{ backgroundColor: t.secondary }} />
+                              <span className="w-4 h-4 rounded-full border border-white/10" style={{ backgroundColor: t.tertiary }} />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="bg-surface-high/20 border border-surface-highest/40 rounded-xl p-4 text-[10px] text-zinc-400 space-y-1">
+                      <p className="font-bold text-zinc-300">💡 Dica de Especialista:</p>
+                      <p>O tema **Imersivo Premium** ajusta as cores do sistema exatamente com base na luminância do seu logotipo, criando uma sensação visual premium e imersiva de white-label.</p>
                     </div>
                   </div>
                 </div>
-                <input type="text" value={profile.logoUrl || ''} onChange={e=>setProfile({...profile, logoUrl: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Modelo Visual PDF</label>
-                  <div className="group relative">
-                    <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help" />
-                    <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-950 text-[10px] text-zinc-300 rounded border border-surface-highest shadow-xl z-50 pointer-events-none">
-                      Escolha o layout de cores dos PDFs gerados no sistema.
+
+                {/* Interactive Design System Preview Dashboard */}
+                <div className="bg-[#0b0c10] border border-zinc-800 rounded-2xl p-6 mt-8 overflow-hidden shadow-2xl relative">
+                  <div className="absolute top-2 right-4 text-[9px] font-bold text-zinc-600 uppercase tracking-widest">
+                    Design System Sandbox
+                  </div>
+                  <h5 className="font-heading font-black text-[11px] text-zinc-400 tracking-widest uppercase mb-6 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" /> Sandbox de Visualização em Tempo Real
+                  </h5>
+
+                  {/* Mini System Replica Styled via Current State Variables */}
+                  <div 
+                    className="rounded-xl border p-6 space-y-6 shadow-inner"
+                    style={{
+                      backgroundColor: profile.colorSurface || '#0a1410',
+                      borderColor: profile.colorSurfaceHighest || '#224233',
+                      fontFamily: `${profile.fontBody || 'Inter'}, sans-serif`
+                    }}
+                  >
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-left">
+                      
+                      {/* Left Block: Colors swatches */}
+                      <div className="space-y-4">
+                        <h6 className="text-[10px] font-bold tracking-widest text-zinc-400 uppercase">Paletas de Cores</h6>
+                        
+                        {/* Primary Swatch */}
+                        <div className="p-3 rounded-lg border flex flex-col justify-between" style={{ backgroundColor: profile.colorSurfaceContainer || '#12241c', borderColor: profile.colorSurfaceHighest || '#224233' }}>
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">Primary</span>
+                            <span className="text-[9px] font-mono text-zinc-400 font-bold select-all">{profile.colorPrimary}</span>
+                          </div>
+                          <div className="flex h-6 rounded overflow-hidden">
+                            {[0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2].map((factor, idx) => (
+                              <div key={idx} className="flex-1" style={{ backgroundColor: profile.colorPrimary, opacity: factor }} />
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Surface Swatch */}
+                        <div className="p-3 rounded-lg border flex flex-col justify-between" style={{ backgroundColor: profile.colorSurfaceContainer || '#12241c', borderColor: profile.colorSurfaceHighest || '#224233' }}>
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">Surface</span>
+                            <span className="text-[9px] font-mono text-zinc-400 font-bold select-all">{profile.colorSurface}</span>
+                          </div>
+                          <div className="flex h-6 rounded overflow-hidden">
+                            {[0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2].map((factor, idx) => (
+                              <div key={idx} className="flex-1" style={{ backgroundColor: profile.colorSurface, opacity: factor }} />
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Secondary Swatch */}
+                        <div className="p-3 rounded-lg border flex flex-col justify-between" style={{ backgroundColor: profile.colorSurfaceContainer || '#12241c', borderColor: profile.colorSurfaceHighest || '#224233' }}>
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-[10px] font-bold text-white uppercase tracking-wider">Secondary</span>
+                            <span className="text-[9px] font-mono text-zinc-400 font-bold select-all text-right">
+                              {themes[activeThemeName.includes('Imersivo') ? 'immersivo' : activeThemeName.includes('Minimalista') ? 'minimalista' : activeThemeName.includes('Esportivo') ? 'esportivo' : 'classico']?.secondary || '#1a2238'}
+                            </span>
+                          </div>
+                          <div className="flex h-6 rounded overflow-hidden">
+                            {[0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2].map((factor, idx) => (
+                              <div key={idx} className="flex-1" style={{ 
+                                backgroundColor: themes[activeThemeName.includes('Imersivo') ? 'immersivo' : activeThemeName.includes('Minimalista') ? 'minimalista' : activeThemeName.includes('Esportivo') ? 'esportivo' : 'classico']?.secondary || '#1a2238', 
+                                opacity: factor 
+                              }} />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Middle Block: Typography & Buttons */}
+                      <div className="space-y-4">
+                        <h6 className="text-[10px] font-bold tracking-widest text-zinc-400 uppercase">Tipografia e Estados</h6>
+                        
+                        <div className="p-3 rounded-lg border" style={{ backgroundColor: profile.colorSurfaceContainer || '#12241c', borderColor: profile.colorSurfaceHighest || '#224233' }}>
+                          <div className="flex justify-between items-center mb-1 text-[8px] text-zinc-400 font-bold uppercase tracking-wider">
+                            <span>Headline</span>
+                            <span>{profile.fontTitle}</span>
+                          </div>
+                          <span 
+                            className="text-4xl block text-white font-black"
+                            style={{ fontFamily: `${profile.fontTitle || 'Montserrat'}, sans-serif` }}
+                          >
+                            Aa
+                          </span>
+                        </div>
+
+                        <div className="p-3 rounded-lg border" style={{ backgroundColor: profile.colorSurfaceContainer || '#12241c', borderColor: profile.colorSurfaceHighest || '#224233' }}>
+                          <div className="flex justify-between items-center mb-1 text-[8px] text-zinc-400 font-bold uppercase tracking-wider">
+                            <span>Body text</span>
+                            <span>{profile.fontBody}</span>
+                          </div>
+                          <span 
+                            className="text-4xl block text-white"
+                            style={{ fontFamily: `${profile.fontBody || 'Inter'}, sans-serif` }}
+                          >
+                            Aa
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 pt-1">
+                          <button 
+                            type="button"
+                            className="py-2 text-[10px] font-bold uppercase tracking-wider text-center transition-all"
+                            style={{
+                              backgroundColor: profile.colorPrimary,
+                              color: profile.colorSurface || '#0a1410',
+                              borderRadius: profile.borderRadius === 'Afiado' ? '0px' : profile.borderRadius === 'Redondo' ? '9999px' : '0.5rem'
+                            }}
+                          >
+                            Primary
+                          </button>
+                          
+                          <button 
+                            type="button"
+                            className="py-2 text-[10px] font-bold uppercase tracking-wider text-center transition-all border"
+                            style={{
+                              backgroundColor: 'transparent',
+                              borderColor: profile.colorSurfaceHighest || '#224233',
+                              color: '#fff',
+                              borderRadius: profile.borderRadius === 'Afiado' ? '0px' : profile.borderRadius === 'Redondo' ? '9999px' : '0.5rem'
+                            }}
+                          >
+                            Secondary
+                          </button>
+                          
+                          <button 
+                            type="button"
+                            className="py-2 text-[10px] font-bold uppercase tracking-wider text-center transition-all"
+                            style={{
+                              backgroundColor: '#ffffff',
+                              color: '#000000',
+                              borderRadius: profile.borderRadius === 'Afiado' ? '0px' : profile.borderRadius === 'Redondo' ? '9999px' : '0.5rem'
+                            }}
+                          >
+                            Inverted
+                          </button>
+
+                          <button 
+                            type="button"
+                            className="py-2 text-[10px] font-bold uppercase tracking-wider text-center transition-all border"
+                            style={{
+                              backgroundColor: 'transparent',
+                              borderColor: profile.colorPrimary,
+                              color: profile.colorPrimary,
+                              borderRadius: profile.borderRadius === 'Afiado' ? '0px' : profile.borderRadius === 'Redondo' ? '9999px' : '0.5rem'
+                            }}
+                          >
+                            Outlined
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Right Block: Interface Widgets */}
+                      <div className="space-y-4">
+                        <h6 className="text-[10px] font-bold tracking-widest text-zinc-400 uppercase">Elementos de UI</h6>
+                        
+                        <div className="relative">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <span className="text-[10px] text-zinc-500">🔍</span>
+                          </div>
+                          <div 
+                            className="w-full pl-8 pr-3 py-2 text-[9px] border text-zinc-500 font-medium select-none cursor-not-allowed"
+                            style={{
+                              backgroundColor: profile.colorSurfaceHigh || '#1a3428',
+                              borderColor: profile.colorSurfaceHighest || '#224233',
+                              borderRadius: profile.borderRadius === 'Afiado' ? '0px' : profile.borderRadius === 'Redondo' ? '9999px' : '0.5rem'
+                            }}
+                          >
+                            Pesquisar...
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 p-3 rounded-lg border" style={{ backgroundColor: profile.colorSurfaceContainer || '#12241c', borderColor: profile.colorSurfaceHighest || '#224233' }}>
+                          <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: '75%', backgroundColor: profile.colorPrimary }} />
+                          </div>
+                          <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: '45%', backgroundColor: themes[activeThemeName.includes('Imersivo') ? 'immersivo' : activeThemeName.includes('Minimalista') ? 'minimalista' : activeThemeName.includes('Esportivo') ? 'esportivo' : 'classico']?.secondary || '#1a2238' }} />
+                          </div>
+                          <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: '60%', backgroundColor: themes[activeThemeName.includes('Imersivo') ? 'immersivo' : activeThemeName.includes('Minimalista') ? 'minimalista' : activeThemeName.includes('Esportivo') ? 'esportivo' : 'classico']?.tertiary || '#ffd5ae' }} />
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2 justify-center">
+                          <span 
+                            className="w-8 h-8 rounded flex items-center justify-center text-xs"
+                            style={{ 
+                              backgroundColor: themes[activeThemeName.includes('Imersivo') ? 'immersivo' : activeThemeName.includes('Minimalista') ? 'minimalista' : activeThemeName.includes('Esportivo') ? 'esportivo' : 'classico']?.tertiary || '#ffd5ae', 
+                              color: '#000',
+                              borderRadius: profile.borderRadius === 'Afiado' ? '0px' : profile.borderRadius === 'Redondo' ? '9999px' : '0.5rem'
+                            }}
+                          >
+                            ✏️
+                          </span>
+                          <span 
+                            className="px-2 h-8 rounded flex items-center justify-center text-[9px] font-bold uppercase tracking-wider"
+                            style={{ 
+                              backgroundColor: profile.colorPrimary, 
+                              color: profile.colorSurface || '#0a1410',
+                              borderRadius: profile.borderRadius === 'Afiado' ? '0px' : profile.borderRadius === 'Redondo' ? '9999px' : '0.5rem'
+                            }}
+                          >
+                            Marcador
+                          </span>
+                          <span 
+                            className="w-8 h-8 rounded flex items-center justify-center text-xs"
+                            style={{ 
+                              backgroundColor: 'rgba(239, 68, 68, 0.2)', 
+                              color: '#f87171',
+                              borderRadius: profile.borderRadius === 'Afiado' ? '0px' : profile.borderRadius === 'Redondo' ? '9999px' : '0.5rem'
+                            }}
+                          >
+                            🗑️
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <select value={profile.pdfTemplate} onChange={e=>setProfile({...profile, pdfTemplate: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors">
-                  <option value="1">Modelo 1 - Clássico (Dourado/Branco)</option>
-                  <option value="2">Modelo 2 - Moderno Escuro (Minimalista)</option>
-                </select>
               </div>
-              <button onClick={saveProfile} className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)]">Salvar Configurações</button>
+              <button onClick={saveProfile} className="w-full py-4 mt-6 bg-primary text-black font-bold uppercase tracking-wider text-xs rounded border border-primary/30 hover:bg-primary-dim transition-all shadow-[0_0_20px_rgba(212,175,55,0.25)] tracking-[0.1em]">
+                Salvar Configurações de Marca
+              </button>
            </div>
         </div>
 
@@ -853,7 +1511,7 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
 
                     <div>
                       <label className="text-xs text-zinc-400 font-bold block uppercase tracking-wide">Nome de Usuário (Username)</label>
-                      <input type="text" value={newUser.username || ''} onChange={e=>setNewUser({...newUser, username:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: coach_jairaleal" />
+                      <input type="text" value={newUser.username || ''} onChange={e=>setNewUser({...newUser, username:e.target.value})} className="w-full bg-surface border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: coach_master" />
                     </div>
 
                     <div>
