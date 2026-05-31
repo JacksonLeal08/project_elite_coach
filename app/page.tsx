@@ -849,6 +849,10 @@ function MainApp({
   const [showInstallBtn, setShowInstallBtn] = useState<boolean>(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
 
+  // Trainer Schedule Reminders state
+  const [trainerSchedules, setTrainerSchedules] = useState<any[]>([]);
+  const [activeTrainerAlert, setActiveTrainerAlert] = useState<any>(null);
+
   // Onboarding Tour state
   const [currentTourStep, setCurrentTourStep] = useState<number | null>(null);
 
@@ -960,6 +964,84 @@ function MainApp({
       }
     }
   }, [currentUser]);
+
+  // Fetch upcoming confirmed schedules for trainer alert check
+  useEffect(() => {
+    if (currentUser?.role !== 'trainer') return;
+
+    const fetchTrainerSchedules = async () => {
+      try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data: scheds, error } = await supabase
+          .from('evaluation_schedules')
+          .select('*, students(name)')
+          .eq('status', 'Confirmado')
+          .gte('scheduled_date', todayStr);
+        
+        if (!error && scheds) {
+          setTrainerSchedules(scheds);
+        }
+      } catch (e) {
+        console.error('Error fetching trainer schedules:', e);
+      }
+    };
+
+    fetchTrainerSchedules();
+    const fetchInterval = setInterval(fetchTrainerSchedules, 60000); // fetch every 1 minute
+    return () => clearInterval(fetchInterval);
+  }, [currentUser]);
+
+  // Checker to notify trainer 30 minutes before
+  useEffect(() => {
+    if (currentUser?.role !== 'trainer' || trainerSchedules.length === 0) {
+      setActiveTrainerAlert(null);
+      return;
+    }
+
+    const checkTrainerSchedules = () => {
+      const now = new Date();
+      const upcoming = trainerSchedules.find((s: any) => {
+        try {
+          const [year, month, day] = s.scheduled_date.split('-').map(Number);
+          const [hours, minutes] = s.scheduled_time.split(':').map(Number);
+          const schedTime = new Date(year, month - 1, day, hours, minutes);
+          
+          const diffMs = schedTime.getTime() - now.getTime();
+          const diffMins = Math.floor(diffMs / 60000);
+          
+          // Warn when schedule is in the next 30 minutes (0 to 30 mins)
+          return diffMins >= 0 && diffMins <= 30;
+        } catch (e) {
+          return false;
+        }
+      });
+
+      if (upcoming) {
+        try {
+          const [year, month, day] = upcoming.scheduled_date.split('-').map(Number);
+          const [hours, minutes] = upcoming.scheduled_time.split(':').map(Number);
+          const schedTime = new Date(year, month - 1, day, hours, minutes);
+          const diffMs = schedTime.getTime() - now.getTime();
+          const diffMins = Math.max(0, Math.floor(diffMs / 60000));
+          
+          setActiveTrainerAlert({
+            id: upcoming.id,
+            studentName: upcoming.students?.name || 'Aluno',
+            timeStr: upcoming.scheduled_time.slice(0, 5),
+            minutesLeft: diffMins
+          });
+        } catch (e) {
+          setActiveTrainerAlert(null);
+        }
+      } else {
+        setActiveTrainerAlert(null);
+      }
+    };
+
+    checkTrainerSchedules();
+    const interval = setInterval(checkTrainerSchedules, 10000); // Check every 10 seconds
+    return () => clearInterval(interval);
+  }, [trainerSchedules, currentUser]);
 
   useEffect(() => {
     if (currentTourStep === null) {
@@ -1279,18 +1361,20 @@ function MainApp({
 
            <div className="flex items-center gap-4">
               {/* Notification Bell */}
-              <button 
-                onClick={() => setShowNotificationsModal(true)}
-                data-tour="notifications"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-primary transition-colors hover:bg-surface-high relative"
-              >
-                 <Bell className="w-4 h-4" />
-                 {notifications.filter(n => !n.read).length > 0 && (
-                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center border border-surface">
-                     {notifications.filter(n => !n.read).length}
-                   </span>
-                 )}
-              </button>
+              <div className="relative">
+                <button 
+                  onClick={() => setShowNotificationsModal(true)}
+                  data-tour="notifications"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-primary transition-colors hover:bg-surface-high"
+                >
+                   <Bell className="w-4 h-4" />
+                </button>
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center border border-surface pointer-events-none z-10">
+                    {notifications.filter(n => !n.read).length}
+                  </span>
+                )}
+              </div>
 
               {/* Logged in User Profile Info (Top Right) */}
               <div className="flex items-center gap-3 pl-3 border-l border-surface-highest">
@@ -1826,6 +1910,35 @@ function MainApp({
           </motion.div>
         </div>
       )}
+
+      <AnimatePresence>
+        {activeTrainerAlert && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-zinc-950/80 backdrop-blur border border-primary/30 p-4 rounded-2xl shadow-[0_10px_30px_rgba(212,175,55,0.15)] flex gap-3.5 items-start"
+          >
+            <div className="p-2 bg-primary/10 border border-primary/20 rounded-xl text-primary shrink-0 animate-bounce">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-white">Avaliação Próxima!</h4>
+              <p className="text-zinc-300 text-xs leading-relaxed">
+                Sua avaliação agendada com o aluno <span className="font-bold text-white">{activeTrainerAlert.studentName}</span> às <span className="font-bold text-[#dfbf80]">{activeTrainerAlert.timeStr}</span> iniciará em <span className="font-bold text-[#dfbf80]">{activeTrainerAlert.minutesLeft} {activeTrainerAlert.minutesLeft === 1 ? 'minuto' : 'minutos'}</span>.
+              </p>
+              <div className="flex justify-end gap-2 pt-2 border-t border-surface-highest/40 mt-1">
+                <button 
+                  onClick={() => setActiveTrainerAlert(null)}
+                  className="px-2.5 py-1 bg-surface-high hover:bg-surface-highest rounded text-[9px] font-bold text-zinc-400 hover:text-white uppercase tracking-wider transition-colors"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -1895,6 +2008,70 @@ function PublicEvolutionView({ token }: { token: string }) {
   
   // Notification dismissal local storage state
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+
+  // Student Public Agenda Reminders state
+  const [reminderPref, setReminderPref] = useState<number>(30);
+  const [activeScheduleAlert, setActiveScheduleAlert] = useState<any>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('elite_coach_reminder_pref');
+      if (saved) {
+        setReminderPref(parseInt(saved, 10));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!data?.schedules || reminderPref === 0) {
+      setActiveScheduleAlert(null);
+      return;
+    }
+
+    const checkSchedules = () => {
+      const now = new Date();
+      const upcoming = data.schedules.find((s: any) => {
+        if (s.status !== 'Confirmado' && s.status !== 'Agendado') return false;
+        try {
+          const [year, month, day] = s.scheduled_date.split('-').map(Number);
+          const [hours, minutes] = s.scheduled_time.split(':').map(Number);
+          const schedTime = new Date(year, month - 1, day, hours, minutes);
+          
+          const diffMs = schedTime.getTime() - now.getTime();
+          const diffMins = Math.floor(diffMs / 60000);
+          
+          return diffMins >= 0 && diffMins <= reminderPref;
+        } catch (e) {
+          return false;
+        }
+      });
+
+      if (upcoming) {
+        try {
+          const [year, month, day] = upcoming.scheduled_date.split('-').map(Number);
+          const [hours, minutes] = upcoming.scheduled_time.split(':').map(Number);
+          const schedTime = new Date(year, month - 1, day, hours, minutes);
+          const diffMs = schedTime.getTime() - now.getTime();
+          const diffMins = Math.max(0, Math.floor(diffMs / 60000));
+          
+          setActiveScheduleAlert({
+            id: upcoming.id,
+            timeStr: upcoming.scheduled_time.slice(0, 5),
+            minutesLeft: diffMins,
+            dateStr: upcoming.scheduled_date.split('-').reverse().join('/')
+          });
+        } catch (e) {
+          setActiveScheduleAlert(null);
+        }
+      } else {
+        setActiveScheduleAlert(null);
+      }
+    };
+
+    checkSchedules();
+    const interval = setInterval(checkSchedules, 10000); // Check every 10 seconds
+    return () => clearInterval(interval);
+  }, [data?.schedules, reminderPref]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -3347,6 +3524,26 @@ function PublicEvolutionView({ token }: { token: string }) {
                 />
               </div>
 
+              <div>
+                <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-1">Lembrar-me com Antecedência</label>
+                <select 
+                  value={reminderPref} 
+                  onChange={e => {
+                    const val = parseInt(e.target.value, 10);
+                    setReminderPref(val);
+                    localStorage.setItem('elite_coach_reminder_pref', val.toString());
+                  }} 
+                  className="w-full bg-surface-high border border-surface-highest text-white rounded-lg p-2.5 outline-none focus:border-primary text-xs font-sans"
+                >
+                  <option value={0}>Desativado</option>
+                  <option value={10}>10 minutos antes</option>
+                  <option value={15}>15 minutos antes</option>
+                  <option value={30}>30 minutos antes</option>
+                  <option value={45}>45 minutos antes</option>
+                  <option value={60}>1 hora antes</option>
+                </select>
+              </div>
+
               <button 
                 type="submit" 
                 disabled={scheduling}
@@ -3746,6 +3943,35 @@ function PublicEvolutionView({ token }: { token: string }) {
           </motion.div>
         </div>
       )}
+
+      <AnimatePresence>
+        {activeScheduleAlert && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-6 right-6 z-50 max-w-sm w-full bg-zinc-950/80 backdrop-blur border border-primary/30 p-4 rounded-2xl shadow-[0_10px_30px_rgba(212,175,55,0.15)] flex gap-3.5 items-start"
+          >
+            <div className="p-2 bg-primary/10 border border-primary/20 rounded-xl text-primary shrink-0 animate-bounce">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div className="flex-1 space-y-1">
+              <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-white">Avaliação Próxima!</h4>
+              <p className="text-zinc-300 text-xs leading-relaxed">
+                Sua avaliação agendada para hoje às <span className="font-bold text-[#dfbf80]">{activeScheduleAlert.timeStr}</span> iniciará em <span className="font-bold text-[#dfbf80]">{activeScheduleAlert.minutesLeft} {activeScheduleAlert.minutesLeft === 1 ? 'minuto' : 'minutos'}</span>.
+              </p>
+              <div className="flex justify-end gap-2 pt-2 border-t border-surface-highest/40 mt-1">
+                <button 
+                  onClick={() => setActiveScheduleAlert(null)}
+                  className="px-2.5 py-1 bg-surface-high hover:bg-surface-highest rounded text-[9px] font-bold text-zinc-400 hover:text-white uppercase tracking-wider transition-colors"
+                >
+                  Entendi
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Footer */}
       <footer className="mt-16 text-center text-[8px] text-zinc-600 font-medium tracking-widest select-none uppercase py-6 border-t border-surface-highest/30">

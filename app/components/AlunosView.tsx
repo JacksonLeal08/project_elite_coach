@@ -9,6 +9,36 @@ import { queueOfflineOperation, runOfflineSync } from '../utils/offline';
 import CustomAlertModal from './CustomAlertModal';
 import ParticleEffect from './ParticleEffect';
 
+const isColumnMismatchError = (error: any): boolean => {
+  if (!error) return false;
+  const code = error.code || '';
+  const message = (error.message || '').toLowerCase();
+  const details = (error.details || '').toLowerCase();
+  const hint = (error.hint || '').toLowerCase();
+  return (
+    code === '42703' ||
+    message.includes('column') ||
+    message.includes('not found') ||
+    message.includes('does not exist') ||
+    details.includes('column') ||
+    details.includes('does not exist') ||
+    hint.includes('column')
+  );
+};
+
+const isSchedulePast = (dateStr: string, timeStr: string) => {
+  try {
+    const today = new Date();
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const scheduleDate = new Date(year, month - 1, day, hours, minutes);
+    return scheduleDate < today;
+  } catch (e) {
+    return false;
+  }
+};
+
+
 interface AlunosViewProps {
   currentUser: User | null;
   redirectStudentId?: string | number | null;
@@ -866,7 +896,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
       if (error) {
         showCustomAlert('Erro', 'Erro ao confirmar agendamento: ' + error.message, 'error');
       } else {
-        showCustomAlert('Sucesso', 'Agendamento confirmado com sucesso!', 'success');
+        showCustomAlert('Sucesso', 'Agendamento confirmado! Ambos serão lembrados com 30 minutos de antecedência.', 'success');
         if (selectedStudent) {
           fetchStudentSchedules(selectedStudent.id);
         }
@@ -913,7 +943,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
         .eq('id', scheduleId);
 
       if (error) {
-        if (error.code === '42703') { // trainer_message column does not exist
+        if (isColumnMismatchError(error)) { // trainer_message column does not exist
           const sch = schedules.find(s => s.id === scheduleId);
           const newNotes = (sch?.notes ? sch.notes + '\n' : '') + `[Mensagem do Treinador]: ${trainerMessageInput}`;
           const { error: fallbackError } = await supabase
@@ -978,7 +1008,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
         .eq('id', scheduleId);
         
       if (error) {
-        if (error.code === '42703') { // trainer_message column does not exist
+        if (isColumnMismatchError(error)) { // trainer_message column does not exist
           const sch = schedules.find(s => s.id === scheduleId);
           const newNotes = (sch?.notes ? sch.notes + '\n' : '') + `[Mensagem do Treinador]: ${trainerMessageInput}`;
           const { error: fallbackError } = await supabase
@@ -1318,7 +1348,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
         .select();
 
       if (insertError) {
-        if (insertError.code === '42703') {
+        if (isColumnMismatchError(insertError)) {
           hadMigrationError = true;
           const { data: fallbackData, error: fallbackError } = await supabase
             .from('students')
@@ -1365,7 +1395,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
           .from('anamnesis')
           .insert([anamnesisPayload]);
 
-        if (anamnesisErr && anamnesisErr.code === '42703') {
+        if (isColumnMismatchError(anamnesisErr)) {
           hadMigrationError = true;
           await supabase.from('anamnesis').insert([anamnesisCorePayload]);
         }
@@ -1408,7 +1438,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
             .from('field_inspections')
             .insert([biometricPayload]);
 
-          if (bioErr && bioErr.code === '42703') {
+          if (isColumnMismatchError(bioErr)) {
             hadMigrationError = true;
             await supabase.from('field_inspections').insert([biometricCorePayload]);
           }
@@ -1438,7 +1468,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
           .from('student_goals')
           .insert([goalsPayload]);
 
-        if (goalsErr && goalsErr.code === '42703') {
+        if (isColumnMismatchError(goalsErr)) {
           hadMigrationError = true;
           await supabase.from('student_goals').insert([goalsCorePayload]);
         }
@@ -1532,7 +1562,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
         .eq('id', editStudent.id);
 
       if (studentErr) {
-        if (studentErr.code === '42703') {
+        if (isColumnMismatchError(studentErr)) {
           hadMigrationError = true;
           const { error: coreErr } = await supabase
             .from('students')
@@ -1575,7 +1605,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
         .from('anamnesis')
         .upsert(anamnesisPayload, { onConflict: 'student_id' });
 
-      if (anamnesisErr && anamnesisErr.code === '42703') {
+      if (isColumnMismatchError(anamnesisErr)) {
         hadMigrationError = true;
         await supabase
           .from('anamnesis')
@@ -1614,7 +1644,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
             .update(biometricPayload)
             .eq('id', evaluations[0].id);
 
-          if (bioErr && bioErr.code === '42703') {
+          if (isColumnMismatchError(bioErr)) {
             hadMigrationError = true;
             await supabase
               .from('field_inspections')
@@ -1632,7 +1662,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
               feedback: 'Avaliação cadastrada via edição'
             }]);
 
-          if (bioErr && bioErr.code === '42703') {
+          if (isColumnMismatchError(bioErr)) {
             hadMigrationError = true;
             await supabase
               .from('field_inspections')
@@ -1673,7 +1703,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
         .from('student_goals')
         .upsert(goalsPayload, { onConflict: 'student_id' });
 
-      if (goalsErr && goalsErr.code === '42703') {
+      if (isColumnMismatchError(goalsErr)) {
         hadMigrationError = true;
         await supabase
           .from('student_goals')
@@ -3033,6 +3063,11 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                                 }`}>
                                   {sch.status === 'Confirmado' ? '✓ Confirmado' : sch.status === 'Sugerido' ? '⚡ Proposta Enviada' : sch.status}
                                 </span>
+                                {sch.status === 'Confirmado' && sch.notes?.includes('[Aluno aceitou a sugestão de nova data]') && (
+                                  <span className="px-2 py-0.5 border border-primary/20 text-primary bg-primary/5 rounded text-[9px] font-bold uppercase tracking-widest animate-pulse">
+                                    🤝 Aluno Aceitou Nova Data
+                                  </span>
+                                )}
                               </div>
                               {sch.status === 'Sugerido' && sch.suggested_date && (
                                 <p className="text-[10px] text-cyan-400 font-bold uppercase mt-1">
@@ -3115,29 +3150,32 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
 
                               {sch.status === 'Confirmado' && (
                                 <>
+                                  {(() => {
+                                    const pastDue = isSchedulePast(sch.scheduled_date, sch.scheduled_time);
+                                    return (
+                                      <button
+                                        onClick={() => handleUpdateScheduleStatus(sch.id, 'Realizado')}
+                                        className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                                          pastDue
+                                            ? 'bg-amber-500/20 border border-amber-500 text-amber-400 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.3)] hover:bg-amber-500/30'
+                                            : 'bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20'
+                                        }`}
+                                      >
+                                        {pastDue ? '⚠️ Avaliação Passada / Concluir' : 'Concluir'}
+                                      </button>
+                                    );
+                                  })()}
                                   <button
-                                    onClick={() => handleUpdateScheduleStatus(sch.id, 'Realizado')}
-                                    className="px-2.5 py-1 bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
-                                  >
-                                    Concluir
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setSuggestingScheduleId(sch.id);
-                                      setSugDateInput(sch.scheduled_date);
-                                      setSugTimeInput(sch.scheduled_time.slice(0, 5));
-                                      setCancelingScheduleId(null);
-                                    }}
-                                    className="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                    disabled
+                                    className="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 opacity-40 cursor-not-allowed rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                    title="Não é possível propor nova data para agendamento já confirmado"
                                   >
                                     Propor Nova Data
                                   </button>
                                   <button
-                                    onClick={() => {
-                                      setCancelingScheduleId(sch.id);
-                                      setSuggestingScheduleId(null);
-                                    }}
-                                    className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                    disabled
+                                    className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 opacity-40 cursor-not-allowed rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                    title="Não é possível cancelar agendamento já confirmado"
                                   >
                                     Cancelar
                                   </button>
@@ -3851,24 +3889,22 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                           {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(day => {
                             const isChecked = editStudent.available_days.includes(day);
                             return (
-                              <label key={day} className={`flex items-center justify-center p-2 rounded-lg border text-[10px] font-bold uppercase cursor-pointer select-none transition-all ${
-                                isChecked
-                                  ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.1)]'
-                                  : 'bg-surface-high border-surface-highest text-zinc-500 hover:text-zinc-300'
-                              }`}>
-                                <input 
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => {
-                                    const days = isChecked
-                                      ? editStudent.available_days.filter(d => d !== day)
-                                      : [...editStudent.available_days, day];
-                                    setEditStudent({ ...editStudent, available_days: days });
-                                  }}
-                                  className="hidden"
-                                />
+                              <div 
+                                key={day} 
+                                onClick={() => {
+                                  const days = isChecked
+                                    ? editStudent.available_days.filter(d => d !== day)
+                                    : [...editStudent.available_days, day];
+                                  setEditStudent({ ...editStudent, available_days: days });
+                                }}
+                                className={`flex items-center justify-center p-2 rounded-lg border text-[10px] font-bold uppercase cursor-pointer select-none transition-all ${
+                                  isChecked
+                                    ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.1)]'
+                                    : 'bg-surface-high border-surface-highest text-zinc-500 hover:text-zinc-300'
+                                }`}
+                              >
                                 {day}
-                              </label>
+                              </div>
                             );
                           })}
                         </div>
@@ -3922,6 +3958,17 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
               </motion.div>
             </div>
           )}
+
+          <CustomAlertModal
+            isOpen={alertModal.isOpen}
+            type={alertModal.type}
+            title={alertModal.title}
+            message={alertModal.message}
+            recordName={alertModal.recordName}
+            currentUser={currentUser}
+            onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+            onConfirm={alertModal.onConfirm}
+          />
         </div>
       );
     }
@@ -4397,24 +4444,22 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                       {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(day => {
                         const isChecked = newStudent.available_days.includes(day);
                         return (
-                          <label key={day} className={`flex items-center justify-center p-2 rounded-lg border text-[10px] font-bold uppercase cursor-pointer select-none transition-all ${
-                            isChecked
-                              ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.1)]'
-                              : 'bg-surface-high border-surface-highest text-zinc-500 hover:text-zinc-300'
-                          }`}>
-                            <input 
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {
-                                const days = isChecked
-                                  ? newStudent.available_days.filter(d => d !== day)
-                                  : [...newStudent.available_days, day];
-                                setNewStudent({ ...newStudent, available_days: days });
-                              }}
-                              className="hidden"
-                            />
+                          <div 
+                            key={day} 
+                            onClick={() => {
+                              const days = isChecked
+                                ? newStudent.available_days.filter(d => d !== day)
+                                : [...newStudent.available_days, day];
+                              setNewStudent({ ...newStudent, available_days: days });
+                            }}
+                            className={`flex items-center justify-center p-2 rounded-lg border text-[10px] font-bold uppercase cursor-pointer select-none transition-all ${
+                              isChecked
+                                ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.15)]'
+                                : 'bg-surface-high border-surface-highest text-zinc-500 hover:text-zinc-300'
+                            }`}
+                          >
                             {day}
-                          </label>
+                          </div>
                         );
                       })}
                     </div>

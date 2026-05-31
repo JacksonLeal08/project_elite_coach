@@ -666,22 +666,6 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
 
            <div className="space-y-6">
               <div>
-                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Token do Bot do Telegram</label>
-                <div className="relative mt-1">
-                  <input 
-                    type={showToken ? "text" : "password"} 
-                    value={botToken} 
-                    onChange={e=>setBotToken(e.target.value)} 
-                    className="w-full bg-surface-high border border-surface-highest rounded p-3 pr-10 text-white text-sm outline-none focus:border-primary transition-colors font-mono" 
-                    placeholder="Ex: 123456789:AABBCCDDEEFF..."
-                  />
-                  <button onClick={() => setShowToken(!showToken)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
-                     <Settings className="w-4 h-4"/>
-                  </button>
-                </div>
-              </div>
-
-              <div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Token do Bot do Telegram</label>
