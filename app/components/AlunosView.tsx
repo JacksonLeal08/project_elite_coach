@@ -3891,7 +3891,9 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                             return (
                               <div 
                                 key={day} 
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
                                   const days = isChecked
                                     ? editStudent.available_days.filter(d => d !== day)
                                     : [...editStudent.available_days, day];
@@ -4446,7 +4448,9 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                         return (
                           <div 
                             key={day} 
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
                               const days = isChecked
                                 ? newStudent.available_days.filter(d => d !== day)
                                 : [...newStudent.available_days, day];
