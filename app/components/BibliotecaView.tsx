@@ -211,6 +211,35 @@ export default function BibliotecaView({ currentUser }: BibliotecaViewProps) {
     }
   };
 
+  const getEmbedUrl = (url: string) => {
+    if (!url) return null;
+    let videoId = '';
+    
+    if (url.includes('youtu.be/')) {
+      videoId = url.split('youtu.be/')[1]?.split('?')[0] || '';
+    } else if (url.includes('youtube.com/watch')) {
+      try {
+        const params = new URLSearchParams(url.split('?')[1]);
+        videoId = params.get('v') || '';
+      } catch (e) {
+        videoId = url.split('v=')[1]?.split('&')[0] || '';
+      }
+    } else if (url.includes('youtube.com/embed/')) {
+      return url;
+    }
+    
+    if (videoId) {
+      return `https://www.youtube.com/embed/${videoId}?mute=1`;
+    }
+    
+    if (url.includes('vimeo.com/')) {
+      const vimeoId = url.split('vimeo.com/')[1]?.split('?')[0] || '';
+      if (vimeoId) return `https://player.vimeo.com/video/${vimeoId}`;
+    }
+    
+    return null;
+  };
+
   const handleRemoveUploadedFile = () => {
     setExistingFileUrl(null);
     setVideoFile(null);
@@ -303,6 +332,40 @@ export default function BibliotecaView({ currentUser }: BibliotecaViewProps) {
                     </button>
                   </div>
                 </div>
+
+                {/* Video Preview Block */}
+                {(() => {
+                  if (ex.video_file_url) {
+                    return (
+                      <div className="w-full aspect-video rounded-lg overflow-hidden border border-surface-highest bg-black mb-3">
+                        <video 
+                          src={ex.video_file_url} 
+                          controls 
+                          muted 
+                          playsInline 
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    );
+                  }
+                  
+                  const embedUrl = getEmbedUrl(ex.video_url);
+                  if (embedUrl) {
+                    return (
+                      <div className="w-full aspect-video rounded-lg overflow-hidden border border-surface-highest bg-black mb-3">
+                        <iframe 
+                          src={embedUrl} 
+                          className="w-full h-full border-none"
+                          allowFullScreen
+                          title={ex.name}
+                          loading="lazy"
+                        />
+                      </div>
+                    );
+                  }
+                  
+                  return null;
+                })()}
                 
                 <h4 className="font-heading font-semibold text-lg text-white group-hover:text-primary transition-colors mb-2">
                   {ex.name}

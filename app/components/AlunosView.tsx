@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, ChevronLeft, Award, CheckCircle2, Camera, Plus, X, MessageSquare, CreditCard, Trash2, History } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Award, CheckCircle2, Camera, Plus, X, MessageSquare, CreditCard, Trash2, History, LayoutGrid, List } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import { Student, User, Anamnesis, StudentGoal } from '../types';
 import { supabase } from '../utils/supabase';
@@ -20,6 +20,19 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('elite_coach_alunos_view_mode') as 'table' | 'cards') || 'table';
+    }
+    return 'table';
+  });
+
+  const handleToggleViewMode = () => {
+    const nextMode = viewMode === 'table' ? 'cards' : 'table';
+    setViewMode(nextMode);
+    localStorage.setItem('elite_coach_alunos_view_mode', nextMode);
+  };
 
   // Custom Alert Modal State
   const [alertModal, setAlertModal] = useState<{
@@ -91,6 +104,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
     state: '',
     is_whatsapp: true,
     activity_level: 'Levemente Ativo',
+    dietary_habits: '',
     medical_history: '',
     injuries: '',
     medications: '',
@@ -132,6 +146,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
       state: '',
       is_whatsapp: true,
       activity_level: 'Levemente Ativo',
+      dietary_habits: '',
       medical_history: '',
       injuries: '',
       medications: '',
@@ -166,7 +181,37 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
     status: 'Ativo',
     phone_number: '',
     telegram_chat_id: '',
-    photo_avatar_url: ''
+    photo_avatar_url: '',
+    email: '',
+    birth_date: '',
+    street: '',
+    number: '',
+    complement: '',
+    neighborhood: '',
+    city: '',
+    state: '',
+    is_whatsapp: true,
+    activity_level: 'Levemente Ativo',
+    dietary_habits: '',
+    medical_history: '',
+    injuries: '',
+    medications: '',
+    weight: '',
+    height: '',
+    body_fat: '',
+    lean_mass: '',
+    blood_pressure: '',
+    waist: '',
+    abdomen: '',
+    hips: '',
+    right_arm: '',
+    left_arm: '',
+    right_thigh: '',
+    left_thigh: '',
+    freq_target: '3',
+    available_days: [] as string[],
+    duration_pref: '60 min',
+    training_location: 'Academia'
   });
 
   const [studentPhone, setStudentPhone] = useState<string>('');
@@ -208,6 +253,9 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
   const [sugDateInput, setSugDateInput] = useState<string>('');
   const [sugTimeInput, setSugTimeInput] = useState<string>('');
   const [suggestingScheduleId, setSuggestingScheduleId] = useState<string | null>(null);
+  const [trainerMessageInput, setTrainerMessageInput] = useState<string>('');
+  const [cancelingScheduleId, setCancelingScheduleId] = useState<string | null>(null);
+  const [editWizardStep, setEditWizardStep] = useState<number>(0);
 
   // Postural Grid State
   const [activeAngle, setActiveAngle] = useState<'front' | 'back' | 'side'>('front');
@@ -835,19 +883,22 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
       return;
     }
     if (!navigator.onLine) {
+      const newNotes = `[Mensagem do Treinador]: ${trainerMessageInput}`;
       queueOfflineOperation('update_schedule_status', {
         id: scheduleId,
         update: {
           status: 'Sugerido',
           suggested_date: sugDateInput,
-          suggested_time: sugTimeInput
+          suggested_time: sugTimeInput,
+          notes: newNotes
         }
       });
       showCustomAlert('Modo Offline', 'Sugestão registrada localmente! Sincronização automática pendente.', 'info');
-      setSchedules(prev => prev.map(s => s.id === scheduleId ? { ...s, status: 'Sugerido', suggested_date: sugDateInput, suggested_time: sugTimeInput } : s));
+      setSchedules(prev => prev.map(s => s.id === scheduleId ? { ...s, status: 'Sugerido', suggested_date: sugDateInput, suggested_time: sugTimeInput, notes: (s.notes || '') + '\n' + newNotes } : s));
       setSuggestingScheduleId(null);
       setSugDateInput('');
       setSugTimeInput('');
+      setTrainerMessageInput('');
       return;
     }
     try {
@@ -856,24 +907,108 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
         .update({
           status: 'Sugerido',
           suggested_date: sugDateInput,
-          suggested_time: sugTimeInput
+          suggested_time: sugTimeInput,
+          trainer_message: trainerMessageInput || null
         })
         .eq('id', scheduleId);
 
       if (error) {
-        showCustomAlert('Erro', 'Erro ao sugerir data: ' + error.message, 'error');
+        if (error.code === '42703') { // trainer_message column does not exist
+          const sch = schedules.find(s => s.id === scheduleId);
+          const newNotes = (sch?.notes ? sch.notes + '\n' : '') + `[Mensagem do Treinador]: ${trainerMessageInput}`;
+          const { error: fallbackError } = await supabase
+            .from('evaluation_schedules')
+            .update({
+              status: 'Sugerido',
+              suggested_date: sugDateInput,
+              suggested_time: sugTimeInput,
+              notes: newNotes
+            })
+            .eq('id', scheduleId);
+
+          if (fallbackError) {
+            showCustomAlert('Erro', 'Erro ao sugerir data: ' + fallbackError.message, 'error');
+          } else {
+            showCustomAlert('Sucesso', 'Nova data sugerida enviada ao aluno!', 'success');
+          }
+        } else {
+          showCustomAlert('Erro', 'Erro ao sugerir data: ' + error.message, 'error');
+        }
       } else {
         showCustomAlert('Sucesso', 'Nova data sugerida enviada ao aluno!', 'success');
-        setSuggestingScheduleId(null);
-        setSugDateInput('');
-        setSugTimeInput('');
-        if (selectedStudent) {
-          fetchStudentSchedules(selectedStudent.id);
-        }
+      }
+      
+      setSuggestingScheduleId(null);
+      setSugDateInput('');
+      setSugTimeInput('');
+      setTrainerMessageInput('');
+      if (selectedStudent) {
+        fetchStudentSchedules(selectedStudent.id);
       }
     } catch (err: any) {
       console.error(err);
       showCustomAlert('Erro', 'Erro ao sugerir nova data.', 'error');
+    }
+  };
+
+  const handleCancelSchedule = async (scheduleId: string) => {
+    if (!trainerMessageInput) {
+      showCustomAlert('Aviso', 'Preencha a justificativa!', 'warning');
+      return;
+    }
+    if (!navigator.onLine) {
+      const newNotes = `[Mensagem do Treinador]: ${trainerMessageInput}`;
+      queueOfflineOperation('update_schedule_status', {
+        id: scheduleId,
+        update: { status: 'Cancelado', notes: newNotes }
+      });
+      showCustomAlert('Modo Offline', 'Cancelamento registrado localmente! Sincronização automática pendente.', 'info');
+      setSchedules(prev => prev.map(s => s.id === scheduleId ? { ...s, status: 'Cancelado', notes: (s.notes || '') + '\n' + newNotes } : s));
+      setCancelingScheduleId(null);
+      setTrainerMessageInput('');
+      return;
+    }
+    try {
+      const { error } = await supabase
+        .from('evaluation_schedules')
+        .update({ 
+          status: 'Cancelado', 
+          trainer_message: trainerMessageInput 
+        })
+        .eq('id', scheduleId);
+        
+      if (error) {
+        if (error.code === '42703') { // trainer_message column does not exist
+          const sch = schedules.find(s => s.id === scheduleId);
+          const newNotes = (sch?.notes ? sch.notes + '\n' : '') + `[Mensagem do Treinador]: ${trainerMessageInput}`;
+          const { error: fallbackError } = await supabase
+            .from('evaluation_schedules')
+            .update({ 
+              status: 'Cancelado', 
+              notes: newNotes 
+            })
+            .eq('id', scheduleId);
+            
+          if (fallbackError) {
+            showCustomAlert('Erro', 'Erro ao cancelar: ' + fallbackError.message, 'error');
+          } else {
+            showCustomAlert('Sucesso', 'Agendamento cancelado com justificativa!', 'success');
+          }
+        } else {
+          showCustomAlert('Erro', 'Erro ao cancelar agendamento: ' + error.message, 'error');
+        }
+      } else {
+        showCustomAlert('Sucesso', 'Agendamento cancelado com justificativa!', 'success');
+      }
+      
+      setCancelingScheduleId(null);
+      setTrainerMessageInput('');
+      if (selectedStudent) {
+        fetchStudentSchedules(selectedStudent.id);
+      }
+    } catch (err: any) {
+      console.error(err);
+      showCustomAlert('Erro', 'Erro ao cancelar agendamento.', 'error');
     }
   };
 
@@ -1327,18 +1462,45 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
 
   const handleEditStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editStudent.name || !editStudent.age || !editStudent.goal) {
+    if (!editStudent.name || !editStudent.goal) {
       return showCustomAlert('Aviso', 'Preencha os campos obrigatórios!', 'warning');
     }
 
-    const ageNum = parseInt(editStudent.age);
-    if (isNaN(ageNum) || ageNum <= 0) {
-      return showCustomAlert('Aviso', 'Idade precisa ser um número válido!', 'warning');
+    let ageCalculated = parseInt(editStudent.age);
+    if (editStudent.birth_date) {
+      const birthDateObj = new Date(editStudent.birth_date);
+      const ageDifMs = Date.now() - birthDateObj.getTime();
+      const ageDate = new Date(ageDifMs);
+      ageCalculated = Math.abs(ageDate.getUTCFullYear() - 1970);
     }
 
-    const updatePayload = {
+    if (isNaN(ageCalculated) || ageCalculated <= 0) {
+      ageCalculated = 20;
+    }
+
+    const fullPayload = {
       name: editStudent.name,
-      age: ageNum,
+      age: ageCalculated,
+      goal: editStudent.goal,
+      biotype: editStudent.biotype,
+      status: editStudent.status,
+      phone_number: editStudent.phone_number || null,
+      telegram_chat_id: editStudent.telegram_chat_id || null,
+      photo_avatar_url: editStudent.photo_avatar_url || null,
+      email: editStudent.email || null,
+      birth_date: editStudent.birth_date || null,
+      street: editStudent.street || null,
+      number: editStudent.number || null,
+      complement: editStudent.complement || null,
+      neighborhood: editStudent.neighborhood || null,
+      city: editStudent.city || null,
+      state: editStudent.state || null,
+      is_whatsapp: editStudent.is_whatsapp
+    };
+
+    const corePayload = {
+      name: editStudent.name,
+      age: ageCalculated,
       goal: editStudent.goal,
       biotype: editStudent.biotype,
       status: editStudent.status,
@@ -1350,54 +1512,193 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
     if (!navigator.onLine) {
       queueOfflineOperation('update_student_profile', {
         id: editStudent.id,
-        update: updatePayload
+        update: fullPayload
       });
-      showCustomAlert('Modo Offline', 'Alterações do aluno registradas localmente! Sincronização automática pendente.', 'info');
+      showCustomAlert('Modo Offline', 'Alterações registradas localmente! Sincronização pendente.', 'info');
       setShowEditStudentModal(false);
-      const updatedStudent = {
-        ...selectedStudent!,
-        name: editStudent.name,
-        age: ageNum,
-        goal: editStudent.goal,
-        biotype: editStudent.biotype,
-        status: editStudent.status,
-        phone_number: editStudent.phone_number || undefined,
-        telegram_chat_id: editStudent.telegram_chat_id || undefined,
-        photo_avatar_url: editStudent.photo_avatar_url || undefined
-      };
-      setSelectedStudent(updatedStudent);
-      setStudents(prev => prev.map(s => s.id.toString() === editStudent.id ? { ...s, ...updatePayload } : s));
+      // update state
+      setSelectedStudent(prev => prev ? { ...prev, ...fullPayload } : null);
+      setStudents(prev => prev.map(s => s.id.toString() === editStudent.id ? { ...s, ...fullPayload } : s));
       return;
     }
 
+    let hadMigrationError = false;
+
     try {
-      const { error } = await supabase
+      // 1. Update Student Table
+      const { error: studentErr } = await supabase
         .from('students')
-        .update(updatePayload)
+        .update(fullPayload)
         .eq('id', editStudent.id);
 
-      if (error) {
-        showCustomAlert('Erro', 'Erro ao atualizar aluno: ' + error.message, 'error');
-      } else {
-        showCustomAlert('Sucesso', 'Dados do aluno atualizados com sucesso!', 'success');
-        setShowEditStudentModal(false);
-        const updatedStudent = {
-          ...selectedStudent!,
-          name: editStudent.name,
-          age: ageNum,
-          goal: editStudent.goal,
-          biotype: editStudent.biotype,
-          status: editStudent.status,
-          phone_number: editStudent.phone_number || undefined,
-          telegram_chat_id: editStudent.telegram_chat_id || undefined,
-          photo_avatar_url: editStudent.photo_avatar_url || undefined
+      if (studentErr) {
+        if (studentErr.code === '42703') {
+          hadMigrationError = true;
+          const { error: coreErr } = await supabase
+            .from('students')
+            .update(corePayload)
+            .eq('id', editStudent.id);
+
+          if (coreErr) {
+            return showCustomAlert('Erro', 'Erro ao atualizar dados: ' + coreErr.message, 'error');
+          }
+        } else {
+          return showCustomAlert('Erro', 'Erro ao atualizar dados: ' + studentErr.message, 'error');
+        }
+      }
+
+      // 2. Upsert Anamnesis
+      const anamnesisPayload = {
+        student_id: editStudent.id,
+        medical_restrictions: editStudent.medical_history || 'Nenhuma',
+        flexibility_level: anamnesis?.flexibility_level || 'Moderada',
+        water_intake: anamnesis?.water_intake || 2.0,
+        dietary_habits: editStudent.dietary_habits || 'Misto',
+        surgical_history: editStudent.injuries || 'Nenhuma',
+        medications: editStudent.medications || 'Nenhuma',
+        cardio_condition: editStudent.medical_history || 'Nenhuma',
+        activity_level: editStudent.activity_level
+      };
+
+      const anamnesisCorePayload = {
+        student_id: editStudent.id,
+        medical_restrictions: editStudent.medical_history || 'Nenhuma',
+        flexibility_level: anamnesis?.flexibility_level || 'Moderada',
+        water_intake: anamnesis?.water_intake || 2.0,
+        dietary_habits: editStudent.dietary_habits || 'Misto',
+        surgical_history: editStudent.injuries || 'Nenhuma',
+        medications: editStudent.medications || 'Nenhuma',
+        cardio_condition: editStudent.medical_history || 'Nenhuma'
+      };
+
+      const { error: anamnesisErr } = await supabase
+        .from('anamnesis')
+        .upsert(anamnesisPayload, { onConflict: 'student_id' });
+
+      if (anamnesisErr && anamnesisErr.code === '42703') {
+        hadMigrationError = true;
+        await supabase
+          .from('anamnesis')
+          .upsert(anamnesisCorePayload, { onConflict: 'student_id' });
+      }
+
+      // 3. Update or Insert last field inspection (biometrics)
+      if (editStudent.weight || editStudent.body_fat || editStudent.height) {
+        const biometricPayload = {
+          student_id: editStudent.id,
+          weight: editStudent.weight ? parseFloat(editStudent.weight) : null,
+          body_fat: editStudent.body_fat ? parseFloat(editStudent.body_fat) : null,
+          skeletal_muscle: editStudent.lean_mass ? parseFloat(editStudent.lean_mass) : null,
+          lean_mass: editStudent.lean_mass ? parseFloat(editStudent.lean_mass) : null,
+          height: editStudent.height ? parseFloat(editStudent.height) : null,
+          blood_pressure: editStudent.blood_pressure || null,
+          waist: editStudent.waist ? parseFloat(editStudent.waist) : null,
+          abdomen: editStudent.abdomen ? parseFloat(editStudent.abdomen) : null,
+          hips: editStudent.hips ? parseFloat(editStudent.hips) : null,
+          right_arm: editStudent.right_arm ? parseFloat(editStudent.right_arm) : null,
+          left_arm: editStudent.left_arm ? parseFloat(editStudent.left_arm) : null,
+          right_thigh: editStudent.right_thigh ? parseFloat(editStudent.right_thigh) : null,
+          left_thigh: editStudent.left_thigh ? parseFloat(editStudent.left_thigh) : null
         };
-        setSelectedStudent(updatedStudent);
-        fetchStudents();
+
+        const biometricCorePayload = {
+          student_id: editStudent.id,
+          weight: editStudent.weight ? parseFloat(editStudent.weight) : null,
+          body_fat: editStudent.body_fat ? parseFloat(editStudent.body_fat) : null,
+          skeletal_muscle: editStudent.lean_mass ? parseFloat(editStudent.lean_mass) : null,
+        };
+
+        if (evaluations.length > 0) {
+          const { error: bioErr } = await supabase
+            .from('field_inspections')
+            .update(biometricPayload)
+            .eq('id', evaluations[0].id);
+
+          if (bioErr && bioErr.code === '42703') {
+            hadMigrationError = true;
+            await supabase
+              .from('field_inspections')
+              .update(biometricCorePayload)
+              .eq('id', evaluations[0].id);
+          }
+        } else {
+          const { error: bioErr } = await supabase
+            .from('field_inspections')
+            .insert([{
+              ...biometricPayload,
+              heart_rate: 70,
+              energy: 8,
+              sleep: 8,
+              feedback: 'Avaliação cadastrada via edição'
+            }]);
+
+          if (bioErr && bioErr.code === '42703') {
+            hadMigrationError = true;
+            await supabase
+              .from('field_inspections')
+              .insert([{
+                ...biometricCorePayload,
+                heart_rate: 70,
+                energy: 8,
+                sleep: 8,
+                feedback: 'Avaliação cadastrada via edição'
+              }]);
+          }
+        }
+      }
+
+      // 4. Upsert Goals
+      const goalsPayload = {
+        student_id: editStudent.id,
+        weight_target: editStudent.weight ? parseFloat(editStudent.weight) : null,
+        body_fat_target: editStudent.body_fat ? parseFloat(editStudent.body_fat) : null,
+        muscle_target: editStudent.lean_mass ? parseFloat(editStudent.lean_mass) : null,
+        freq_target: parseInt(editStudent.freq_target) || 3,
+        available_days: editStudent.available_days.join(','),
+        duration_pref: editStudent.duration_pref,
+        training_location: editStudent.training_location,
+        updated_at: new Date().toISOString()
+      };
+
+      const goalsCorePayload = {
+        student_id: editStudent.id,
+        weight_target: editStudent.weight ? parseFloat(editStudent.weight) : null,
+        body_fat_target: editStudent.body_fat ? parseFloat(editStudent.body_fat) : null,
+        muscle_target: editStudent.lean_mass ? parseFloat(editStudent.lean_mass) : null,
+        freq_target: parseInt(editStudent.freq_target) || 3,
+        updated_at: new Date().toISOString()
+      };
+
+      const { error: goalsErr } = await supabase
+        .from('student_goals')
+        .upsert(goalsPayload, { onConflict: 'student_id' });
+
+      if (goalsErr && goalsErr.code === '42703') {
+        hadMigrationError = true;
+        await supabase
+          .from('student_goals')
+          .upsert(goalsCorePayload, { onConflict: 'student_id' });
+      }
+
+      if (hadMigrationError) {
+        showCustomAlert('Atualização Parcial', 'Perfil atualizado, porém alguns novos campos estendidos (circunferências, etc.) não puderam ser gravados por falta de migração no banco de dados.', 'info');
+      } else {
+        showCustomAlert('Sucesso', 'Perfil do aluno atualizado com sucesso!', 'success');
+      }
+
+      setShowEditStudentModal(false);
+      
+      // Reload details
+      fetchStudents();
+      if (selectedStudent) {
+        const { data: updatedObj } = await supabase.from('students').select('*').eq('id', editStudent.id).single();
+        if (updatedObj) {
+          setSelectedStudent(updatedObj);
+        }
       }
     } catch (err: any) {
       console.error(err);
-      showCustomAlert('Erro', 'Erro inesperado ao atualizar aluno.', 'error');
+      showCustomAlert('Erro', 'Erro ao atualizar dados do aluno.', 'error');
     }
   };
 
@@ -1502,15 +1803,46 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                   onClick={() => {
                     setEditStudent({
                       id: selectedStudent.id.toString(),
-                      name: selectedStudent.name,
-                      age: selectedStudent.age.toString(),
-                      goal: selectedStudent.goal,
-                      biotype: selectedStudent.biotype,
-                      status: selectedStudent.status,
+                      name: selectedStudent.name || '',
+                      age: selectedStudent.age ? selectedStudent.age.toString() : '',
+                      goal: selectedStudent.goal || '',
+                      biotype: selectedStudent.biotype || 'Mesomorfo',
+                      status: selectedStudent.status || 'Ativo',
                       phone_number: selectedStudent.phone_number || '',
                       telegram_chat_id: selectedStudent.telegram_chat_id || '',
-                      photo_avatar_url: selectedStudent.photo_avatar_url || ''
+                      photo_avatar_url: selectedStudent.photo_avatar_url || '',
+                      email: selectedStudent.email || '',
+                      birth_date: selectedStudent.birth_date || '',
+                      street: selectedStudent.street || '',
+                      number: selectedStudent.number || '',
+                      complement: selectedStudent.complement || '',
+                      neighborhood: selectedStudent.neighborhood || '',
+                      city: selectedStudent.city || '',
+                      state: selectedStudent.state || '',
+                      is_whatsapp: selectedStudent.is_whatsapp !== false,
+                      activity_level: anamnesis?.activity_level || 'Levemente Ativo',
+                      dietary_habits: anamnesis?.dietary_habits || '',
+                      medical_history: anamnesis?.medical_restrictions || '',
+                      injuries: anamnesis?.surgical_history || '',
+                      medications: anamnesis?.medications || '',
+                      weight: evaluations.length > 0 ? (evaluations[0].weight?.toString() || '') : '',
+                      height: evaluations.length > 0 ? (evaluations[0].height?.toString() || '') : '',
+                      body_fat: evaluations.length > 0 ? (evaluations[0].body_fat?.toString() || '') : '',
+                      lean_mass: evaluations.length > 0 ? (evaluations[0].skeletal_muscle?.toString() || '') : '',
+                      blood_pressure: evaluations.length > 0 ? (evaluations[0].blood_pressure || '') : '',
+                      waist: evaluations.length > 0 ? (evaluations[0].waist?.toString() || '') : '',
+                      abdomen: evaluations.length > 0 ? (evaluations[0].abdomen?.toString() || '') : '',
+                      hips: evaluations.length > 0 ? (evaluations[0].hips?.toString() || '') : '',
+                      right_arm: evaluations.length > 0 ? (evaluations[0].right_arm?.toString() || '') : '',
+                      left_arm: evaluations.length > 0 ? (evaluations[0].left_arm?.toString() || '') : '',
+                      right_thigh: evaluations.length > 0 ? (evaluations[0].right_thigh?.toString() || '') : '',
+                      left_thigh: evaluations.length > 0 ? (evaluations[0].left_thigh?.toString() || '') : '',
+                      freq_target: goals?.freq_target ? goals.freq_target.toString() : '3',
+                      available_days: goals?.available_days ? goals.available_days.split(',') : [],
+                      duration_pref: goals?.duration_pref || '60 min',
+                      training_location: goals?.training_location || 'Academia'
                     });
+                    setEditWizardStep(0);
                     setShowEditStudentModal(true);
                   }}
                   className="px-4 py-2 bg-surface hover:bg-surface-high border border-surface-highest text-zinc-300 hover:text-primary rounded text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 duration-200 active:scale-95 shadow-[0_2px_10px_rgba(0,0,0,0.15)]"
@@ -1626,9 +1958,8 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                 </button>
            </div>
 
-            {/* Horizontal scrollability wrapper for active tabs content on mobile */}
-            <div className="overflow-x-auto w-full scrollbar-none">
-              <div className="min-w-[700px] md:min-w-0">
+            {/* Tab content container */}
+            <div className="w-full">
            {activeProfileTab === 'general' && (
              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                <div className="space-y-8">
@@ -2727,13 +3058,17 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                                       setSuggestingScheduleId(sch.id);
                                       setSugDateInput(sch.scheduled_date);
                                       setSugTimeInput(sch.scheduled_time.slice(0, 5));
+                                      setCancelingScheduleId(null);
                                     }}
                                     className="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
                                   >
                                     Propor Nova Data
                                   </button>
                                   <button
-                                    onClick={() => handleUpdateScheduleStatus(sch.id, 'Cancelado')}
+                                    onClick={() => {
+                                      setCancelingScheduleId(sch.id);
+                                      setSuggestingScheduleId(null);
+                                    }}
                                     className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
                                   >
                                     Recusar
@@ -2754,6 +3089,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                                       setSuggestingScheduleId(sch.id);
                                       setSugDateInput(sch.scheduled_date);
                                       setSugTimeInput(sch.scheduled_time.slice(0, 5));
+                                      setCancelingScheduleId(null);
                                     }}
                                     className="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
                                   >
@@ -2766,7 +3102,10 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                                     Concluir
                                   </button>
                                   <button
-                                    onClick={() => handleUpdateScheduleStatus(sch.id, 'Cancelado')}
+                                    onClick={() => {
+                                      setCancelingScheduleId(sch.id);
+                                      setSuggestingScheduleId(null);
+                                    }}
                                     className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
                                   >
                                     Cancelar
@@ -2787,13 +3126,17 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                                       setSuggestingScheduleId(sch.id);
                                       setSugDateInput(sch.scheduled_date);
                                       setSugTimeInput(sch.scheduled_time.slice(0, 5));
+                                      setCancelingScheduleId(null);
                                     }}
                                     className="px-2.5 py-1 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
                                   >
                                     Propor Nova Data
                                   </button>
                                   <button
-                                    onClick={() => handleUpdateScheduleStatus(sch.id, 'Cancelado')}
+                                    onClick={() => {
+                                      setCancelingScheduleId(sch.id);
+                                      setSuggestingScheduleId(null);
+                                    }}
                                     className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
                                   >
                                     Cancelar
@@ -2803,7 +3146,10 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
 
                               {sch.status === 'Sugerido' && (
                                 <button
-                                  onClick={() => handleUpdateScheduleStatus(sch.id, 'Cancelado')}
+                                  onClick={() => {
+                                    setCancelingScheduleId(sch.id);
+                                    setSuggestingScheduleId(null);
+                                  }}
                                   className="px-2.5 py-1 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 rounded text-[10px] font-bold uppercase tracking-wider transition-colors"
                                 >
                                   Cancelar Proposta
@@ -2811,6 +3157,36 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                               )}
                             </div>
                           </div>
+
+                          {cancelingScheduleId === sch.id && (
+                             <div className="mt-2 p-4 bg-surface-high border border-surface-highest rounded-xl space-y-3">
+                               <h4 className="text-[10px] text-red-400 font-bold uppercase tracking-widest">Justificar Cancelamento / Recusa</h4>
+                               <div>
+                                 <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1">Mensagem para o Aluno *</label>
+                                 <textarea 
+                                   value={trainerMessageInput}
+                                   onChange={e => setTrainerMessageInput(e.target.value)}
+                                   placeholder="Escreva a justificativa para o aluno..."
+                                   className="w-full bg-surface border border-surface-highest rounded px-3 py-1.5 text-white text-xs outline-none focus:border-primary h-16 resize-none"
+                                   required
+                                 />
+                                </div>
+                                <div className="flex justify-end gap-2 text-xs font-bold uppercase tracking-wider">
+                                  <button 
+                                    onClick={() => handleCancelSchedule(sch.id)}
+                                    className="px-3 py-1.5 bg-red-500/20 border border-red-500/40 text-red-400 rounded hover:bg-red-500/30 transition-colors text-[10px]"
+                                  >
+                                    Confirmar Cancelamento
+                                  </button>
+                                  <button 
+                                    onClick={() => { setCancelingScheduleId(null); setTrainerMessageInput(''); }}
+                                    className="px-3 py-1.5 bg-surface border border-surface-highest text-zinc-400 hover:text-white rounded transition-colors text-[10px]"
+                                  >
+                                    Voltar
+                                  </button>
+                                </div>
+                              </div>
+                           )}
 
                           {suggestingScheduleId === sch.id && (
                             <div className="mt-2 p-4 bg-surface-high border border-surface-highest rounded-xl space-y-3">
@@ -2835,6 +3211,15 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                                   />
                                 </div>
                               </div>
+                              <div>
+                                 <label className="text-[9px] text-zinc-500 font-bold uppercase block mb-1">Justificativa / Mensagem para o Aluno</label>
+                                 <textarea 
+                                   value={trainerMessageInput}
+                                   onChange={e => setTrainerMessageInput(e.target.value)}
+                                   placeholder="Escreva uma observação ou justificativa para propor esta nova data..."
+                                   className="w-full bg-surface border border-surface-highest rounded px-3 py-1.5 text-white text-xs outline-none focus:border-primary h-16 resize-none"
+                                 />
+                               </div>
                               <div className="flex justify-end gap-2 text-xs font-bold uppercase tracking-wider">
                                 <button 
                                   onClick={() => handleSuggestSchedule(sch.id)}
@@ -2843,7 +3228,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                                   Enviar Proposta
                                 </button>
                                 <button 
-                                  onClick={() => setSuggestingScheduleId(null)}
+                                  onClick={() => { setSuggestingScheduleId(null); setTrainerMessageInput(''); }}
                                   className="px-3 py-1.5 bg-surface border border-surface-highest text-zinc-400 hover:text-white rounded transition-colors text-[10px]"
                                 >
                                   Cancelar
@@ -3060,7 +3445,6 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
             )}
           </div>
           </div>
-          </div>
 
          {/* New Payment Modal Dialog */}
          {showPaymentModal && selectedStudent && (
@@ -3145,100 +3529,431 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
            </div>
          )}
 
-         {/* Edit Student Modal Dialog */}
-         {showEditStudentModal && selectedStudent && (
-           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-md w-full relative">
-               <button onClick={() => setShowEditStudentModal(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
-                 <X className="w-5 h-5"/>
-               </button>
-               <h3 className="text-xl font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2">Editar Dados do Aluno</h3>
-               <form onSubmit={handleEditStudentSubmit} className="space-y-4">
-                 <div className="flex flex-col items-center justify-center mb-4">
-                   <div className="relative group cursor-pointer w-20 h-20 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shadow-[0_0_15px_rgba(223,191,128,0.2)]">
-                     {editStudent.photo_avatar_url ? (
-                       <img src={editStudent.photo_avatar_url} alt="Avatar Preview" className="w-full h-full object-cover" />
-                     ) : (
-                       <Camera className="w-6 h-6 text-zinc-500 group-hover:text-[#dfbf80] transition-colors" />
-                     )}
-                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                       <span className="text-[9px] text-white font-bold uppercase tracking-wider">Upload</span>
-                     </div>
-                     <input
-                       type="file"
-                       accept="image/*"
-                       onChange={(e) => handleAvatarChange(e, true)}
-                       className="absolute inset-0 opacity-0 cursor-pointer"
-                     />
-                   </div>
-                   <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider mt-1.5">Foto de Perfil</span>
-                 </div>
-                 <div>
-                   <label className="text-xs text-zinc-400 uppercase font-bold">Nome do Aluno *</label>
-                   <input required type="text" value={editStudent.name} onChange={e=>setEditStudent({...editStudent, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: João da Silva"/>
-                 </div>
-                 <div className="grid grid-cols-2 gap-4">
-                   <div>
-                     <label className="text-xs text-zinc-400 uppercase font-bold">Idade *</label>
-                     <input required type="number" value={editStudent.age} onChange={e=>setEditStudent({...editStudent, age: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 27"/>
-                   </div>
-                   <div>
-                     <label className="text-xs text-zinc-400 uppercase font-bold">Biotipo</label>
-                     <select value={editStudent.biotype} onChange={e=>setEditStudent({...editStudent, biotype: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary">
-                       <option>Mesomorfo</option>
-                       <option>Endomorfo</option>
-                       <option>Ectomorfo</option>
-                     </select>
-                   </div>
-                 </div>
-                 <div>
-                   <label className="text-xs text-zinc-400 uppercase font-bold">Objetivo *</label>
-                   <input required type="text" value={editStudent.goal} onChange={e=>setEditStudent({...editStudent, goal: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: Hipertrofia ou Perda de Peso"/>
-                 </div>
-                 <div className="grid grid-cols-2 gap-4">
-                   <div>
-                     <label className="text-xs text-zinc-400 uppercase font-bold">WhatsApp (com DDD)</label>
-                     <input type="text" value={editStudent.phone_number} onChange={e=>setEditStudent({...editStudent, phone_number: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 5511999999999"/>
-                   </div>
-                   <div>
-                     <label className="text-xs text-zinc-400 uppercase font-bold">Telegram Chat ID</label>
-                     <input type="text" value={editStudent.telegram_chat_id} onChange={e=>setEditStudent({...editStudent, telegram_chat_id: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary" placeholder="Ex: 987654321"/>
-                   </div>
-                 </div>
-                 <div>
-                   <label className="text-xs text-zinc-400 uppercase font-bold">Status</label>
-                   <select value={editStudent.status} onChange={e=>setEditStudent({...editStudent, status: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2.5 mt-1 text-white text-sm outline-none focus:border-primary">
-                     <option>Ativo</option>
-                     <option>Inativo</option>
-                   </select>
-                 </div>
-                 <button type="submit" className="w-full py-3 mt-4 bg-primary text-black font-bold uppercase tracking-wider rounded border border-primary/30 hover:bg-primary-dim transition-colors shadow-[0_0_15px_rgba(212,175,55,0.2)]">Salvar Alterações</button>
-               </form>
-             </motion.div>
-           </div>
-         )}
+                   {/* Edit Student Modal Dialog */}
+          {showEditStudentModal && (
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-lg w-full relative overflow-y-auto max-h-[90vh] scrollbar-none">
+                <button onClick={() => { setShowEditStudentModal(false); }} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
+                  <X className="w-5 h-5"/>
+                </button>
+                <h3 className="text-lg font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2 uppercase tracking-wider">Editar Perfil do Aluno</h3>
+                
+                {/* Wizard Steps Progress Bar */}
+                <div className="flex items-center justify-between mb-6 px-1 select-none">
+                  {[
+                    { label: 'Cadastro', step: 0 },
+                    { label: 'Saúde', step: 1 },
+                    { label: 'Biometria', step: 2 },
+                    { label: 'Logística', step: 3 }
+                  ].map((item, idx) => (
+                    <React.Fragment key={item.step}>
+                      <div className="flex flex-col items-center relative z-10">
+                        <button
+                          type="button"
+                          onClick={() => setEditWizardStep(item.step)}
+                          className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold uppercase transition-all duration-300 ${
+                            editWizardStep === item.step
+                              ? 'bg-[#dfbf80] text-black ring-4 ring-[#dfbf80]/30 shadow-[0_0_15px_rgba(223,191,128,0.4)]'
+                              : editWizardStep > item.step
+                              ? 'bg-primary/20 text-[#dfbf80] border border-[#dfbf80]/40'
+                              : 'bg-surface border border-surface-highest text-zinc-500 hover:text-zinc-300'
+                          }`}
+                        >
+                          {item.step + 1}
+                        </button>
+                        <span className={`text-[9px] font-bold uppercase tracking-wider mt-1.5 transition-colors ${
+                          editWizardStep === item.step ? 'text-[#dfbf80]' : 'text-zinc-500'
+                        }`}>
+                          {item.label}
+                        </span>
+                      </div>
+                      {idx < 3 && (
+                        <div className="flex-1 h-[2px] mx-2 -mt-4 bg-surface-highest relative">
+                          <div 
+                            className="absolute inset-y-0 left-0 bg-[#dfbf80] transition-all duration-300"
+                            style={{ width: editWizardStep > item.step ? '100%' : '0%' }}
+                          />
+                        </div>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </div>
 
-         <CustomAlertModal
-           isOpen={alertModal.isOpen}
-           type={alertModal.type}
-           title={alertModal.title}
-           message={alertModal.message}
-           recordName={alertModal.recordName}
-           currentUser={currentUser}
-           onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
-           onConfirm={alertModal.onConfirm}
-         />
-      </div>
-    );
-  }
+                <form onSubmit={handleEditStudentSubmit} className="space-y-6">
+                  {/* Step 0: Dados Pessoais & Endereço */}
+                  {editWizardStep === 0 && (
+                    <div className="space-y-4">
+                      <div className="flex flex-col items-center justify-center mb-2">
+                        <div className="relative group cursor-pointer w-16 h-16 rounded-full border-2 border-[#dfbf80] overflow-hidden bg-surface-high flex items-center justify-center shadow-[0_0_12px_rgba(223,191,128,0.2)]">
+                          {editStudent.photo_avatar_url ? (
+                            <img src={editStudent.photo_avatar_url} alt="Avatar Preview" className="w-full h-full object-cover" />
+                          ) : (
+                            <Camera className="w-5 h-5 text-zinc-500 group-hover:text-[#dfbf80] transition-colors" />
+                          )}
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <span className="text-[8px] text-white font-bold uppercase tracking-wider">Upload</span>
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => handleAvatarChange(e, true)}
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                          />
+                        </div>
+                        <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider mt-1">Foto de Perfil</span>
+                      </div>
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Nome Completo *</label>
+                          <input required type="text" value={editStudent.name} onChange={e=>setEditStudent({...editStudent, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: João da Silva"/>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Data de Nascimento</label>
+                          <input type="date" value={editStudent.birth_date} onChange={e=>setEditStudent({...editStudent, birth_date: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono"/>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">E-mail</label>
+                          <input type="email" value={editStudent.email} onChange={e=>setEditStudent({...editStudent, email: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: joao@email.com"/>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Telefone / Celular</label>
+                          <input type="text" value={editStudent.phone_number} onChange={e=>setEditStudent({...editStudent, phone_number: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: 5511999999999"/>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 py-1 px-1">
+                        <input 
+                          type="checkbox" 
+                          id="edit_is_whatsapp"
+                          checked={editStudent.is_whatsapp} 
+                          onChange={e => setEditStudent({ ...editStudent, is_whatsapp: e.target.checked })} 
+                          className="w-4 h-4 rounded border-surface-highest bg-surface-high text-primary focus:ring-primary accent-primary"
+                        />
+                        <label htmlFor="edit_is_whatsapp" className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider cursor-pointer select-none">
+                          Este número é o mesmo do WhatsApp?
+                        </label>
+                      </div>
+
+                      <div className="border-t border-surface-highest pt-3">
+                        <h4 className="text-[10px] text-[#dfbf80] font-bold uppercase tracking-widest mb-3">Endereço Completo</h4>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="col-span-2">
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Rua / Avenida</label>
+                            <input type="text" value={editStudent.street} onChange={e=>setEditStudent({...editStudent, street: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: Rua das Flores"/>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Número</label>
+                            <input type="text" value={editStudent.number} onChange={e=>setEditStudent({...editStudent, number: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: 123"/>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Complemento</label>
+                            <input type="text" value={editStudent.complement} onChange={e=>setEditStudent({...editStudent, complement: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: Apto 45"/>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Bairro</label>
+                            <input type="text" value={editStudent.neighborhood} onChange={e=>setEditStudent({...editStudent, neighborhood: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: Centro"/>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Cidade</label>
+                            <input type="text" value={editStudent.city} onChange={e=>setEditStudent({...editStudent, city: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: São Paulo"/>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Estado (UF)</label>
+                            <input type="text" value={editStudent.state} onChange={e=>setEditStudent({...editStudent, state: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: SP"/>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 1: Anamnese & Histórico de Saúde */}
+                  {editWizardStep === 1 && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Objetivo Principal *</label>
+                          <select value={editStudent.goal} onChange={e=>setEditStudent({...editStudent, goal: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                            <option value="">Selecione...</option>
+                            <option>Emagrecimento</option>
+                            <option>Hipertrofia</option>
+                            <option>Condicionamento Físico</option>
+                            <option>Reabilitação Física</option>
+                            <option>Saúde e Qualidade de Vida</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Nível de Atividade Atual</label>
+                          <select value={editStudent.activity_level} onChange={e=>setEditStudent({...editStudent, activity_level: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                            <option>Sedentário</option>
+                            <option>Levemente Ativo</option>
+                            <option>Moderadamente Ativo</option>
+                            <option>Muito Ativo</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Biotipo Corporal</label>
+                          <select value={editStudent.biotype} onChange={e=>setEditStudent({...editStudent, biotype: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                            <option>Mesomorfo</option>
+                            <option>Endomorfo</option>
+                            <option>Ectomorfo</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Status</label>
+                          <select value={editStudent.status} onChange={e=>setEditStudent({...editStudent, status: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                            <option>Ativo</option>
+                            <option>Inativo</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Histórico Médico (Doenças, Cardíaco, Hipertensão)</label>
+                        <textarea value={editStudent.medical_history} onChange={e=>setEditStudent({...editStudent, medical_history: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs h-16 resize-none outline-none focus:border-primary" placeholder="Ex: Hipertensão leve controlada..."/>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Lesões ou Restrições Físicas (Dores, Cirurgias)</label>
+                        <textarea value={editStudent.injuries} onChange={e=>setEditStudent({...editStudent, injuries: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs h-16 resize-none outline-none focus:border-primary" placeholder="Ex: Dor lombar..."/>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Uso de Medicamentos Contínuos</label>
+                        <input type="text" value={editStudent.medications} onChange={e=>setEditStudent({...editStudent, medications: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: Losartana 50mg/dia"/>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Hábitos Alimentares / Alergias</label>
+                        <input type="text" value={editStudent.dietary_habits} onChange={e=>setEditStudent({...editStudent, dietary_habits: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: Dieta hiperproteica, sem restrições..."/>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 2: Dados Biométricos Atuais */}
+                  {editWizardStep === 2 && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[9px] text-zinc-400 font-bold uppercase block">Peso Atual (kg)</label>
+                          <input type="number" step="0.1" value={editStudent.weight} onChange={e=>setEditStudent({...editStudent, weight: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 82.5"/>
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-zinc-400 font-bold uppercase block">Altura (m)</label>
+                          <input type="number" step="0.01" value={editStudent.height} onChange={e=>setEditStudent({...editStudent, height: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 1.78"/>
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-zinc-400 font-bold uppercase block">Pressão Arterial</label>
+                          <input type="text" value={editStudent.blood_pressure} onChange={e=>setEditStudent({...editStudent, blood_pressure: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 120/80"/>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[9px] text-zinc-400 font-bold uppercase block">% de Gordura (%)</label>
+                          <input type="number" step="0.1" value={editStudent.body_fat} onChange={e=>setEditStudent({...editStudent, body_fat: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 16.4"/>
+                        </div>
+                        <div>
+                          <label className="text-[9px] text-zinc-400 font-bold uppercase block">Massa Magra (kg)</label>
+                          <input type="number" step="0.1" value={editStudent.lean_mass} onChange={e=>setEditStudent({...editStudent, lean_mass: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 68.2"/>
+                        </div>
+                      </div>
+
+                      <div className="border-t border-surface-highest pt-3">
+                        <h4 className="text-[10px] text-[#dfbf80] font-bold uppercase tracking-widest mb-3">Circunferências Corporais (cm)</h4>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Cintura</label>
+                            <input type="number" step="0.1" value={editStudent.waist} onChange={e=>setEditStudent({...editStudent, waist: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 85"/>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Abdômen</label>
+                            <input type="number" step="0.1" value={editStudent.abdomen} onChange={e=>setEditStudent({...editStudent, abdomen: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 92"/>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Quadril</label>
+                            <input type="number" step="0.1" value={editStudent.hips} onChange={e=>setEditStudent({...editStudent, hips: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 104"/>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Braço Direito</label>
+                            <input type="number" step="0.1" value={editStudent.right_arm} onChange={e=>setEditStudent({...editStudent, right_arm: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 34"/>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Braço Esquerdo</label>
+                            <input type="number" step="0.1" value={editStudent.left_arm} onChange={e=>setEditStudent({...editStudent, left_arm: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 34.2"/>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Coxa Direita</label>
+                            <input type="number" step="0.1" value={editStudent.right_thigh} onChange={e=>setEditStudent({...editStudent, right_thigh: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 58"/>
+                          </div>
+                          <div>
+                            <label className="text-[9px] text-zinc-400 font-bold uppercase block">Coxa Esquerda</label>
+                            <input type="number" step="0.1" value={editStudent.left_thigh} onChange={e=>setEditStudent({...editStudent, left_thigh: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary font-mono" placeholder="Ex: 57.8"/>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Step 3: Planejamento & Logística de Treino */}
+                  {editWizardStep === 3 && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Frequência Semanal Alvo</label>
+                          <select value={editStudent.freq_target} onChange={e=>setEditStudent({...editStudent, freq_target: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                            <option value="1">1x na semana</option>
+                            <option value="2">2x na semana</option>
+                            <option value="3">3x na semana</option>
+                            <option value="4">4x na semana</option>
+                            <option value="5">5x ou mais na semana</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Duração Preferencial</label>
+                          <select value={editStudent.duration_pref} onChange={e=>setEditStudent({...editStudent, duration_pref: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                            <option>30 min</option>
+                            <option>45 min</option>
+                            <option>60 min</option>
+                            <option>mais de 60 min</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Local de Treinamento</label>
+                        <select value={editStudent.training_location} onChange={e=>setEditStudent({...editStudent, training_location: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary">
+                          <option>Academia</option>
+                          <option>Ar Livre</option>
+                          <option>Condomínio</option>
+                          <option>Casa</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-2">Dias Disponíveis para Treino</label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(day => {
+                            const isChecked = editStudent.available_days.includes(day);
+                            return (
+                              <label key={day} className={`flex items-center justify-center p-2 rounded-lg border text-[10px] font-bold uppercase cursor-pointer select-none transition-all ${
+                                isChecked
+                                  ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.1)]'
+                                  : 'bg-surface-high border-surface-highest text-zinc-500 hover:text-zinc-300'
+                              }`}>
+                                <input 
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    const days = isChecked
+                                      ? editStudent.available_days.filter(d => d !== day)
+                                      : [...editStudent.available_days, day];
+                                    setEditStudent({ ...editStudent, available_days: days });
+                                  }}
+                                  className="hidden"
+                                />
+                                {day}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Wizard Navigation Footer */}
+                  <div className="flex gap-3 pt-4 border-t border-surface-highest">
+                    {editWizardStep > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setEditWizardStep(editWizardStep - 1)}
+                        className="flex-1 py-2.5 bg-surface hover:bg-surface-high text-zinc-300 font-bold uppercase tracking-wider text-[10px] rounded-lg border border-surface-highest transition-all duration-200 active:scale-95 flex items-center justify-center gap-1"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" /> Voltar
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowEditStudentModal(false)}
+                        className="flex-1 py-2.5 bg-surface hover:bg-surface-high text-zinc-400 hover:text-white font-bold uppercase tracking-wider text-[10px] rounded-lg border border-surface-highest transition-all duration-200 active:scale-95"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                    
+                    {editWizardStep < 3 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editWizardStep === 0 && !editStudent.name) {
+                            return showCustomAlert('Aviso', 'Nome do Aluno é obrigatório!', 'warning');
+                          }
+                          setEditWizardStep(editWizardStep + 1);
+                        }}
+                        className="flex-1 py-2.5 bg-primary text-black font-bold uppercase tracking-wider text-[10px] rounded-lg hover:bg-primary-dim transition-all duration-200 active:scale-95 flex items-center justify-center gap-1"
+                      >
+                        Avançar <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        className="flex-1 py-2.5 bg-gradient-to-r from-primary to-primary-dim text-black font-bold uppercase tracking-wider text-[10px] rounded-lg hover:scale-102 transition-all duration-200 active:scale-95 shadow-[0_0_15px_rgba(212,175,55,0.2)]"
+                      >
+                        Salvar Alterações
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <h2 className="text-2xl font-heading font-bold text-white">Alunos</h2>
-        <button onClick={() => setShowNewStudentModal(true)} className="px-4 py-2 bg-primary text-black font-bold rounded flex items-center gap-2 hover:bg-primary-dim transition-colors text-sm shadow-[0_0_10px_rgba(212,175,55,0.3)]">
-          <Plus className="w-4 h-4" /> Novo Aluno
-        </button>
+        <div className="flex items-center gap-3">
+          {/* View Mode Toggle */}
+          <div className="hidden md:flex bg-surface rounded-lg p-0.5 border border-surface-highest">
+            <button
+              onClick={() => handleToggleViewMode()}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1 ${
+                viewMode === 'table' ? 'bg-[#dfbf80] text-black' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <List className="w-3.5 h-3.5" /> Tabela
+            </button>
+            <button
+              onClick={() => handleToggleViewMode()}
+              className={`px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1 ${
+                viewMode === 'cards' ? 'bg-[#dfbf80] text-black' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" /> Cards
+            </button>
+          </div>
+          <button onClick={() => setShowNewStudentModal(true)} className="px-4 py-2 bg-primary text-black font-bold rounded flex items-center gap-2 hover:bg-primary-dim transition-colors text-sm shadow-[0_0_10px_rgba(212,175,55,0.3)]">
+            <Plus className="w-4 h-4" /> Novo Aluno
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -3248,63 +3963,81 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
       ) : (
         <>
           {/* Desktop Table View */}
-          <div className="hidden md:block bg-surface-container border border-surface-highest rounded-xl overflow-hidden">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-surface-high border-b border-surface-highest text-zinc-400 uppercase text-xs font-bold tracking-wider">
-                <tr>
-                  <th className="p-4 rounded-tl-xl">Aluno</th>
-                  <th className="p-4">Idade</th>
-                  <th className="p-4">Objetivo</th>
-                  <th className="p-4">Financeiro</th>
-                  <th className="p-4">Badges</th>
-                  <th className="p-4 text-right rounded-tr-xl">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-surface-highest">
-                {students.map(s => (
-                  <tr key={s.id} onClick={() => setSelectedStudent(s)} className="hover:bg-surface-high/50 transition-colors cursor-pointer group text-zinc-300">
-                    <td className="p-4">
-                       <div className="font-medium text-white group-hover:text-primary transition-colors">{s.name}</div>
-                       <div className={`text-xs ${s.status === 'Ativo' ? 'text-primary' : 'text-red-400'}`}>{s.status}</div>
-                    </td>
-                    <td className="p-4 font-mono text-zinc-400">{s.age}</td>
-                    <td className="p-4"><span className="px-2 py-1 bg-surface rounded border border-surface-highest text-xs">{s.goal}</span></td>
-                    <td className="p-4">
-                       {(() => {
-                          const finStatus = getStudentFinancialStatus(s.id);
-                          return (
-                             <span className={`px-2 py-0.5 border rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${finStatus.color}`}>
-                                {finStatus.label}
-                             </span>
-                          );
-                       })()}
-                    </td>
-                    <td className="p-4">
-                      <div className="flex -space-x-1">
-                        {s.badges && s.badges.slice(0,3).map((b, i) => (
-                          <span key={i} title={b.name} className="w-6 h-6 flex items-center justify-center bg-surface border border-surface-highest rounded-full text-xs">{b.icon}</span>
-                        ))}
-                        {(!s.badges || s.badges.length === 0) && <span className="text-zinc-600 text-xs">-</span>}
-                      </div>
-                    </td>
-                    <td className="p-4 text-right space-x-2">
-                       <button className="text-zinc-400 hover:text-primary transition-colors text-xs uppercase font-bold flex items-center gap-1 ml-auto">Ver Perfil <ChevronRight className="w-3 h-3"/></button>
-                    </td>
+          {viewMode === 'table' && (
+            <div className="hidden md:block bg-surface-container border border-surface-highest rounded-xl overflow-hidden">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-surface-high border-b border-surface-highest text-zinc-400 uppercase text-xs font-bold tracking-wider">
+                  <tr>
+                    <th className="p-4 rounded-tl-xl">Aluno</th>
+                    <th className="p-4">Idade</th>
+                    <th className="p-4">Objetivo</th>
+                    <th className="p-4">Financeiro</th>
+                    <th className="p-4">Badges</th>
+                    <th className="p-4 text-right rounded-tr-xl">Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-surface-highest">
+                  {students.map(s => (
+                    <tr key={s.id} onClick={() => setSelectedStudent(s)} className="hover:bg-surface-high/50 transition-colors cursor-pointer group text-zinc-300">
+                      <td className="p-4 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full border border-[#dfbf80]/30 overflow-hidden bg-surface-high flex items-center justify-center shrink-0">
+                          {s.photo_avatar_url ? (
+                            <img src={s.photo_avatar_url} alt={s.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-sm font-bold text-[#dfbf80]">{s.name.charAt(0).toUpperCase()}</span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="font-medium text-white group-hover:text-primary transition-colors">{s.name}</div>
+                          <div className={`text-xs ${s.status === 'Ativo' ? 'text-primary' : 'text-red-400'}`}>{s.status}</div>
+                        </div>
+                      </td>
+                      <td className="p-4 font-mono text-zinc-400">{s.age}</td>
+                      <td className="p-4"><span className="px-2 py-1 bg-surface rounded border border-surface-highest text-xs">{s.goal}</span></td>
+                      <td className="p-4">
+                         {(() => {
+                            const finStatus = getStudentFinancialStatus(s.id);
+                            return (
+                               <span className={`px-2 py-0.5 border rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${finStatus.color}`}>
+                                  {finStatus.label}
+                               </span>
+                            );
+                         })()}
+                      </td>
+                      <td className="p-4">
+                        <div className="flex -space-x-1">
+                          {s.badges && s.badges.slice(0,3).map((b, i) => (
+                            <span key={i} title={b.name} className="w-6 h-6 flex items-center justify-center bg-surface border border-surface-highest rounded-full text-xs">{b.icon}</span>
+                          ))}
+                          {(!s.badges || s.badges.length === 0) && <span className="text-zinc-600 text-xs">-</span>}
+                        </div>
+                      </td>
+                      <td className="p-4 text-right space-x-2">
+                         <button className="text-zinc-400 hover:text-primary transition-colors text-xs uppercase font-bold flex items-center gap-1 ml-auto">Ver Perfil <ChevronRight className="w-3.5 h-3.5"/></button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-          {/* Mobile Cards View */}
-          <div className="grid grid-cols-1 gap-4 md:hidden">
+          {/* Cards View (Desktop when selected, or Mobile always) */}
+          <div className={`${viewMode === 'cards' ? 'grid' : 'grid md:hidden'} grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4`}>
             {students.map(s => (
               <div 
                 key={s.id} 
                 onClick={() => setSelectedStudent(s)}
                 className="bg-surface-container border border-surface-highest p-4 rounded-xl hover:border-primary/50 transition-all cursor-pointer flex flex-col gap-3 relative overflow-hidden"
               >
-                <div className="flex justify-between items-start">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-full border border-[#dfbf80]/30 overflow-hidden bg-surface-high flex items-center justify-center shrink-0">
+                    {s.photo_avatar_url ? (
+                      <img src={s.photo_avatar_url} alt={s.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-base font-bold text-[#dfbf80]">{s.name.charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
                   <div>
                     <h4 className="font-bold text-white text-base leading-tight flex flex-wrap items-center gap-2">
                       {s.name}
@@ -3319,7 +4052,6 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                     </h4>
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${s.status === 'Ativo' ? 'text-primary' : 'text-red-400'}`}>{s.status}</span>
                   </div>
-                  <span className="text-xs bg-surface-high border border-surface-highest px-2 py-1 rounded text-zinc-400 font-medium">{s.age} anos</span>
                 </div>
 
                 <div className="flex justify-between items-center border-t border-surface-highest/40 pt-3">
@@ -3327,17 +4059,15 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                     <span className="text-[10px] text-zinc-500 uppercase font-bold block mb-0.5">Objetivo</span>
                     <span className="px-2 py-0.5 bg-surface-high rounded border border-surface-highest text-xs text-zinc-300">{s.goal}</span>
                   </div>
-                  
-                  {s.badges && s.badges.length > 0 && (
-                    <div>
-                      <span className="text-[10px] text-zinc-500 uppercase font-bold block mb-0.5 text-right">Badges</span>
-                      <div className="flex gap-1 justify-end">
-                        {s.badges.slice(0, 3).map((b, i) => (
-                          <span key={i} title={b.name} className="w-6 h-6 flex items-center justify-center bg-surface-high border border-surface-highest rounded-full text-xs">{b.icon}</span>
-                        ))}
-                      </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-zinc-500 uppercase font-bold block mb-0.5">Badges</span>
+                    <div className="flex -space-x-1 justify-end">
+                      {s.badges && s.badges.slice(0, 3).map((b, i) => (
+                        <span key={i} title={b.name} className="w-5 h-5 flex items-center justify-center bg-surface border border-surface-highest rounded-full text-[10px]">{b.icon}</span>
+                      ))}
+                      {(!s.badges || s.badges.length === 0) && <span className="text-zinc-500 text-[10px]">-</span>}
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -3547,6 +4277,10 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                   <div>
                     <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Uso de Medicamentos Contínuos</label>
                     <input type="text" value={newStudent.medications} onChange={e=>setNewStudent({...newStudent, medications: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: Losartana 50mg/dia"/>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Hábitos Alimentares / Alergias</label>
+                    <input type="text" value={newStudent.dietary_habits} onChange={e=>setNewStudent({...newStudent, dietary_habits: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-2 mt-1 text-white text-xs outline-none focus:border-primary" placeholder="Ex: Dieta hiperproteica, sem restrições..."/>
                   </div>
                 </div>
               )}

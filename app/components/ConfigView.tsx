@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Zap, Users, Settings, CheckCircle2, X, RotateCcw, Share2, Eye, EyeOff } from 'lucide-react';
+import { Zap, Users, Settings, CheckCircle2, X, RotateCcw, Share2, Eye, EyeOff, Copy, HelpCircle, Info } from 'lucide-react';
 import CustomAlertModal from './CustomAlertModal';
 import { generatePDFAndShare } from '../utils/pdf';
 import { User, ProfileConfig, HistoryEntry } from '../types';
@@ -49,7 +49,48 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
   const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editForm, setEditForm] = useState<User | null>(null);
 
-  const [theme, setTheme] = useState<string>(() => typeof window !== 'undefined' ? (localStorage.getItem('elite_coach_theme') || 'dark') : 'dark');
+  const [theme, setTheme] = useState<string>('dark');
+  const [lastCreatedUser, setLastCreatedUser] = useState<{
+    name: string;
+    username: string;
+    password: string;
+    role: string;
+  } | null>(null);
+
+  const [showTokenGuide, setShowTokenGuide] = useState<boolean>(false);
+  const [showChatIdGuide, setShowChatIdGuide] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const themeKey = currentUser?.id ? `elite_coach_theme_${currentUser.id}` : 'elite_coach_theme';
+      const savedTheme = localStorage.getItem(themeKey) || localStorage.getItem('elite_coach_theme') || 'dark';
+      setTheme(savedTheme);
+      if (savedTheme === 'light') {
+        document.documentElement.classList.add('light-theme');
+      } else {
+        document.documentElement.classList.remove('light-theme');
+      }
+    }
+  }, [currentUser]);
+
+  const handleCopyCredentials = (u: User) => {
+    const isLast = lastCreatedUser && lastCreatedUser.username === (u.username || u.email);
+    const passwordToShow = isLast ? lastCreatedUser.password : '********';
+    
+    const text = `Elite Coach - Credenciais de Acesso\n` +
+      `Nome: ${u.name}\n` +
+      `Perfil: ${u.role}\n` +
+      `Usuário/E-mail: ${u.username || u.email}\n` +
+      `Senha: ${passwordToShow}\n` +
+      `Link de Acesso: ${window.location.origin}`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      showCustomAlert('Sucesso', 'Credenciais copiadas com sucesso!', 'success');
+    }).catch(err => {
+      console.error('Could not copy text: ', err);
+      showCustomAlert('Erro', 'Não foi possível copiar automaticamente.', 'error');
+    });
+  };
 
   const [botToken, setBotToken] = useState<string>('');
   const [adminChatId, setAdminChatId] = useState<string>('');
@@ -253,6 +294,8 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
+    const themeKey = currentUser?.id ? `elite_coach_theme_${currentUser.id}` : 'elite_coach_theme';
+    localStorage.setItem(themeKey, newTheme);
     localStorage.setItem('elite_coach_theme', newTheme);
     if (newTheme === 'light') {
       document.documentElement.classList.add('light-theme');
@@ -338,6 +381,12 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
           if (profileError) {
              console.error('Error upserting profile details:', profileError.message);
           }
+          setLastCreatedUser({
+            name: newUser.name,
+            username: newUser.username ? newUser.username.toLowerCase().trim() : newUser.email,
+            password: newUser.password,
+            role: newUser.role
+          });
         }
 
         showCustomAlert('Sucesso', 'Membro registrado com sucesso! Um e-mail de confirmação foi disparado.', 'success');
@@ -534,25 +583,65 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
               </div>
 
               <div>
-                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Nome Completo</label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Nome Completo</label>
+                  <div className="group relative">
+                    <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help" />
+                    <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-950 text-[10px] text-zinc-300 rounded border border-surface-highest shadow-xl z-50 pointer-events-none">
+                      Nome do profissional exibido nos cabeçalhos e relatórios em PDF.
+                    </div>
+                  </div>
+                </div>
                 <input type="text" value={profile.name} onChange={e=>setProfile({...profile, name: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Instagram</label>
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Instagram</label>
+                    <div className="group relative">
+                      <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help" />
+                      <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-950 text-[10px] text-zinc-300 rounded border border-surface-highest shadow-xl z-50 pointer-events-none">
+                        Link ou username do Instagram profissional do treinador.
+                      </div>
+                    </div>
+                  </div>
                   <input type="text" value={profile.instagram || ''} onChange={e=>setProfile({...profile, instagram: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
                 </div>
                 <div>
-                  <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">WhatsApp</label>
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">WhatsApp</label>
+                    <div className="group relative">
+                      <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help" />
+                      <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-950 text-[10px] text-zinc-300 rounded border border-surface-highest shadow-xl z-50 pointer-events-none">
+                        Número de contato do WhatsApp exibido nas fichas.
+                      </div>
+                    </div>
+                  </div>
                   <input type="text" value={profile.whatsapp || ''} onChange={e=>setProfile({...profile, whatsapp: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
                 </div>
               </div>
               <div>
-                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">URL da Logo (PDF)</label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">URL da Logo (PDF)</label>
+                  <div className="group relative">
+                    <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help" />
+                    <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-950 text-[10px] text-zinc-300 rounded border border-surface-highest shadow-xl z-50 pointer-events-none">
+                      Link público da imagem ou logo para os relatórios.
+                    </div>
+                  </div>
+                </div>
                 <input type="text" value={profile.logoUrl || ''} onChange={e=>setProfile({...profile, logoUrl: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors" />
               </div>
               <div>
-                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Modelo Visual PDF</label>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Modelo Visual PDF</label>
+                  <div className="group relative">
+                    <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help" />
+                    <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-950 text-[10px] text-zinc-300 rounded border border-surface-highest shadow-xl z-50 pointer-events-none">
+                      Escolha o layout de cores dos PDFs gerados no sistema.
+                    </div>
+                  </div>
+                </div>
                 <select value={profile.pdfTemplate} onChange={e=>setProfile({...profile, pdfTemplate: e.target.value})} className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors">
                   <option value="1">Modelo 1 - Clássico (Dourado/Branco)</option>
                   <option value="2">Modelo 2 - Moderno Escuro (Minimalista)</option>
@@ -593,7 +682,74 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
               </div>
 
               <div>
-                <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Chat ID do Administrador (Telegram)</label>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Token do Bot do Telegram</label>
+                    <div className="group relative">
+                      <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help" />
+                      <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-950 text-[10px] text-zinc-300 rounded border border-surface-highest shadow-xl z-50 pointer-events-none">
+                        Chave do BotFather para a API do Telegram.
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowTokenGuide(!showTokenGuide)}
+                    className="text-[10px] text-primary hover:underline flex items-center gap-1 font-semibold uppercase tracking-wider"
+                  >
+                    <HelpCircle className="w-3 h-3" /> Como obter?
+                  </button>
+                </div>
+                <div className="relative mt-1">
+                  <input 
+                    type={showToken ? "text" : "password"} 
+                    value={botToken} 
+                    onChange={e=>setBotToken(e.target.value)} 
+                    className="w-full bg-surface-high border border-surface-highest rounded p-3 pr-10 text-white text-sm outline-none focus:border-primary transition-colors font-mono" 
+                    placeholder="Ex: 123456789:AABBCCDDEEFF..."
+                  />
+                  <button onClick={() => setShowToken(!showToken)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300">
+                     <Settings className="w-4 h-4"/>
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {showTokenGuide && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }} 
+                      animate={{ opacity: 1, height: 'auto' }} 
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-2 bg-surface p-3 rounded border border-surface-highest text-xs text-zinc-300 space-y-2 overflow-hidden"
+                    >
+                      <p className="font-bold text-primary">Passo a passo para obter o Token:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-zinc-400">
+                        <li>Abra o Telegram e busque pelo contato oficial <strong className="text-white">@BotFather</strong>.</li>
+                        <li>Inicie o chat e envie o comando <code className="text-primary font-mono bg-zinc-900 px-1 py-0.5 rounded">/newbot</code>.</li>
+                        <li>Escolha um nome e um username para o seu bot (deve terminar em &quot;bot&quot;).</li>
+                        <li>O @BotFather enviará uma mensagem de sucesso contendo o Token HTTP (ex: <code className="text-white font-mono break-all bg-zinc-900 px-1 py-0.5 rounded">123456789:ABC...</code>). Copie e cole no campo acima.</li>
+                      </ol>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <label className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Chat ID do Administrador (Telegram)</label>
+                    <div className="group relative">
+                      <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help" />
+                      <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-950 text-[10px] text-zinc-300 rounded border border-surface-highest shadow-xl z-50 pointer-events-none">
+                        Código do usuário que receberá as mensagens.
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowChatIdGuide(!showChatIdGuide)}
+                    className="text-[10px] text-primary hover:underline flex items-center gap-1 font-semibold uppercase tracking-wider"
+                  >
+                    <HelpCircle className="w-3 h-3" /> Como obter?
+                  </button>
+                </div>
                 <input 
                   type="text" 
                   value={adminChatId} 
@@ -601,6 +757,25 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
                   className="w-full bg-surface-high border border-surface-highest rounded p-3 mt-1 text-white text-sm outline-none focus:border-primary transition-colors font-mono" 
                   placeholder="Ex: 987654321"
                 />
+
+                <AnimatePresence>
+                  {showChatIdGuide && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }} 
+                      animate={{ opacity: 1, height: 'auto' }} 
+                      exit={{ opacity: 0, height: 0 }}
+                      className="mt-2 bg-surface p-3 rounded border border-surface-highest text-xs text-zinc-300 space-y-2 overflow-hidden"
+                    >
+                      <p className="font-bold text-primary">Passo a passo para obter seu Chat ID:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-zinc-400">
+                        <li>Abra o Telegram e busque pelo seu bot recém-criado.</li>
+                        <li>Envie a mensagem <code className="text-primary font-mono bg-zinc-900 px-1 py-0.5 rounded">/start</code> para iniciar a conversa.</li>
+                        <li>Agora busque pelo contato oficial <strong className="text-white">@userinfobot</strong> e clique em começar.</li>
+                        <li>Ele retornará uma mensagem contendo seu <strong className="text-white">Id</strong> (ex: <code className="text-white font-mono bg-zinc-900 px-1 py-0.5 rounded">987654321</code>). Copie e cole no campo acima.</li>
+                      </ol>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
               
               <div className="flex items-center justify-between p-4 bg-surface-high border border-surface-highest rounded">
@@ -645,7 +820,15 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
 
         {/* Team & Appearance */}
         <div className="bg-surface-container border border-surface-highest rounded-xl p-8 col-span-1 md:col-span-2">
-          <h3 className="font-heading font-semibold text-lg text-white mb-6 border-b border-surface-highest pb-2">Aparência do Sistema</h3>
+          <div className="flex items-center gap-1.5 mb-6 border-b border-surface-highest pb-2">
+            <h3 className="font-heading font-semibold text-lg text-white">Aparência do Sistema</h3>
+            <div className="group relative">
+              <Info className="w-3.5 h-3.5 text-zinc-500 hover:text-zinc-300 cursor-help" />
+              <div className="hidden group-hover:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-zinc-950 text-[10px] text-zinc-300 rounded border border-surface-highest shadow-xl z-50 pointer-events-none">
+                Ajuste o contraste e as tonalidades do layout visual para o usuário atual.
+              </div>
+            </div>
+          </div>
           <div className="flex items-center justify-between bg-surface-high p-4 rounded-lg border border-surface-highest">
             <div>
               <p className="text-white font-medium">Tema Visual</p>
@@ -792,11 +975,17 @@ export default function ConfigView({ currentUser, onUserUpdate }: ConfigViewProp
                           <div className="flex items-center justify-end gap-4">
                             {editingId === u.id ? (
                               <>
-                                 <button onClick={saveEdit} className="text-[#00ff41] hover:text-[#00ff41]/80 transition-colors uppercase text-xs font-bold tracking-wider">Salvar</button>
-                                 <button onClick={() => setEditingId(null)} className="text-zinc-500 hover:text-zinc-400 transition-colors uppercase text-xs font-bold tracking-wider">Canc</button>
+                                <button onClick={saveEdit} className="text-[#00ff41] hover:text-[#00ff41]/80 transition-colors uppercase text-xs font-bold tracking-wider">Salvar</button>
+                                <button onClick={() => setEditingId(null)} className="text-zinc-500 hover:text-zinc-400 transition-colors uppercase text-xs font-bold tracking-wider">Cancelar</button>
                               </>
                             ) : (
                               <>
+                                 <button 
+                                   onClick={() => handleCopyCredentials(u)} 
+                                   className="text-[#dfbf80] hover:text-[#dfbf80]/80 transition-colors uppercase text-xs font-bold tracking-wider flex items-center"
+                                 >
+                                   <Copy className="w-3.5 h-3.5 mr-1" /> Copiar
+                                 </button>
                                  <button onClick={() => startEdit(u)} className="text-[#d4af37] hover:text-[#d4af37]/80 transition-colors uppercase text-xs font-bold tracking-wider">Editar</button>
                                  {u.unremovable || u.role === 'Desenvolvedor' ? (
                                     <span className="text-xs text-zinc-600 italic">Protegido</span>

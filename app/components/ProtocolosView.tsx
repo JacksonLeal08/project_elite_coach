@@ -79,6 +79,46 @@ export default function ProtocolosView() {
 
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [workoutData, setWorkoutData] = useState<WorkoutData | null>(null);
+  const [activeMetadata, setActiveMetadata] = useState<{
+    student: string;
+    objective: string;
+    durationWeeks: string;
+    weight: string;
+    height: string;
+    imc: string;
+    clinicalNotes: string;
+  } | null>(draft ? {
+    student: draft.student || '',
+    objective: draft.objective || '',
+    durationWeeks: draft.durationWeeks || '4',
+    weight: draft.weight || '',
+    height: draft.height || '',
+    imc: draft.imc || '',
+    clinicalNotes: draft.clinicalNotes || ''
+  } : null);
+
+  const handleClearParameters = () => {
+    setStudent('');
+    setObjective('');
+    setSplit('ABC');
+    setDays('3');
+    setNeeds('');
+    setDurationWeeks('4');
+    setWeight('');
+    setHeight('');
+    setImc('');
+    setClinicalNotes('');
+    setStartDate(new Date().toISOString().split('T')[0]);
+    setEndDate('');
+    setWorkoutData(null);
+    setSelectedStudentAnamnesis(null);
+    setActiveMetadata(null);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('elite_coach_protocol_draft');
+    }
+    showCustomAlert("Limpo", "Todos os parâmetros do formulário foram limpos.", "info");
+  };
+
   const [activeDayIdx, setActiveDayIdx] = useState<number>(0);
   const [sendNotification, setSendNotification] = useState<boolean>(true);
   const [whatsappLink, setWhatsappLink] = useState<string>('');
@@ -405,6 +445,15 @@ export default function ProtocolosView() {
     setStartDate(item.startDate || new Date().toISOString().split('T')[0]);
     setEndDate(item.endDate || '');
     setActiveDayIdx(0);
+    setActiveMetadata({
+      student: item.student,
+      objective: item.objective,
+      durationWeeks: item.durationWeeks,
+      weight: item.weight || '',
+      height: item.height || '',
+      imc: item.imc || '',
+      clinicalNotes: item.clinicalNotes || ''
+    });
   };
 
   const handleGenerate = async () => {
@@ -460,7 +509,26 @@ export default function ProtocolosView() {
       
       setWorkoutData(data);
       setActiveDayIdx(0);
+      setActiveMetadata({ student, objective, durationWeeks, weight, height, imc, clinicalNotes });
       await saveToHistory(data, { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes, startDate, endDate }, sendNotification);
+      
+      // Auto-clear parameters
+      setStudent('');
+      setObjective('');
+      setSplit('ABC');
+      setDays('3');
+      setNeeds('');
+      setDurationWeeks('4');
+      setWeight('');
+      setHeight('');
+      setImc('');
+      setClinicalNotes('');
+      setStartDate(new Date().toISOString().split('T')[0]);
+      setEndDate('');
+      setSelectedStudentAnamnesis(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('elite_coach_protocol_draft');
+      }
     } catch (error: any) {
       showCustomAlert("Erro", `Erro ao gerar protocolo: ${error.message}\nTente novamente em alguns instantes.`, "error");
     } finally {
@@ -478,8 +546,27 @@ export default function ProtocolosView() {
     
     setIsGenerating(true);
     try {
+      setActiveMetadata({ student, objective, durationWeeks, weight, height, imc, clinicalNotes });
       await saveToHistory(workoutData, { student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes, startDate, endDate }, sendNotification);
       showCustomAlert("Sucesso", "Treino manual salvo com sucesso no histórico!", "success");
+      
+      // Auto-clear parameters
+      setStudent('');
+      setObjective('');
+      setSplit('ABC');
+      setDays('3');
+      setNeeds('');
+      setDurationWeeks('4');
+      setWeight('');
+      setHeight('');
+      setImc('');
+      setClinicalNotes('');
+      setStartDate(new Date().toISOString().split('T')[0]);
+      setEndDate('');
+      setSelectedStudentAnamnesis(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('elite_coach_protocol_draft');
+      }
     } catch (err: any) {
       showCustomAlert("Erro", "Erro ao salvar protocolo manual: " + err.message, "error");
     } finally {
@@ -488,13 +575,31 @@ export default function ProtocolosView() {
   };
 
   const handleExportPDF = () => {
-    if (!workoutData) return;
-    generatePDFAndShare({ student, objective, durationWeeks, weight, height, imc, clinicalNotes, workoutData }, true, exerciseLibrary);
+    if (!workoutData || !activeMetadata) return;
+    generatePDFAndShare({ 
+      student: activeMetadata.student, 
+      objective: activeMetadata.objective, 
+      durationWeeks: activeMetadata.durationWeeks, 
+      weight: activeMetadata.weight, 
+      height: activeMetadata.height, 
+      imc: activeMetadata.imc, 
+      clinicalNotes: activeMetadata.clinicalNotes, 
+      workoutData 
+    }, true, exerciseLibrary);
   };
 
   const shareWorkout = () => {
-    if (!workoutData) return;
-    generatePDFAndShare({ student, objective, durationWeeks, weight, height, imc, clinicalNotes, workoutData }, false, exerciseLibrary);
+    if (!workoutData || !activeMetadata) return;
+    generatePDFAndShare({ 
+      student: activeMetadata.student, 
+      objective: activeMetadata.objective, 
+      durationWeeks: activeMetadata.durationWeeks, 
+      weight: activeMetadata.weight, 
+      height: activeMetadata.height, 
+      imc: activeMetadata.imc, 
+      clinicalNotes: activeMetadata.clinicalNotes, 
+      workoutData 
+    }, false, exerciseLibrary);
   };
 
   const [focusMode, setFocusMode] = useState<boolean>(false);
@@ -677,6 +782,14 @@ export default function ProtocolosView() {
                   {isGenerating ? 'Salvando...' : 'Salvar Protocolo Manual'}
                 </button>
               )}
+              <button
+                type="button"
+                onClick={handleClearParameters}
+                disabled={isGenerating}
+                className="w-full py-2.5 bg-surface hover:bg-surface-high border border-surface-highest text-zinc-400 hover:text-white font-bold uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 mt-2 text-xs"
+              >
+                Limpar Parâmetros
+              </button>
            </div>
         </div>
 

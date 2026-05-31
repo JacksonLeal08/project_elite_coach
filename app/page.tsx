@@ -258,10 +258,13 @@ export default function App() {
   useEffect(() => {
     console.log('App.tsx useEffect mounted');
     if (typeof window !== 'undefined') {
-      const savedTheme = localStorage.getItem('elite_coach_theme');
+      const themeKey = currentUser?.id ? `elite_coach_theme_${currentUser.id}` : 'elite_coach_theme';
+      const savedTheme = localStorage.getItem(themeKey) || localStorage.getItem('elite_coach_theme') || 'dark';
       console.log('Saved theme in localStorage:', savedTheme);
       if (savedTheme === 'light') {
         document.documentElement.classList.add('light-theme');
+      } else {
+        document.documentElement.classList.remove('light-theme');
       }
 
       // Check for public student_token
@@ -296,7 +299,7 @@ export default function App() {
 
     checkInitialSession();
 
-        // 2. Listen for auth changes
+    // 2. Listen for auth changes
     console.log('Registering onAuthStateChange listener...');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('onAuthStateChange fired! Event:', event, 'Has session:', !!session);
@@ -321,6 +324,19 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Theme Sync effect when user changes (e.g. login/logout or profile update)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const themeKey = currentUser?.id ? `elite_coach_theme_${currentUser.id}` : 'elite_coach_theme';
+      const savedTheme = localStorage.getItem(themeKey) || localStorage.getItem('elite_coach_theme') || 'dark';
+      if (savedTheme === 'light') {
+        document.documentElement.classList.add('light-theme');
+      } else {
+        document.documentElement.classList.remove('light-theme');
+      }
+    }
+  }, [currentUser]);
 
     const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1313,7 +1329,7 @@ function MainApp({
               <div>
                  <AnimatePresence mode="wait">
                     <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-                       {activeTab === 'dashboard' && <DashboardView />}
+                       {activeTab === 'dashboard' && <DashboardView currentUser={currentUser} />}
                        {activeTab === 'alunos' && (
                          <AlunosView 
                            currentUser={currentUser} 
@@ -1577,7 +1593,7 @@ function MainApp({
       </AnimatePresence>
 
       {/* Floating AI Agent Button */}
-      <div className="fixed bottom-24 right-6 z-[80]" data-tour="ai-agent">
+      <div className={`fixed ${showMobileMoreMenu ? 'bottom-[310px]' : 'bottom-24'} right-6 z-[80] transition-all duration-300`} data-tour="ai-agent">
         <button 
           onClick={() => setShowAiAgent(true)}
           className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-primary-dim text-black flex items-center justify-center shadow-[0_4px_20px_rgba(212,175,55,0.4)] hover:scale-110 active:scale-95 transition-all duration-200 group relative"
@@ -2570,6 +2586,11 @@ function PublicEvolutionView({ token }: { token: string }) {
   }
   if (data?.schedules) {
     data.schedules.forEach((s: any, sIdx: number) => {
+      const trainerMsg = s.trainer_message || (() => {
+        const msgIndex = s.notes ? s.notes.indexOf('[Mensagem do Treinador]:') : -1;
+        return msgIndex !== -1 ? s.notes.substring(msgIndex + '[Mensagem do Treinador]:'.length).trim() : null;
+      })();
+
       if (s.status === 'Sugerido') {
         const alertId = `suggested_schedule_${s.id || sIdx}`;
         if (!dismissedAlerts.includes(alertId)) {
@@ -2577,7 +2598,7 @@ function PublicEvolutionView({ token }: { token: string }) {
             id: alertId,
             type: 'schedule_suggested',
             title: '⚡ Nova Data Sugerida',
-            message: `O professor sugeriu reagendar para ${new Date(s.suggested_date + 'T12:00:00').toLocaleDateString('pt-BR')} às ${s.suggested_time?.slice(0, 5)}.`
+            message: `O professor sugeriu reagendar para ${new Date(s.suggested_date + 'T12:00:00').toLocaleDateString('pt-BR')} às ${s.suggested_time?.slice(0, 5)}.` + (trainerMsg ? ` Justificativa: "${trainerMsg}"` : '')
           });
         }
       } else if (s.status === 'Confirmado') {
@@ -2597,7 +2618,7 @@ function PublicEvolutionView({ token }: { token: string }) {
             id: alertId,
             type: 'schedule_cancelled',
             title: '❌ Agendamento Cancelado',
-            message: `O agendamento do dia ${new Date(s.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')} às ${s.scheduled_time?.slice(0, 5)} foi cancelado pelo treinador.`
+            message: `O agendamento do dia ${new Date(s.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')} às ${s.scheduled_time?.slice(0, 5)} foi cancelado pelo treinador.` + (trainerMsg ? ` Justificativa: "${trainerMsg}"` : '')
           });
         }
       }
@@ -2715,7 +2736,25 @@ function PublicEvolutionView({ token }: { token: string }) {
                   <h4 className="text-sm font-bold text-white leading-tight">
                     O treinador sugeriu reagendar para o dia <span className="font-mono text-cyan-300">{new Date(s.suggested_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span> às <span className="font-mono text-cyan-300">{s.suggested_time?.slice(0, 5)}</span>.
                   </h4>
-                  {s.notes && <p className="text-zinc-400 text-xs italic">“{s.notes}”</p>}
+                  {(() => {
+                    const trainerMsg = s.trainer_message || (() => {
+                      const msgIndex = s.notes ? s.notes.indexOf('[Mensagem do Treinador]:') : -1;
+                      return msgIndex !== -1 ? s.notes.substring(msgIndex + '[Mensagem do Treinador]:'.length).trim() : null;
+                    })();
+                    
+                    const cleanNotes = s.notes ? s.notes.replace(/\[Mensagem do Treinador\]:[^\n]*/, '').trim() : '';
+
+                    return (
+                      <>
+                        {trainerMsg && (
+                          <div className="mt-2 text-xs bg-cyan-950/30 border border-cyan-800/20 p-2.5 rounded-lg text-zinc-300">
+                            <span className="font-bold text-cyan-400">Mensagem do Professor:</span> “{trainerMsg}”
+                          </div>
+                        )}
+                        {cleanNotes && <p className="text-zinc-400 text-xs italic mt-1">Obs: “{cleanNotes}”</p>}
+                      </>
+                    );
+                  })()}
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button
@@ -3321,21 +3360,35 @@ function PublicEvolutionView({ token }: { token: string }) {
               <div className="mt-4 pt-3 border-t border-surface-highest/40">
                 <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block mb-2">Solicitações Recentes:</span>
                 <div className="space-y-2 max-h-40 overflow-y-auto scrollbar-none pr-1">
-                  {data.schedules.map((s: any, sIdx: number) => (
-                    <div key={sIdx} className="bg-surface p-2 rounded-lg border border-surface-highest/50 flex justify-between items-center text-xs">
-                      <div className="space-y-0.5">
-                        <span className="font-bold text-white block">{new Date(s.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                        <span className="text-[10px] text-zinc-500 font-mono">{s.scheduled_time}</span>
+                  {data.schedules.map((s: any, sIdx: number) => {
+                    const trainerMsg = s.trainer_message || (() => {
+                      const msgIndex = s.notes ? s.notes.indexOf('[Mensagem do Treinador]:') : -1;
+                      return msgIndex !== -1 ? s.notes.substring(msgIndex + '[Mensagem do Treinador]:'.length).trim() : null;
+                    })();
+                    return (
+                      <div key={sIdx} className="bg-surface p-2.5 rounded-lg border border-surface-highest/50 space-y-1 flex flex-col text-xs">
+                        <div className="flex justify-between items-center w-full">
+                          <div className="space-y-0.5">
+                            <span className="font-bold text-white block">{new Date(s.scheduled_date + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                            <span className="text-[10px] text-zinc-500 font-mono">{s.scheduled_time}</span>
+                          </div>
+                          <span className={`text-[9px] px-2 py-0.5 rounded font-extrabold uppercase ${
+                            s.status === 'Realizado' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+                            s.status === 'Cancelado' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                            s.status === 'Sugerido' ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' :
+                            'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                          }`}>
+                            {s.status}
+                          </span>
+                        </div>
+                        {trainerMsg && (
+                          <p className="text-[10px] text-zinc-400 border-l border-cyan-500/40 pl-2 py-0.5 italic mt-1 bg-surface-high/20 rounded-r">
+                            “{trainerMsg}”
+                          </p>
+                        )}
                       </div>
-                      <span className={`text-[9px] px-2 py-0.5 rounded font-extrabold uppercase ${
-                        s.status === 'Realizado' ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
-                        s.status === 'Cancelado' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
-                        'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                      }`}>
-                        {s.status}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

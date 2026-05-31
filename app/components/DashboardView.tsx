@@ -1,18 +1,41 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Users, Dumbbell, Zap, CheckCircle2, Award, ChevronRight, History, ShieldAlert } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
-import { ProgressionData, ActivityEntry } from '../types';
+import { ProgressionData, ActivityEntry, User } from '../types';
 import { MOCK_PROGRESSION, MOCK_ACTIVITIES } from '../mocks';
 import { supabase } from '../utils/supabase';
 
-export default function DashboardView() {
+interface DashboardViewProps {
+  currentUser: User | null;
+}
+
+export default function DashboardView({ currentUser }: DashboardViewProps) {
   const [goal, setGoal] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('elite_coach_goal') || '10000';
     }
     return '10000';
   });
+
+  const [toast, setToast] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
+  const toastTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const triggerToast = (val: string) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    
+    const userName = currentUser?.name || 'Treinador';
+    setToast({
+      show: true,
+      message: `Olá, ${userName}! O valor da meta mensal foi atualizado para R$ ${parseFloat(val || '0').toLocaleString()} com sucesso.`
+    });
+
+    toastTimeoutRef.current = setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 4000);
+  };
 
   const [loading, setLoading] = useState<boolean>(true);
   const [stats, setStats] = useState({
@@ -226,6 +249,7 @@ export default function DashboardView() {
   const handleGoalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setGoal(e.target.value);
     localStorage.setItem('elite_coach_goal', e.target.value);
+    triggerToast(e.target.value);
   };
 
   const currentRevenue = stats.currentRevenue;
@@ -450,6 +474,26 @@ export default function DashboardView() {
             </div>
          )}
       </div>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast.show && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-6 left-6 z-[9999] max-w-sm bg-surface-high/95 backdrop-blur border border-primary/30 p-4 rounded-xl flex items-start gap-3 shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
+          >
+            <div className="p-1.5 bg-primary/10 border border-primary/20 text-primary rounded-lg shrink-0 mt-0.5">
+              <Award className="w-4 h-4" />
+            </div>
+            <div className="space-y-0.5">
+              <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest block">Meta Atualizada</span>
+              <p className="text-zinc-200 text-xs leading-relaxed">{toast.message}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -44,6 +44,7 @@ export interface Student {
   neighborhood?: string | null;
   city?: string | null;
   state?: string | null;
+  is_whatsapp?: boolean | null;
 }
 
 export interface Anamnesis {
