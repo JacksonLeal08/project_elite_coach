@@ -3561,11 +3561,12 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                    {/* Edit Student Modal Dialog */}
           {showEditStudentModal && (
             <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-lg w-full relative overflow-y-auto max-h-[90vh] scrollbar-none">
-                <button onClick={() => { setShowEditStudentModal(false); }} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-lg w-full relative flex flex-col max-h-[90vh]">
+                <button onClick={() => { setShowEditStudentModal(false); }} className="absolute top-4 right-4 text-zinc-400 hover:text-white z-10">
                   <X className="w-5 h-5"/>
                 </button>
-                <h3 className="text-lg font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2 uppercase tracking-wider">Editar Perfil do Aluno</h3>
+                <div className="flex-shrink-0">
+                  <h3 className="text-lg font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2 uppercase tracking-wider">Editar Perfil do Aluno</h3>
                 
                 {/* Wizard Steps Progress Bar */}
                 <div className="flex items-center justify-between mb-6 px-1 select-none">
@@ -3607,8 +3608,10 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                     </React.Fragment>
                   ))}
                 </div>
+                </div>
 
-                <form onSubmit={handleEditStudentSubmit} className="space-y-6">
+                <form onSubmit={handleEditStudentSubmit} className="flex-1 flex flex-col min-h-0">
+                  <div className="flex-1 overflow-y-auto pr-1 space-y-6 scrollbar-none py-1">
                   {/* Step 0: Dados Pessoais & Endereço */}
                   {editWizardStep === 0 && (
                     <div className="space-y-4">
@@ -3904,9 +3907,10 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                       </div>
                     </div>
                   )}
+                  </div>
 
                   {/* Wizard Navigation Footer */}
-                  <div className="flex gap-3 pt-4 border-t border-surface-highest">
+                  <div className="flex-shrink-0 flex gap-3 pt-4 border-t border-surface-highest mt-4">
                     {editWizardStep > 0 ? (
                       <button
                         type="button"
@@ -4117,11 +4121,12 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
             {/* New Student Modal Dialog */}
       {showNewStudentModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-lg w-full relative overflow-y-auto max-h-[90vh] scrollbar-none">
-            <button onClick={() => { setShowNewStudentModal(false); resetNewStudent(); }} className="absolute top-4 right-4 text-zinc-400 hover:text-white">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-surface-container border border-surface-highest rounded-xl p-6 max-w-lg w-full relative flex flex-col max-h-[90vh]">
+            <button onClick={() => { setShowNewStudentModal(false); resetNewStudent(); }} className="absolute top-4 right-4 text-zinc-400 hover:text-white z-10">
               <X className="w-5 h-5"/>
             </button>
-            <h3 className="text-lg font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2 uppercase tracking-wider">Cadastrar Novo Aluno</h3>
+            <div className="flex-shrink-0">
+              <h3 className="text-lg font-heading font-bold text-white mb-6 border-b border-surface-highest pb-2 uppercase tracking-wider">Cadastrar Novo Aluno</h3>
             
             {/* Wizard Steps Progress Bar */}
             <div className="flex items-center justify-between mb-6 px-1 select-none">
@@ -4164,8 +4169,10 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                 </React.Fragment>
               ))}
             </div>
+            </div>
 
-            <form onSubmit={handleAddStudentSubmit} className="space-y-6">
+            <form onSubmit={handleAddStudentSubmit} className="flex-1 flex flex-col min-h-0">
+              <div className="flex-1 overflow-y-auto pr-1 space-y-6 scrollbar-none py-1">
               {/* Step 0: Dados Pessoais & Endereço */}
               {wizardStep === 0 && (
                 <div className="space-y-4">
@@ -4461,9 +4468,10 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                   </div>
                 </div>
               )}
+              </div>
 
               {/* Wizard Navigation Footer */}
-              <div className="flex gap-3 pt-4 border-t border-surface-highest">
+              <div className="flex-shrink-0 flex gap-3 pt-4 border-t border-surface-highest mt-4">
                 {wizardStep > 0 ? (
                   <button
                     type="button"
