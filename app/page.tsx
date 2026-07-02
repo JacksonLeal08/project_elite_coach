@@ -570,19 +570,19 @@ export default function App() {
   if (authState === 'goodbye') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-black">
-        <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: 'url("https://i.ibb.co/jk8KJxCz/personal-trainer-loading-screen.png")' }}></div>
-        <div className="absolute inset-0 bg-black/40 z-0 backdrop-blur-[2px]"></div>
+        <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: 'url("/gym-bg.png")' }}></div>
+        <div className="absolute inset-0 bg-black/60 z-0 backdrop-blur-[4px]"></div>
 
         <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.8 }} className="flex flex-col items-center z-10 w-full max-w-[420px] px-4">
             <motion.div 
                animate={{ scale: [1, 1.05, 1] }} 
                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-               className="w-[360px] h-[360px] sm:w-[400px] sm:h-[400px] mb-2 flex items-center justify-center"
+               className="w-32 h-32 sm:w-40 sm:h-40 mb-6 flex items-center justify-center"
             >
-               <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+               <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain drop-shadow-[0_0_20px_var(--color-primary)]" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
             </motion.div>
             
-            <div className="mt-2 w-full h-5 rounded-full p-[2px] relative border border-primary/40 shadow-lg" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <div className="mt-2 w-full h-4 rounded-full p-[2px] relative border border-primary/40 shadow-lg" style={{ backgroundColor: 'var(--color-surface)' }}>
                <motion.div 
                  initial={{ width: "100%" }} 
                  animate={{ width: 0 }} 
@@ -601,22 +601,22 @@ export default function App() {
   if (authState === 'loading') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-black">
-        <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: 'url("https://i.ibb.co/jk8KJxCz/personal-trainer-loading-screen.png")' }}></div>
-        <div className="absolute inset-0 bg-black/40 z-0 backdrop-blur-[2px]"></div>
+        <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: 'url("/gym-bg.png")' }}></div>
+        <div className="absolute inset-0 bg-black/60 z-0 backdrop-blur-[4px]"></div>
 
         <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 1 }} className="flex flex-col items-center z-10 w-full max-w-[420px] px-4">
             <motion.div 
-               animate={{ scale: [1, 1.08, 1] }} 
+               animate={{ scale: [1, 1.05, 1] }} 
                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-               className="w-[360px] h-[360px] sm:w-[400px] sm:h-[400px] mb-2 flex items-center justify-center"
+               className="w-32 h-32 sm:w-40 sm:h-40 mb-6 flex items-center justify-center"
             >
-               <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+               <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain drop-shadow-[0_0_20px_var(--color-primary)]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
                <div className="hidden flex-col items-center justify-center">
                  <span className="text-6xl mb-2 drop-shadow-md">💪</span>
                </div>
             </motion.div>
             
-            <div className="mt-2 w-full h-5 rounded-full p-[2px] relative border border-primary/40 shadow-lg" style={{ backgroundColor: 'var(--color-surface)' }}>
+            <div className="mt-2 w-full h-4 rounded-full p-[2px] relative border border-primary/40 shadow-lg" style={{ backgroundColor: 'var(--color-surface)' }}>
                <motion.div 
                  initial={{ width: 0 }} 
                  animate={{ width: "80%" }} 
@@ -636,15 +636,15 @@ export default function App() {
     return (
       <div className="min-h-screen relative flex items-center justify-center p-4 bg-black">
         {/* Background mimic (Dark gym) */}
-        <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: 'url("https://i.ibb.co/HDzs8w0w/personal-trainer-login-screen.png")' }}></div>
+        <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: 'url("/gym-bg.png")' }}></div>
         {/* Slightly darken the image */}
-        <div className="absolute inset-0 bg-black/40 z-0 backdrop-blur-[2px]"></div>
+        <div className="absolute inset-0 bg-black/50 z-0 backdrop-blur-[3px]"></div>
 
         <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="relative z-10 w-full max-w-[420px] backdrop-blur-[16px] rounded-[32px] overflow-hidden border border-white/20 p-8 sm:p-10" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.02) 100%)', boxShadow: '0 30px 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.1)' }}>
            
            <div className="flex flex-col items-center mb-6 mt-[-10px]">
-              <div className="w-[360px] h-[240px] sm:w-[380px] sm:h-[260px] mb-2 flex items-center justify-center">
-                 <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain" style={{ filter: 'drop-shadow(20px 7px 7px white)' }} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+              <div className="w-28 h-28 sm:w-36 h-36 mb-2 flex items-center justify-center">
+                 <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain drop-shadow-[0_0_15px_var(--color-primary)]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
                  <div className="hidden flex-col items-center justify-center">
                      <span className="text-4xl drop-shadow-sm">💪</span>
                  </div>
