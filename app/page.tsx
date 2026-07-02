@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight, Sun, Moon } from 'lucide-react';
 import { ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
@@ -13,6 +13,7 @@ import FinanceiroView from './components/FinanceiroView';
 import { supabase } from './utils/supabase';
 import { User } from './types';
 import { getOfflineQueue, queueOfflineOperation, runOfflineSync } from './utils/offline';
+import { useTheme } from './contexts/ThemeContext';
 
 export default function App() {
   const [authState, setAuthState] = useState<'loading' | 'login' | 'app' | 'goodbye' | 'reset_password' | 'public_evolution'>('loading');
@@ -957,6 +958,7 @@ function MainApp({
   fetchBrandSettings: () => Promise<void>
 }) {
 
+  const { theme, toggleTheme } = useTheme();
   const [time, setTime] = useState<string>('');
   const [date, setDate] = useState<string>('');
   const [showZoom, setShowZoom] = useState<boolean>(false);
@@ -1508,6 +1510,13 @@ function MainApp({
                       {currentUser?.name.charAt(0)}
                     </div>
                   )}
+                </button>
+                <button 
+                  onClick={(e) => toggleTheme(e.clientX, e.clientY)} 
+                  className="text-zinc-500 hover:text-[#dfbf80] hover:scale-110 active:scale-95 transition-all p-2 bg-surface rounded-lg border border-surface-highest/40 hover:border-[#dfbf80]/30 hover:bg-[#dfbf80]/5 flex items-center justify-center shrink-0 ml-1" 
+                  title={theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}
+                >
+                  {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                 </button>
                 <button 
                   onClick={() => setShowLogoutConfirm(true)} 

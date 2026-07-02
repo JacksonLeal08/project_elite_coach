@@ -123,3 +123,9 @@ body {
   -ms-overflow-style: none; /* IE/Edge */
 }
 
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
