@@ -1,8 +1,9 @@
 import { User, Student } from '../types';
+import { BRANDING } from '../config/branding';
 
 export const MOCK_USERS: User[] = [
   { id: 1, name: 'Jackson Leal', email: 'jackson602@gmail.com', role: 'Desenvolvedor', unremovable: true, pass: '798621' },
-  { id: 2, name: 'Jaira Leal', email: 'jaira@elitecoach.com', role: 'Administrador', unremovable: false },
+  { id: 2, name: BRANDING.defaultAdminName, email: BRANDING.defaultAdminEmail, role: 'Administrador', unremovable: false },
   { id: 3, name: 'Carlos Silva', email: 'carlos@elitecoach.com', role: 'Treinador', unremovable: false },
 ];
 

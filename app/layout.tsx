@@ -1,18 +1,19 @@
 import type {Metadata} from 'next';
 import { Inter, Montserrat } from 'next/font/google';
 import './globals.css';
+import { BRANDING } from './config/branding';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const montserrat = Montserrat({ subsets: ['latin'], variable: '--font-montserrat' });
 
 export const metadata: Metadata = {
-  title: 'Elite Coach',
-  description: 'Gestão de alta performance.',
+  title: BRANDING.shortName,
+  description: BRANDING.description,
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Elite Coach',
+    title: BRANDING.shortName,
   },
 };
 
