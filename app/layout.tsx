@@ -28,7 +28,7 @@ export const viewport = {
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="pt-BR" className={`${inter.variable} ${montserrat.variable}`}>
-      <body className="bg-zinc-950 text-zinc-100 font-sans" suppressHydrationWarning>
+      <body className="font-sans" suppressHydrationWarning>
         <ThemeProvider>
           {children}
         </ThemeProvider>

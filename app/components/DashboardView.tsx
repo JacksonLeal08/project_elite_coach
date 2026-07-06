@@ -5,12 +5,14 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 import { ProgressionData, ActivityEntry, User } from '../types';
 import { MOCK_PROGRESSION, MOCK_ACTIVITIES } from '../mocks';
 import { supabase } from '../utils/supabase';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface DashboardViewProps {
   currentUser: User | null;
 }
 
 export default function DashboardView({ currentUser }: DashboardViewProps) {
+  const { theme } = useTheme();
   const [goal, setGoal] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('elite_coach_goal') || '10000';
@@ -377,22 +379,32 @@ export default function DashboardView({ currentUser }: DashboardViewProps) {
               <ResponsiveContainer width="100%" height="100%">
                 {chartTab === 'loads' ? (
                    <LineChart data={MOCK_PROGRESSION}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#224233" vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={theme === 'light' ? '#cbd5e1' : '#224233'} vertical={false} />
                       <XAxis dataKey="week" stroke="#8f9b95" fontSize={12} tickLine={false} axisLine={false} />
                       <YAxis stroke="#8f9b95" fontSize={12} tickLine={false} axisLine={false} width={40} />
                       <RechartsTooltip 
-                         contentStyle={{ backgroundColor: '#12241C', border: '1px solid #224233', borderRadius: '8px', color: '#e0e8e4' }}
+                         contentStyle={{ 
+                           backgroundColor: theme === 'light' ? '#ffffff' : '#12241C', 
+                           border: theme === 'light' ? '1px solid #cbd5e1' : '1px solid #224233', 
+                           borderRadius: '8px', 
+                           color: theme === 'light' ? '#0f172a' : '#e0e8e4' 
+                         }}
                          itemStyle={{ color: '#d4af37' }}
                       />
                       <Line type="monotone" dataKey="load" stroke="#d4af37" strokeWidth={3} dot={{ r: 4, fill: '#d4af37' }} activeDot={{ r: 6 }} />
                    </LineChart>
                 ) : (
                    <BarChart data={billingData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#224233" vertical={false} />
+                      <CartesianGrid strokeDasharray="3 3" stroke={theme === 'light' ? '#cbd5e1' : '#224233'} vertical={false} />
                       <XAxis dataKey="month" stroke="#8f9b95" fontSize={12} tickLine={false} axisLine={false} />
                       <YAxis stroke="#8f9b95" fontSize={12} tickLine={false} axisLine={false} width={40} tickFormatter={(v: any) => `R$ ${v}`} />
                       <RechartsTooltip 
-                         contentStyle={{ backgroundColor: '#12241C', border: '1px solid #224233', borderRadius: '8px', color: '#e0e8e4' }}
+                         contentStyle={{ 
+                           backgroundColor: theme === 'light' ? '#ffffff' : '#12241C', 
+                           border: theme === 'light' ? '1px solid #cbd5e1' : '1px solid #224233', 
+                           borderRadius: '8px', 
+                           color: theme === 'light' ? '#0f172a' : '#e0e8e4' 
+                         }}
                          formatter={(value: any) => `R$ ${value.toLocaleString('pt-BR')}`}
                       />
                       <Bar dataKey="recebido" name="Recebido" fill="#00ff41" radius={[4, 4, 0, 0]} />

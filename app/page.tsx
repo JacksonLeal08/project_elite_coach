@@ -16,6 +16,7 @@ import { getOfflineQueue, queueOfflineOperation, runOfflineSync } from './utils/
 import { useTheme } from './contexts/ThemeContext';
 
 export default function App() {
+  const { theme } = useTheme();
   const [authState, setAuthState] = useState<'loading' | 'login' | 'app' | 'goodbye' | 'reset_password' | 'public_evolution'>('loading');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [publicToken, setPublicToken] = useState<string>('');
@@ -39,6 +40,10 @@ export default function App() {
     borderRadius: 'Moderno'
   });
 
+  useEffect(() => {
+    applyBrandStyles(brandSettings, theme);
+  }, [theme, brandSettings]);
+
   const loadGoogleFont = (fontName: string) => {
     if (typeof window === 'undefined') return;
     const id = `gfont-${fontName.replace(/\s+/g, '-').toLowerCase()}`;
@@ -50,16 +55,24 @@ export default function App() {
     document.head.appendChild(link);
   };
 
-  const applyBrandStyles = (settings: any) => {
+  const applyBrandStyles = (settings: any, currentTheme: 'dark' | 'light') => {
     if (typeof window === 'undefined') return;
     const root = document.documentElement;
 
     if (settings.colorPrimary) root.style.setProperty('--color-primary', settings.colorPrimary);
     if (settings.colorPrimaryDim) root.style.setProperty('--color-primary-dim', settings.colorPrimaryDim);
-    if (settings.colorSurface) root.style.setProperty('--color-surface', settings.colorSurface);
-    if (settings.colorSurfaceContainer) root.style.setProperty('--color-surface-container', settings.colorSurfaceContainer);
-    if (settings.colorSurfaceHigh) root.style.setProperty('--color-surface-high', settings.colorSurfaceHigh);
-    if (settings.colorSurfaceHighest) root.style.setProperty('--color-surface-highest', settings.colorSurfaceHighest);
+    
+    if (currentTheme === 'light') {
+      root.style.removeProperty('--color-surface');
+      root.style.removeProperty('--color-surface-container');
+      root.style.removeProperty('--color-surface-high');
+      root.style.removeProperty('--color-surface-highest');
+    } else {
+      if (settings.colorSurface) root.style.setProperty('--color-surface', settings.colorSurface);
+      if (settings.colorSurfaceContainer) root.style.setProperty('--color-surface-container', settings.colorSurfaceContainer);
+      if (settings.colorSurfaceHigh) root.style.setProperty('--color-surface-high', settings.colorSurfaceHigh);
+      if (settings.colorSurfaceHighest) root.style.setProperty('--color-surface-highest', settings.colorSurfaceHighest);
+    }
 
     if (settings.fontTitle) {
       loadGoogleFont(settings.fontTitle);
@@ -116,15 +129,15 @@ export default function App() {
         };
 
         setBrandSettings(updated);
-        applyBrandStyles(updated);
+        applyBrandStyles(updated, theme);
         document.title = updated.name;
       } else {
-        applyBrandStyles(brandSettings);
+        applyBrandStyles(brandSettings, theme);
         document.title = brandSettings.name;
       }
     } catch (e) {
       console.error('Error fetching brand settings:', e);
-      applyBrandStyles(brandSettings);
+      applyBrandStyles(brandSettings, theme);
       document.title = brandSettings.name;
     }
   };
