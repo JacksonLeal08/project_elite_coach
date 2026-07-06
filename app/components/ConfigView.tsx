@@ -5,6 +5,7 @@ import CustomAlertModal from './CustomAlertModal';
 import { generatePDFAndShare } from '../utils/pdf';
 import { User, ProfileConfig, HistoryEntry } from '../types';
 import { supabase } from '../utils/supabase';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface ConfigViewProps {
   currentUser: User | null;
@@ -51,7 +52,7 @@ export default function ConfigView({ currentUser, onUserUpdate, brandSettings, f
   const [editingId, setEditingId] = useState<string | number | null>(null);
   const [editForm, setEditForm] = useState<User | null>(null);
 
-  const [theme, setTheme] = useState<string>('dark');
+  const { theme, toggleTheme } = useTheme();
   const [lastCreatedUser, setLastCreatedUser] = useState<{
     name: string;
     username: string;
@@ -61,19 +62,6 @@ export default function ConfigView({ currentUser, onUserUpdate, brandSettings, f
 
   const [showTokenGuide, setShowTokenGuide] = useState<boolean>(false);
   const [showChatIdGuide, setShowChatIdGuide] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const themeKey = currentUser?.id ? `elite_coach_theme_${currentUser.id}` : 'elite_coach_theme';
-      const savedTheme = localStorage.getItem(themeKey) || localStorage.getItem('elite_coach_theme') || 'dark';
-      setTheme(savedTheme);
-      if (savedTheme === 'light') {
-        document.documentElement.classList.add('light-theme');
-      } else {
-        document.documentElement.classList.remove('light-theme');
-      }
-    }
-  }, [currentUser]);
 
   const handleCopyCredentials = (u: User) => {
     const isLast = lastCreatedUser && lastCreatedUser.username === (u.username || u.email);
@@ -300,11 +288,7 @@ export default function ConfigView({ currentUser, onUserUpdate, brandSettings, f
     setProfile(prev => ({
       ...prev,
       colorPrimary: selected.primary,
-      colorPrimaryDim: selected.primaryDim,
-      colorSurface: selected.surface,
-      colorSurfaceContainer: selected.surfaceContainer,
-      colorSurfaceHigh: selected.surfaceHigh,
-      colorSurfaceHighest: selected.surfaceHighest
+      colorPrimaryDim: selected.primaryDim
     }));
   };
 
@@ -624,19 +608,6 @@ export default function ConfigView({ currentUser, onUserUpdate, brandSettings, f
         }
       }
     );
-  };
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(newTheme);
-    const themeKey = currentUser?.id ? `elite_coach_theme_${currentUser.id}` : 'elite_coach_theme';
-    localStorage.setItem(themeKey, newTheme);
-    localStorage.setItem('elite_coach_theme', newTheme);
-    if (newTheme === 'light') {
-      document.documentElement.classList.add('light-theme');
-    } else {
-      document.documentElement.classList.remove('light-theme');
-    }
   };
 
   const handleAdd = async () => {
@@ -1477,7 +1448,7 @@ export default function ConfigView({ currentUser, onUserUpdate, brandSettings, f
               <p className="text-zinc-400 text-sm">Alterne entre Dark Gold e Light Profissional</p>
             </div>
             <button 
-              onClick={toggleTheme} 
+              onClick={(e) => toggleTheme(e.clientX, e.clientY)} 
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${theme === 'light' ? 'bg-primary' : 'bg-surface-highest'}`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${theme === 'light' ? 'translate-x-6' : 'translate-x-1'}`} />
