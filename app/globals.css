@@ -161,6 +161,52 @@ button:focus {
   box-shadow: none !important;
 }
 
+/* Modais Modernos com Cantos Arredondados e Efeito Vidro (Glassmorphism) */
+.bg-surface-container.border.border-surface-highest.rounded-xl,
+.bg-surface-container.border.border-surface-highest.rounded-2xl,
+.bg-surface-container.border.rounded-2xl {
+  background: rgba(10, 20, 16, 0.8) !important; /* Verde escuro translúcido */
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+  border-radius: 1.25rem !important; /* Cantos arredondados modernos */
+  transition: all 0.3s ease-in-out !important;
+}
+
+/* Modais no Tema Claro */
+.light-theme .bg-surface-container.border.border-surface-highest.rounded-xl,
+.light-theme .bg-surface-container.border.border-surface-highest.rounded-2xl,
+.light-theme .bg-surface-container.border.rounded-2xl {
+  background: rgba(255, 255, 255, 0.82) !important; /* Branco jateado translúcido */
+  border-color: rgba(0, 0, 0, 0.06) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+  border-radius: 1.25rem !important;
+}
+
+/* Painel de Vidro (Glassmorphism) para Overlays e Loadings */
+.glass-panel {
+  background: rgba(18, 36, 28, 0.6) !important; /* Fundo verde translúcido */
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 2px rgba(255, 255, 255, 0.15) !important;
+  border-radius: 1.5rem !important; /* 24px */
+  padding: 2rem !important; /* 32px */
+}
+
+.light-theme .glass-panel {
+  background: rgba(255, 255, 255, 0.65) !important; /* Fundo branco translúcido */
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.08), inset 0 1px 2px rgba(255, 255, 255, 0.3) !important;
+  border-radius: 1.5rem !important;
+  padding: 2rem !important;
+}
+
 /* Ocultar barras de rolagem em todo o sistema */
 ::-webkit-scrollbar {
   display: none;

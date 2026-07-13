@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   title: BRANDING.shortName,
   description: BRANDING.description,
   manifest: '/manifest.json',
+  icons: {
+    icon: '/favicon.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

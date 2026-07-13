@@ -618,7 +618,7 @@ export default function App() {
         <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: 'url("/gym-bg.png")' }}></div>
         <div className="absolute inset-0 bg-black/60 z-0 backdrop-blur-[4px]"></div>
 
-        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 1 }} className="flex flex-col items-center z-10 w-full max-w-[420px] px-4">
+        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 1 }} className="flex flex-col items-center z-10 w-full max-w-[420px] glass-panel text-center">
             <motion.div 
                animate={{ scale: [1, 1.05, 1] }} 
                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
@@ -1576,7 +1576,7 @@ function MainApp({
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
                <span>JIMMP Info</span>
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
-               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.2.1</span>
+               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.3.0</span>
              </div>
            </footer>
         </div>
@@ -2400,7 +2400,7 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8 }}
-          className="flex flex-col items-center z-10 w-full max-w-[420px] px-6 text-center"
+          className="flex flex-col items-center z-10 w-full max-w-[420px] glass-panel text-center"
         >
           <motion.div 
              animate={{ 
