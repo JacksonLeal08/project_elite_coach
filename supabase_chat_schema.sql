@@ -9,7 +9,7 @@
 CREATE TABLE IF NOT EXISTS public.chat_rooms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    student_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    student_id UUID NOT NULL REFERENCES public.students(id) ON DELETE CASCADE,
     coach_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     CONSTRAINT unique_student_coach UNIQUE (student_id, coach_id)
 );
@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS public.chat_messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     room_id UUID NOT NULL REFERENCES public.chat_rooms(id) ON DELETE CASCADE,
-    sender_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    sender_id UUID NOT NULL,
     message TEXT NOT NULL,
     read BOOLEAN DEFAULT false NOT NULL
 );
