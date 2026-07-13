@@ -379,6 +379,34 @@ export default function ChatComponent({
       .catch((err) => console.error(err));
   };
 
+  const isImageMessage = (msg: Message) => {
+    if (msg.message_type === 'image') return true;
+    const text = msg.message || '';
+    if (text.startsWith('data:image/')) return true;
+    if (text.startsWith('http') && (
+      text.toLowerCase().endsWith('.png') ||
+      text.toLowerCase().endsWith('.jpg') ||
+      text.toLowerCase().endsWith('.jpeg') ||
+      text.toLowerCase().endsWith('.gif') ||
+      text.toLowerCase().endsWith('.webp') ||
+      text.includes('/chat-attachments/')
+    )) return true;
+    return false;
+  };
+
+  const isAudioMessage = (msg: Message) => {
+    if (msg.message_type === 'audio') return true;
+    const text = msg.message || '';
+    if (text.startsWith('data:audio/')) return true;
+    if (text.startsWith('http') && (
+      text.toLowerCase().endsWith('.webm') ||
+      text.toLowerCase().endsWith('.mp3') ||
+      text.toLowerCase().endsWith('.wav') ||
+      text.toLowerCase().endsWith('.ogg')
+    )) return true;
+    return false;
+  };
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-zinc-400 gap-2">
@@ -457,7 +485,7 @@ export default function ChatComponent({
                   </div>
 
                   {/* Message body */}
-                  {msg.message_type === 'image' ? (
+                  {isImageMessage(msg) ? (
                     <a
                       href={msg.message}
                       target="_blank"
@@ -470,7 +498,7 @@ export default function ChatComponent({
                         className="max-w-full h-auto object-contain max-h-48 hover:scale-105 transition-transform"
                       />
                     </a>
-                  ) : msg.message_type === 'audio' ? (
+                  ) : isAudioMessage(msg) ? (
                     <div className="py-1">
                       <audio src={msg.message} controls className="w-48 max-w-full h-8 brightness-90 contrast-125" />
                     </div>

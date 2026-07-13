@@ -20,6 +20,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: BRANDING.shortName,
   },
+  other: {
+    'mobile-web-app-capable': 'yes',
+  }
 };
 
 export const viewport = {
