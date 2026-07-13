@@ -1480,7 +1480,7 @@ function MainApp({
       </AnimatePresence>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden pb-16 md:pb-0">
+      <main className="flex-1 flex flex-col h-[100dvh] md:h-screen overflow-hidden pb-16 md:pb-0">
         {/* Header */}
         <header className="h-16 border-b border-surface-highest bg-surface/50 backdrop-blur flex items-center justify-between px-4 md:px-8">
            <div className="flex items-center bg-surface-high rounded-full border border-surface-highest px-3 py-1.5 w-44 sm:w-64 md:w-96 focus-within:border-primary/50 transition-colors">
@@ -1576,7 +1576,7 @@ function MainApp({
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
                <span>JIMMP Info</span>
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
-               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.2.0</span>
+               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.2.1</span>
              </div>
            </footer>
         </div>
@@ -1811,7 +1811,7 @@ function MainApp({
       </AnimatePresence>
 
       {/* Floating AI Agent Button */}
-      <div className={`fixed ${showMobileMoreMenu ? 'bottom-[310px]' : 'bottom-24'} right-6 z-[80] transition-all duration-300`} data-tour="ai-agent">
+      <div className={`fixed ${showMobileMoreMenu ? 'bottom-[310px]' : 'bottom-28 md:bottom-24'} right-6 z-[80] transition-all duration-300`} data-tour="ai-agent">
         <button 
           onClick={() => setShowAiAgent(true)}
           className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-primary-dim text-black flex items-center justify-center shadow-[0_4px_20px_rgba(212,175,55,0.4)] hover:scale-110 active:scale-95 transition-all duration-200 group relative"

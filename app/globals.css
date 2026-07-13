@@ -114,6 +114,53 @@ body {
   border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
+/* Ajustes de alto contraste e acessibilidade para o Tema Claro */
+.light-theme .text-\[\#dfbf80\],
+.light-theme .text-primary {
+  color: #8c6d00 !important; /* Dourado/bronze mais escuro para melhor contraste e leitura */
+}
+
+.light-theme .text-\[\#00ff41\] {
+  color: #15803d !important; /* Verde escuro (green-700) de alto contraste */
+}
+
+.light-theme .bg-\[\#00ff41\]\/20 {
+  background-color: rgba(21, 128, 61, 0.15) !important; /* Fundo verde translúcido suave */
+}
+
+.light-theme .border-\[\#00ff41\]\/40 {
+  border-color: rgba(21, 128, 61, 0.3) !important;
+}
+
+.light-theme .hover\:bg-\[\#00ff41\]\/30:hover {
+  background-color: rgba(21, 128, 61, 0.25) !important;
+}
+
+.light-theme .text-amber-300,
+.light-theme .text-amber-400 {
+  color: #b45309 !important; /* Âmbar escuro (amber-700) de alto contraste */
+}
+
+.light-theme .bg-amber-950\/20 {
+  background-color: rgba(180, 83, 9, 0.1) !important; /* Fundo âmbar suave */
+}
+
+.light-theme .border-amber-500\/30,
+.light-theme .border-amber-500\/40 {
+  border-color: rgba(180, 83, 9, 0.25) !important;
+}
+
+.light-theme .bg-amber-500\/20 {
+  background-color: rgba(180, 83, 9, 0.15) !important;
+}
+
+/* Remover o outline de foco incômodo do navegador em botões de abas */
+.light-theme button:focus,
+button:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* Ocultar barras de rolagem em todo o sistema */
 ::-webkit-scrollbar {
   display: none;
