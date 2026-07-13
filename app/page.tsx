@@ -382,15 +382,6 @@ export default function App() {
     console.log('App.tsx useEffect mounted');
     fetchBrandSettings();
     if (typeof window !== 'undefined') {
-      const themeKey = currentUser?.id ? `elite_coach_theme_${currentUser.id}` : 'elite_coach_theme';
-      const savedTheme = localStorage.getItem(themeKey) || localStorage.getItem('elite_coach_theme') || 'dark';
-      console.log('Saved theme in localStorage:', savedTheme);
-      if (savedTheme === 'light') {
-        document.documentElement.classList.add('light-theme');
-      } else {
-        document.documentElement.classList.remove('light-theme');
-      }
-
       // Check for public student_token
       const params = new URLSearchParams(window.location.search);
       const token = params.get('student_token');
@@ -449,18 +440,7 @@ export default function App() {
     };
   }, []);
 
-  // Theme Sync effect when user changes (e.g. login/logout or profile update)
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const themeKey = currentUser?.id ? `elite_coach_theme_${currentUser.id}` : 'elite_coach_theme';
-      const savedTheme = localStorage.getItem(themeKey) || localStorage.getItem('elite_coach_theme') || 'dark';
-      if (savedTheme === 'light') {
-        document.documentElement.classList.add('light-theme');
-      } else {
-        document.documentElement.classList.remove('light-theme');
-      }
-    }
-  }, [currentUser]);
+
 
     const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1576,7 +1556,7 @@ function MainApp({
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
                <span>JIMMP Info</span>
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
-               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.3.0</span>
+               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.3.1</span>
              </div>
            </footer>
         </div>

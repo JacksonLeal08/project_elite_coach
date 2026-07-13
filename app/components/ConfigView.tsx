@@ -839,6 +839,35 @@ export default function ConfigView({ currentUser, onUserUpdate, brandSettings, f
     }
   };
 
+  const handleClearCache = async () => {
+    try {
+      // 1. Limpar Cache Storage do Navegador
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(key => caches.delete(key)));
+      }
+      
+      // 2. Desregistrar Service Workers ativos
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map(r => r.unregister()));
+      }
+      
+      // 3. Limpar chaves locais do localStorage (preservando token de sessão do Supabase)
+      Object.keys(localStorage).forEach(key => {
+        if (!key.startsWith('sb-') && !key.includes('supabase')) {
+          localStorage.removeItem(key);
+        }
+      });
+
+      alert('Caches de arquivos e dados locais limpos com sucesso! O aplicativo será recarregado para baixar os novos ícones e atualizações.');
+      window.location.reload();
+    } catch (e) {
+      console.error('Erro ao limpar cache:', e);
+      window.location.reload();
+    }
+  };
+
   const visibleUsers = users.filter(u => u.role !== 'Desenvolvedor' || currentUser?.role === 'Desenvolvedor');
 
   return (
@@ -846,7 +875,13 @@ export default function ConfigView({ currentUser, onUserUpdate, brandSettings, f
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-heading font-bold text-white">Configurações e Histórico</h2>
         <div className="flex items-center gap-4 text-zinc-400">
-           <button className="hover:text-white transition-colors"><Zap className="w-5 h-5"/></button>
+           <button 
+             onClick={handleClearCache}
+             title="Limpar Cache e Forçar Atualização (PWA)"
+             className="hover:text-primary active:scale-95 transition-all p-1.5 bg-surface-high border border-surface-highest/60 hover:border-primary/30 rounded-lg flex items-center justify-center"
+           >
+             <Zap className="w-5 h-5"/>
+           </button>
         </div>
       </div>
 
