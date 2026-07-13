@@ -140,23 +140,23 @@ export default function ChatComponent({
           event: '*',
           schema: 'public',
           table: 'chat_messages',
-          filter: `room_id=eq.${roomId}`,
         },
         (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newMsg = payload.new as Message;
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) return prev;
-              if (newMsg.sender_id !== senderId) {
-                playNotificationSound();
-              }
-              return [...prev, newMsg];
-            });
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedMsg = payload.new as Message;
-            setMessages((prev) =>
-              prev.map((m) => (m.id === updatedMsg.id ? updatedMsg : m))
-            );
+          const newMsg = payload.new as Message;
+          if (newMsg && newMsg.room_id === roomId) {
+            if (payload.eventType === 'INSERT') {
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === newMsg.id)) return prev;
+                if (newMsg.sender_id !== senderId) {
+                  playNotificationSound();
+                }
+                return [...prev, newMsg];
+              });
+            } else if (payload.eventType === 'UPDATE') {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === newMsg.id ? newMsg : m))
+              );
+            }
           }
         }
       )
@@ -277,10 +277,34 @@ export default function ChatComponent({
     }
   };
 
+  const triggerChatNotification = async () => {
+    try {
+      const { data: existingNotif } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('title', 'Nova Mensagem no Chat')
+        .eq('read', false)
+        .limit(1);
+
+      if (!existingNotif || existingNotif.length === 0) {
+        await supabase
+          .from('notifications')
+          .insert([{
+            title: 'Nova Mensagem no Chat',
+            message: `Você recebeu uma nova mensagem no chat de ${senderName}.`,
+            type: 'chat',
+            read: false
+          }]);
+      }
+    } catch (err) {
+      console.error('Erro ao acionar notificação de chat:', err);
+    }
+  };
+
   const sendAttachmentMessage = async (urlOrData: string, type: 'image' | 'audio') => {
     if (!roomId) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('chat_messages')
         .insert({
           room_id: roomId,
@@ -288,6 +312,9 @@ export default function ChatComponent({
           message: urlOrData,
           message_type: type
         });
+      if (!error) {
+        await triggerChatNotification();
+      }
     } catch (err) {
       console.error(err);
     }
@@ -313,6 +340,7 @@ export default function ChatComponent({
         });
 
       if (error) throw error;
+      await triggerChatNotification();
     } catch (err) {
       console.error('Erro ao enviar mensagem:', err);
       setNewMessage(text);
@@ -499,8 +527,9 @@ export default function ChatComponent({
                       />
                     </a>
                   ) : isAudioMessage(msg) ? (
-                    <div className="py-1">
-                      <audio src={msg.message} controls className="w-48 max-w-full h-8 brightness-90 contrast-125" />
+                    <div className="flex items-center gap-2 py-1 bg-surface-high/65 px-3 py-2 rounded-lg border border-surface-highest/50">
+                      <Mic className="w-4 h-4 text-primary animate-pulse shrink-0" />
+                      <audio src={msg.message} controls className="w-48 max-w-full h-8 brightness-90 contrast-125 select-none" />
                     </div>
                   ) : (
                     <p className="break-words leading-relaxed whitespace-pre-wrap">{msg.message}</p>

@@ -599,29 +599,37 @@ export default function App() {
         <div className="absolute inset-0 z-0 bg-cover bg-center" style={{ backgroundImage: 'url("/gym-bg.png")' }}></div>
         <div className="absolute inset-0 bg-black/60 z-0 backdrop-blur-[4px]"></div>
 
-        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 1 }} className="flex flex-col items-center z-10 w-full max-w-[420px] glass-panel text-center">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }} 
+          animate={{ opacity: 1, scale: 1 }} 
+          transition={{ duration: 0.8 }} 
+          className="flex flex-col items-center z-10 w-full max-w-[360px] bg-black/60 border border-[#dfbf80]/20 p-8 sm:p-10 rounded-[32px] backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] text-center relative overflow-hidden"
+        >
+          {/* Spinner giratório dourado com logo centralizado */}
+          <div className="relative w-32 h-32 sm:w-36 sm:h-36 mb-6 flex items-center justify-center shrink-0">
+            <div className="absolute inset-0 rounded-full border-2 border-[#dfbf80]/10 border-t-2 border-t-[#dfbf80] animate-spin" />
             <motion.div 
-               animate={{ scale: [1, 1.05, 1] }} 
-               transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-               className="w-32 h-32 sm:w-40 sm:h-40 mb-6 flex items-center justify-center"
+              animate={{ scale: [0.96, 1.02, 0.96] }} 
+              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+              className="w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center z-10"
             >
-               <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain drop-shadow-[0_0_20px_var(--color-primary)]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
-               <div className="hidden flex-col items-center justify-center text-primary">
-                 <Dumbbell className="w-16 h-16 animate-pulse text-primary drop-shadow-[0_0_15px_var(--color-primary)]" />
-               </div>
+              <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(223,191,128,0.4)]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+              <div className="hidden flex-col items-center justify-center text-primary">
+                <Dumbbell className="w-12 h-12 animate-pulse text-primary drop-shadow-[0_0_15px_var(--color-primary)]" />
+              </div>
             </motion.div>
-            
-            <div className="mt-2 w-full h-4 rounded-full p-[2px] relative border border-primary/40 shadow-lg" style={{ backgroundColor: 'var(--color-surface)' }}>
-               <motion.div 
-                 initial={{ width: 0 }} 
-                 animate={{ width: "80%" }} 
-                 transition={{ duration: 2.5, ease: "easeInOut" }} 
-                 className="h-full rounded-full relative overflow-hidden"
-                 style={{ background: 'linear-gradient(90deg, var(--color-surface-container) 0%, var(--color-primary) 100%)', boxShadow: '0 0 12px var(--color-primary)' }}
-               />
-               <div className="absolute inset-0 rounded-full border border-white/10 pointer-events-none"></div>
-            </div>
-            <p className="mt-5 text-primary text-sm sm:text-base font-semibold tracking-wide drop-shadow-md">Carregando a melhor experiência...</p>
+          </div>
+          
+          <div className="mt-2 w-full h-1.5 rounded-full p-[1px] relative border border-[#dfbf80]/20 bg-surface-high/40 shadow-inner overflow-hidden">
+             <motion.div 
+               initial={{ width: 0 }} 
+               animate={{ width: "80%" }} 
+               transition={{ duration: 2.5, ease: "easeInOut" }} 
+               className="h-full rounded-full relative overflow-hidden"
+               style={{ background: 'linear-gradient(90deg, transparent 0%, #dfbf80 100%)', boxShadow: '0 0 10px #dfbf80' }}
+             />
+          </div>
+          <p className="mt-6 text-[#dfbf80] text-xs font-bold tracking-[0.18em] uppercase drop-shadow-md animate-pulse">Carregando a melhor experiência...</p>
         </motion.div>
       </div>
     );
@@ -2142,42 +2150,9 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
   const [ratingStars, setRatingStars] = useState(5);
   const [ratingFeedback, setRatingFeedback] = useState('');
   const [savingRating, setSavingRating] = useState(false);
+  const [unreadChatMessagesCount, setUnreadChatMessagesCount] = useState<number>(0);
 
-  const handleSaveChatRating = async () => {
-    if (!student?.id || !coachId) return;
-    setSavingRating(true);
-    try {
-      const { data: room, error: findError } = await supabase
-        .from('chat_rooms')
-        .select('id')
-        .eq('student_id', student.id)
-        .eq('coach_id', coachId)
-        .maybeSingle();
 
-      if (findError) throw findError;
-
-      if (room) {
-        const { error } = await supabase
-          .from('chat_rooms')
-          .update({
-            rating: ratingStars,
-            rating_feedback: ratingFeedback || null
-          })
-          .eq('id', room.id);
-
-        if (error) throw error;
-        alert('Obrigado! Sua avaliação foi registrada com sucesso.');
-        setShowRatingModal(false);
-      } else {
-        alert('Nenhuma sala de chat ativa para avaliação.');
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert('Erro ao salvar avaliação. Tente novamente.');
-    } finally {
-      setSavingRating(false);
-    }
-  };
 
   useEffect(() => {
     const fetchCoachId = async () => {
@@ -2451,30 +2426,27 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.8 }}
-          className="flex flex-col items-center z-10 w-full max-w-[420px] glass-panel text-center"
+          className="flex flex-col items-center z-10 w-full max-w-[360px] bg-black/60 border border-[#dfbf80]/20 p-8 sm:p-10 rounded-[32px] backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.9)] text-center relative overflow-hidden"
         >
-          <motion.div 
-             animate={{ 
-               scale: [1, 1.04, 1],
-               filter: [
-                 'drop-shadow(0 0 20px rgba(223,191,128,0.25))',
-                 'drop-shadow(0 0 35px rgba(223,191,128,0.5))',
-                 'drop-shadow(0 0 20px rgba(223,191,128,0.25))'
-               ]
-             }} 
-             transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-             className="w-[260px] h-[260px] sm:w-[320px] sm:h-[320px] mb-4 flex items-center justify-center animate-fade-in"
-          >
-             <img 
+          {/* Spinner giratório dourado com logo centralizado */}
+          <div className="relative w-32 h-32 sm:w-36 sm:h-36 mb-6 flex items-center justify-center shrink-0">
+            <div className="absolute inset-0 rounded-full border-2 border-[#dfbf80]/10 border-t-2 border-t-[#dfbf80] animate-spin" />
+            <motion.div 
+              animate={{ scale: [0.96, 1.02, 0.96] }} 
+              transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+              className="w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center z-10"
+            >
+              <img 
                 src={brandSettings?.logoUrl || "/logo.png"} 
                 alt={brandSettings?.name || "Logo"} 
-                className="w-full h-full object-contain" 
+                className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(223,191,128,0.4)]" 
                 onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} 
               />
-             <div className="hidden flex-col items-center justify-center text-primary">
-               <Dumbbell className="w-16 h-16 animate-pulse text-primary drop-shadow-[0_0_15px_var(--color-primary)]" />
-             </div>
-          </motion.div>
+              <div className="hidden flex-col items-center justify-center text-primary">
+                <Dumbbell className="w-12 h-12 animate-pulse text-primary drop-shadow-[0_0_15px_var(--color-primary)]" />
+              </div>
+            </motion.div>
+          </div>
           
           <div className="w-48 h-1 rounded-full relative overflow-hidden bg-[#dfbf80]/10 border border-[#dfbf80]/20">
              <motion.div 
@@ -2487,7 +2459,7 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
              />
           </div>
           
-          <p className="mt-6 text-[#dfbf80] text-xs sm:text-sm font-semibold tracking-[0.15em] uppercase drop-shadow-md animate-pulse">
+          <p className="mt-6 text-[#dfbf80] text-xs font-bold tracking-[0.18em] uppercase drop-shadow-md animate-pulse">
             Carregando evolução física...
           </p>
         </motion.div>
@@ -2515,6 +2487,124 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
   }
 
   const { student, goals, evaluations, anamnesis, latest_workout } = data;
+
+  // Escutar mensagens não lidas do aluno
+  useEffect(() => {
+    if (!student?.id || !coachId) return;
+
+    const fetchUnreadMessagesCount = async () => {
+      try {
+        const { data: room } = await supabase
+          .from('chat_rooms')
+          .select('id')
+          .eq('student_id', student.id)
+          .eq('coach_id', coachId)
+          .maybeSingle();
+
+        if (room) {
+          const { count, error } = await supabase
+            .from('chat_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('room_id', room.id)
+            .eq('read', false)
+            .neq('sender_id', student.id.toString());
+
+          if (!error && count !== null) {
+            setUnreadChatMessagesCount(count);
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao buscar mensagens não lidas:', err);
+      }
+    };
+
+    fetchUnreadMessagesCount();
+
+    const channel = supabase
+      .channel('unread-chat-count')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'chat_messages',
+        },
+        (payload) => {
+          fetchUnreadMessagesCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [student, coachId]);
+
+  // Marcar chat como lido ao abrir
+  useEffect(() => {
+    if (showChat && student?.id && coachId) {
+      const markChatAsRead = async () => {
+        try {
+          const { data: room } = await supabase
+            .from('chat_rooms')
+            .select('id')
+            .eq('student_id', student.id)
+            .eq('coach_id', coachId)
+            .maybeSingle();
+
+          if (room) {
+            await supabase
+              .from('chat_messages')
+              .update({ read: true })
+              .eq('room_id', room.id)
+              .neq('sender_id', student.id.toString())
+              .eq('read', false);
+            
+            setUnreadChatMessagesCount(0);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      markChatAsRead();
+    }
+  }, [showChat, student, coachId]);
+
+  const handleSaveChatRating = async () => {
+    if (!student?.id || !coachId) return;
+    setSavingRating(true);
+    try {
+      const { data: room, error: findError } = await supabase
+        .from('chat_rooms')
+        .select('id')
+        .eq('student_id', student.id)
+        .eq('coach_id', coachId)
+        .maybeSingle();
+
+      if (findError) throw findError;
+
+      if (room) {
+        const { error } = await supabase
+          .from('chat_rooms')
+          .update({
+            rating: ratingStars,
+            rating_feedback: ratingFeedback || null
+          })
+          .eq('id', room.id);
+
+        if (error) throw error;
+        alert('Obrigado! Sua avaliação foi registrada com sucesso.');
+        setShowRatingModal(false);
+      } else {
+        alert('Nenhuma sala de chat ativa para avaliação.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro ao salvar avaliação. Tente novamente.');
+    } finally {
+      setSavingRating(false);
+    }
+  };
 
   // Sorting evaluations by date for chart rendering
   const chartData = [...evaluations].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()).map((e: any) => ({
@@ -4173,10 +4263,14 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
             title="Chat com o Treinador"
           >
             <MessageSquare className="w-5 h-5 text-black" />
-            <span className="absolute -top-1 -right-1 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-            </span>
+            {unreadChatMessagesCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 text-[8px] font-bold text-white items-center justify-center">
+                  {unreadChatMessagesCount}
+                </span>
+              </span>
+            )}
           </button>
         </div>
       )}
