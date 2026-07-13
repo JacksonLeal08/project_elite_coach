@@ -877,6 +877,9 @@ const tourSteps = [
 ];
 
 const LOCAL_HELP_KB: Record<string, Record<string, string>> = {
+  "Apresentação do Sistema": {
+    "O que o sistema é capaz de fazer?": "O Elite Coach CRM é uma plataforma completa e premium de gestão esportiva white-label:\n\n1. Gestão de Alunos e Anamnese: Cadastro completo de saúde, objetivos e avaliação postural com grade geométrica interativa.\n2. Prescrição Inteligente (Clinical Guard IA): Prevenção automática de lesões. O sistema impede a prescrição de exercícios inadequados para patologias específicas registradas na anamnese.\n3. Evolução Corporal: Acompanhamento de metas de peso, gordura e músculo com gráficos interativos de evolução.\n4. Portal do Aluno PWA: Acesso sem login via link com token seguro. Permite check-in de treinos de forma offline e sincronização automática.\n5. Chat em Tempo Real: Comunicação interna e direta entre professor e aluno no painel web e celular.\n6. Gestão Financeira: Lançamento de faturas e planos com notificações automáticas."
+  },
   "Painel Geral & Financeiro": {
     "Informações Básicas e Badges": "No Painel Geral, você gerencia as informações cadastrais do aluno e visualiza suas Conquistas (Badges). As Badges celebram a assiduidade e progresso do aluno (ex: Treino Focado, Frequência Ouro).",
     "Faturas e Mensalidades": "Na aba Financeiro, você pode lançar faturas manuais selecionando planos padrão (Mensal, Trimestral, Semestral, Anual) ou valores personalizados, definindo datas de vencimento específicas.",
@@ -901,6 +904,10 @@ const LOCAL_HELP_KB: Record<string, Record<string, string>> = {
     "Check-ins de Treinos": "O aluno registra no seu portal os exercícios executados. Ao marcar todos os exercícios do dia, o treino é concluído, incrementando a assiduidade e disparando alertas de progresso.",
     "Badges de Frequência": "À medida que o aluno acumula treinos concluídos, ele conquista novos badges de assiduidade, promovendo gamificação e engajamento.",
     "PWA e Acesso Offline": "O portal do aluno é um PWA completo. Ele salva os treinos em cache no localStorage. O aluno pode fazer o check-in offline, e as ações serão sincronizadas automaticamente assim que houver conexão."
+  },
+  "Chat e Atualizações": {
+    "Chat Interno Real-time": "Canal de chat exclusivo em tempo real. O professor pode enviar mensagens na aba 'Mensagens' do aluno; o aluno interage por um balão flutuante na sua agenda pública.",
+    "Limpeza de Cache (Raio)": "Permite limpar arquivos locais temporários e service workers no navegador do celular ou computador do aluno, forçando o download imediato dos novos ícones e atualizações do PWA."
   },
   "Clinical Guard IA": {
     "Validação de Lesões na Prescrição": "O AI Clinical Guard analisa a anamnese do aluno em busca de lesões relatadas (ex: hérnia discal, condromalácia) e impede a prescrição de exercícios contraindicados no gerador de treinos.",
@@ -1557,7 +1564,7 @@ function MainApp({
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
                <span>JIMMP Info</span>
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
-               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.3.4</span>
+               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.3.5</span>
              </div>
            </footer>
         </div>

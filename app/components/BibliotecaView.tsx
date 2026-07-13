@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Plus, X, Video, FileText, Trash2, ArrowRight, Edit3, Upload, Link } from 'lucide-react';
+import { Search, Plus, X, Video, FileText, Trash2, ArrowRight, Edit3, Upload, Link, Dumbbell, Activity, Trophy, Sparkles } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { User } from '../types';
 import CustomAlertModal from './CustomAlertModal';
@@ -11,6 +11,40 @@ interface BibliotecaViewProps {
 
 export default function BibliotecaView({ currentUser }: BibliotecaViewProps) {
   const [exercises, setExercises] = useState<any[]>([]);
+  
+  const getExerciseAvatar = (category: string, hasVideo: boolean) => {
+    let bgGradient = 'from-[#dfbf80]/20 to-[#dfbf80]/5 text-[#dfbf80] border-[#dfbf80]/30';
+    let IconComponent = Dumbbell;
+
+    const cat = category.toLowerCase();
+    if (cat.includes('cardio')) {
+      bgGradient = 'from-red-500/20 to-red-500/5 text-red-400 border-red-500/30';
+      IconComponent = Activity;
+    } else if (cat.includes('pernas')) {
+      bgGradient = 'from-emerald-500/20 to-emerald-500/5 text-emerald-400 border-emerald-500/30';
+      IconComponent = Trophy;
+    } else if (cat.includes('braços') || cat.includes('peito') || cat.includes('costas') || cat.includes('ombros')) {
+      bgGradient = 'from-amber-500/20 to-amber-500/5 text-amber-400 border-amber-500/30';
+      IconComponent = Dumbbell;
+    } else if (cat.includes('abdômen')) {
+      bgGradient = 'from-cyan-500/20 to-cyan-500/5 text-cyan-400 border-cyan-500/30';
+      IconComponent = Sparkles;
+    } else {
+      bgGradient = 'from-zinc-500/20 to-zinc-500/5 text-zinc-400 border-zinc-500/30';
+      IconComponent = FileText;
+    }
+
+    return (
+      <div className={`w-12 h-12 rounded-lg border bg-gradient-to-br ${bgGradient} flex items-center justify-center shrink-0 shadow-inner relative group/avatar`}>
+        <IconComponent className="w-5 h-5 group-hover/avatar:scale-110 transition-transform" />
+        {hasVideo && (
+          <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-black flex items-center justify-center border border-black shadow text-[9px] font-bold">
+            <Video className="w-2.5 h-2.5" />
+          </span>
+        )}
+      </div>
+    );
+  };
   const [loading, setLoading] = useState<boolean>(true);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
@@ -367,17 +401,21 @@ export default function BibliotecaView({ currentUser }: BibliotecaViewProps) {
                   return null;
                 })()}
                 
-                <h4 className="font-heading font-semibold text-lg text-white group-hover:text-primary transition-colors mb-2">
-                  {ex.name}
-                </h4>
-                
-                {ex.description ? (
-                  <p className="text-zinc-400 text-xs leading-relaxed mb-3 line-clamp-3" title={ex.description}>
-                    {ex.description}
-                  </p>
-                ) : (
-                  <p className="text-zinc-600 text-xs italic mb-3">Sem instruções cadastradas.</p>
-                )}
+                <div className="flex items-center gap-3 mb-3 mt-1">
+                  {getExerciseAvatar(ex.category, !!(ex.video_file_url || ex.video_url))}
+                  <div className="flex-1 min-w-0 text-left">
+                    <h4 className="font-heading font-semibold text-sm text-white group-hover:text-primary transition-colors leading-tight truncate" title={ex.name}>
+                      {ex.name}
+                    </h4>
+                    {ex.description ? (
+                      <p className="text-zinc-400 text-[10px] leading-snug mt-0.5 line-clamp-2" title={ex.description}>
+                        {ex.description}
+                      </p>
+                    ) : (
+                      <p className="text-zinc-600 text-[10px] italic mt-0.5">Sem instruções cadastradas.</p>
+                    )}
+                  </div>
+                </div>
 
                 {/* Availability status layout */}
                 <div className="flex flex-col gap-1.5 text-[10px] text-zinc-400 bg-surface-high/40 p-2.5 rounded-lg border border-surface-highest/40 mb-4 mt-2">

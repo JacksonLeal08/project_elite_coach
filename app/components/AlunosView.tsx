@@ -330,7 +330,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
   const [schedules, setSchedules] = useState<any[]>([]);
   const [loadingSchedules, setLoadingSchedules] = useState<boolean>(false);
   const [savingSchedule, setSavingSchedule] = useState<boolean>(false);
-  const [newSchedule, setNewSchedule] = useState({ date: '', time: '', notes: '' });
+  const [newSchedule, setNewSchedule] = useState({ date: '', time: '', notes: '', status: 'Agendado' });
 
   // Goals State
   const [goals, setGoals] = useState<StudentGoal | null>(null);
@@ -873,14 +873,14 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
         student_id: selectedStudent.id,
         scheduled_date: newSchedule.date,
         scheduled_time: newSchedule.time,
-        status: 'Agendado',
+        status: newSchedule.status || 'Agendado',
         notes: newSchedule.notes || null
       };
 
       if (!navigator.onLine) {
         queueOfflineOperation('add_schedule', schedulePayload);
         showCustomAlert('Modo Offline', 'Retorno agendado localmente! Sincronização automática pendente.', 'info');
-        setNewSchedule({ date: '', time: '', notes: '' });
+        setNewSchedule({ date: '', time: '', notes: '', status: 'Agendado' });
         setSchedules(prev => [...prev, { ...schedulePayload, id: 'temp_' + Date.now(), created_at: new Date().toISOString() }]);
         setSavingSchedule(false);
         return;
@@ -903,8 +903,10 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
       const { error: notifError } = await supabase
         .from('notifications')
         .insert([{
-          title: 'Novo Retorno Agendado',
-          message: `Retorno agendado para o aluno ${selectedStudent.name} em ${dateFormatted}.`,
+          title: newSchedule.status === 'Sugerido' ? 'Nova Data de Retorno Sugerida' : 'Novo Retorno Agendado',
+          message: newSchedule.status === 'Sugerido' 
+            ? `Seu treinador sugeriu uma nova data de retorno para o aluno ${selectedStudent.name} em ${dateFormatted}.`
+            : `Retorno agendado para o aluno ${selectedStudent.name} em ${dateFormatted}.`,
           type: 'schedule',
           read: false
         }]);
@@ -921,7 +923,8 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
         .maybeSingle();
 
       if (adminSettings?.value) {
-        const tgMsg = `<b>🔔 Elite Coach - Novo Retorno Agendado!</b>\n\n👤 <b>Aluno:</b> ${selectedStudent.name}\n📅 <b>Data:</b> ${newSchedule.date.split('-').reverse().join('/')}\n⏰ <b>Hora:</b> ${newSchedule.time}\n📝 <b>Notas:</b> ${newSchedule.notes || 'Sem observações'}`;
+        const isSug = newSchedule.status === 'Sugerido';
+        const tgMsg = `<b>${isSug ? '⚡ Elite Coach - Data de Retorno Sugerida pelo Professor!' : '🔔 Elite Coach - Novo Retorno Agendado!'}</b>\n\n👤 <b>Aluno:</b> ${selectedStudent.name}\n📅 <b>Data:</b> ${newSchedule.date.split('-').reverse().join('/')}\n⏰ <b>Hora:</b> ${newSchedule.time}\n📝 <b>Notas:</b> ${newSchedule.notes || 'Sem observações'}`;
         
         try {
           await fetch('/api/telegram/send-message', {
@@ -930,12 +933,32 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
             body: JSON.stringify({ chatId: adminSettings.value, message: tgMsg })
           });
         } catch (tgErr) {
-          console.error('Error sending Telegram notification:', tgErr);
+          console.error('Error sending Telegram notification to admin:', tgErr);
         }
       }
 
-      showCustomAlert('Sucesso', 'Retorno agendado com sucesso!', 'success');
-      setNewSchedule({ date: '', time: '', notes: '' });
+      // Send telegram alert to student if selectedStudent.telegram_chat_id is configured
+      if (selectedStudent.telegram_chat_id) {
+        let clientMsg = '';
+        if (newSchedule.status === 'Sugerido') {
+          clientMsg = `<b>⚡ Elite Coach - Nova Data de Retorno Sugerida!</b>\n\nSeu treinador sugeriu uma data para sua próxima avaliação.\n\n📅 <b>Data Sugerida:</b> ${newSchedule.date.split('-').reverse().join('/')}\n⏰ <b>Hora:</b> ${newSchedule.time}\n📝 <b>Notas:</b> ${newSchedule.notes || 'Sem observações'}\n\n<i>Acesse seu portal de treinos para confirmar ou sugerir outra data!</i>`;
+        } else {
+          clientMsg = `<b>📅 Elite Coach - Novo Retorno Agendado!</b>\n\nSeu treinador agendou sua próxima avaliação de retorno.\n\n📅 <b>Data:</b> ${newSchedule.date.split('-').reverse().join('/')}\n⏰ <b>Hora:</b> ${newSchedule.time}\n📝 <b>Notas:</b> ${newSchedule.notes || 'Sem observações'}`;
+        }
+
+        try {
+          await fetch('/api/telegram/send-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chatId: selectedStudent.telegram_chat_id, message: clientMsg })
+          });
+        } catch (tgErr) {
+          console.error('Error sending Telegram notification to client:', tgErr);
+        }
+      }
+
+      showCustomAlert('Sucesso', newSchedule.status === 'Sugerido' ? 'Sugestão de data enviada com sucesso!' : 'Retorno agendado com sucesso!', 'success');
+      setNewSchedule({ date: '', time: '', notes: '', status: 'Agendado' });
       fetchStudentSchedules(selectedStudent.id);
     } catch (err: any) {
       console.error(err);
@@ -3020,6 +3043,18 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                     </div>
 
                     <div>
+                      <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Tipo de Agendamento</label>
+                      <select
+                        value={newSchedule.status || 'Agendado'}
+                        onChange={e => setNewSchedule({ ...newSchedule, status: e.target.value })}
+                        className="w-full bg-surface border border-surface-highest rounded px-3 py-2.5 mt-1 text-white text-xs outline-none focus:border-primary"
+                      >
+                        <option value="Agendado">Agendar Diretamente (Confirmado)</option>
+                        <option value="Sugerido">Sugerir Data (Pendente de aceite do Aluno)</option>
+                      </select>
+                    </div>
+
+                    <div>
                       <label className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">Observações / Notas</label>
                       <textarea
                         value={newSchedule.notes}
@@ -3034,7 +3069,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                       disabled={savingSchedule}
                       className="w-full py-3 bg-primary text-black font-bold uppercase tracking-wider text-xs rounded hover:bg-primary-dim transition-all shadow-[0_0_12px_rgba(212,175,55,0.15)] flex items-center justify-center gap-1.5"
                     >
-                      {savingSchedule ? 'Agendando...' : 'Confirmar Agendamento'}
+                      {savingSchedule ? 'Processando...' : newSchedule.status === 'Sugerido' ? 'Enviar Sugestão' : 'Confirmar Agendamento'}
                     </button>
                   </form>
                 </div>
@@ -4086,8 +4121,23 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                           {(!s.badges || s.badges.length === 0) && <span className="text-zinc-600 text-xs">-</span>}
                         </div>
                       </td>
-                      <td className="p-4 text-right space-x-2">
-                         <button className="text-zinc-400 hover:text-primary transition-colors text-xs uppercase font-bold flex items-center gap-1 ml-auto">Ver Perfil <ChevronRight className="w-3.5 h-3.5"/></button>
+                      <td className="p-4 text-right">
+                        <div className="flex items-center justify-end gap-3">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedStudent(s);
+                              setActiveProfileTab('chat');
+                            }}
+                            className="p-1.5 rounded bg-surface hover:bg-surface-high border border-surface-highest text-zinc-400 hover:text-primary transition-colors"
+                            title="Chat com o Aluno"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
+                          <button className="text-zinc-400 hover:text-primary transition-colors text-xs uppercase font-bold flex items-center gap-1">
+                            Ver Perfil <ChevronRight className="w-3.5 h-3.5"/>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -4104,28 +4154,43 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                 onClick={() => setSelectedStudent(s)}
                 className="bg-surface-container border border-surface-highest p-4 rounded-xl hover:border-primary/50 transition-all cursor-pointer flex flex-col gap-3 relative overflow-hidden"
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full border border-[#dfbf80]/30 overflow-hidden bg-surface-high flex items-center justify-center shrink-0">
-                    {s.photo_avatar_url ? (
-                      <img src={s.photo_avatar_url} alt={s.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-base font-bold text-[#dfbf80]">{s.name.charAt(0).toUpperCase()}</span>
-                    )}
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full border border-[#dfbf80]/30 overflow-hidden bg-surface-high flex items-center justify-center shrink-0">
+                      {s.photo_avatar_url ? (
+                        <img src={s.photo_avatar_url} alt={s.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-base font-bold text-[#dfbf80]">{s.name.charAt(0).toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white text-base leading-tight flex flex-wrap items-center gap-2">
+                        {s.name}
+                        {(() => {
+                            const finStatus = getStudentFinancialStatus(s.id);
+                            return (
+                               <span className={`px-1.5 py-0.5 border rounded text-[8px] font-bold uppercase tracking-wider whitespace-nowrap ${finStatus.color}`}>
+                                  {finStatus.label}
+                               </span>
+                            );
+                        })()}
+                      </h4>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${s.status === 'Ativo' ? 'text-primary' : 'text-red-400'}`}>{s.status}</span>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-white text-base leading-tight flex flex-wrap items-center gap-2">
-                      {s.name}
-                      {(() => {
-                          const finStatus = getStudentFinancialStatus(s.id);
-                          return (
-                             <span className={`px-1.5 py-0.5 border rounded text-[8px] font-bold uppercase tracking-wider whitespace-nowrap ${finStatus.color}`}>
-                                {finStatus.label}
-                             </span>
-                          );
-                      })()}
-                    </h4>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider ${s.status === 'Ativo' ? 'text-primary' : 'text-red-400'}`}>{s.status}</span>
-                  </div>
+
+                  {/* Quick Chat Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedStudent(s);
+                      setActiveProfileTab('chat');
+                    }}
+                    className="w-8 h-8 rounded-lg bg-surface-high border border-surface-highest hover:border-primary/50 text-zinc-400 hover:text-primary transition-all flex items-center justify-center shrink-0"
+                    title="Abrir Chat"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </button>
                 </div>
 
                 <div className="flex justify-between items-center border-t border-surface-highest/40 pt-3">
