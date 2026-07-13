@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight, Sun, Moon } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight, Sun, Moon, MessageSquare } from 'lucide-react';
 import { ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
@@ -10,6 +10,7 @@ import InspecoesView from './components/InspecoesView';
 import ConfigView from './components/ConfigView';
 import BibliotecaView from './components/BibliotecaView';
 import FinanceiroView from './components/FinanceiroView';
+import ChatComponent from './components/ChatComponent';
 import { supabase } from './utils/supabase';
 import { User } from './types';
 import { getOfflineQueue, queueOfflineOperation, runOfflineSync } from './utils/offline';
@@ -1556,7 +1557,7 @@ function MainApp({
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
                <span>JIMMP Info</span>
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
-               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.3.3</span>
+               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.3.4</span>
              </div>
            </footer>
         </div>
@@ -2126,6 +2127,29 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
   // Student Public Agenda Reminders state
   const [reminderPref, setReminderPref] = useState<number>(30);
   const [activeScheduleAlert, setActiveScheduleAlert] = useState<any>(null);
+
+  // Chat states
+  const [coachId, setCoachId] = useState<string | null>(null);
+  const [showChat, setShowChat] = useState<boolean>(false);
+
+  useEffect(() => {
+    const fetchCoachId = async () => {
+      try {
+        const { data: coachProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .or("role.eq.Professor,role.eq.Desenvolvedor")
+          .limit(1)
+          .single();
+        if (coachProfile) {
+          setCoachId(coachProfile.id);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar ID do treinador:', err);
+      }
+    };
+    fetchCoachId();
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -4090,6 +4114,68 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
               </div>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating Chat Button for Student */}
+      {coachId && student?.id && (
+        <div className="fixed bottom-24 left-6 z-[80] transition-all duration-300">
+          <button 
+            onClick={() => setShowChat(true)}
+            className="w-12 h-12 rounded-full bg-primary text-black flex items-center justify-center shadow-[0_4px_20px_rgba(212,175,55,0.4)] hover:scale-110 active:scale-95 transition-all duration-200 group relative"
+            title="Chat com o Treinador"
+          >
+            <MessageSquare className="w-5 h-5 text-black" />
+            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* Floating Chat Drawer/Modal */}
+      <AnimatePresence>
+        {showChat && coachId && student?.id && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex justify-end">
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="w-full max-w-md h-full bg-surface-container border-l border-surface-highest/60 flex flex-col shadow-2xl"
+            >
+              {/* Drawer Header */}
+              <div className="p-4 border-b border-surface-highest/60 flex justify-between items-center bg-surface/50">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                    <Dumbbell className="w-4 h-4" />
+                  </div>
+                  <div className="text-left">
+                    <h3 className="font-heading font-semibold text-xs text-white uppercase tracking-wider">Chat com o Treinador</h3>
+                    <p className="text-[9px] text-zinc-400">Canal direto em tempo real</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowChat(false)}
+                  className="w-8 h-8 rounded-lg bg-surface hover:bg-surface-high border border-surface-highest/60 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Chat Body */}
+              <div className="flex-1 p-4 overflow-hidden">
+                <ChatComponent 
+                  studentId={student.id.toString()}
+                  coachId={coachId || ''}
+                  senderId={student.id.toString()}
+                  senderName={student.name || ''}
+                  isPublic={true}
+                />
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

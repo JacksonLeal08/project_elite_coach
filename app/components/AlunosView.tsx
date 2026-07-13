@@ -8,6 +8,7 @@ import { exportAnamnesisPDF, exportPosturePDF, exportEvolutionPDF, exportFrequen
 import { queueOfflineOperation, runOfflineSync } from '../utils/offline';
 import CustomAlertModal from './CustomAlertModal';
 import ParticleEffect from './ParticleEffect';
+import ChatComponent from './ChatComponent';
 
 const isColumnMismatchError = (error: any): boolean => {
   if (!error) return false;
@@ -320,7 +321,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
   const [activeMetric, setActiveMetric] = useState<'weight' | 'body_fat' | 'heart_rate'>('weight');
 
   // Tab and Anamnesis State
-  const [activeProfileTab, setActiveProfileTab] = useState<'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance'>('general');
+  const [activeProfileTab, setActiveProfileTab] = useState<'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance' | 'chat'>('general');
   const [anamnesis, setAnamnesis] = useState<Anamnesis | null>(null);
   const [loadingAnamnesis, setLoadingAnamnesis] = useState<boolean>(false);
   const [savingAnamnesis, setSavingAnamnesis] = useState<boolean>(false);
@@ -1977,6 +1978,19 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                 >
                   Assiduidade e Treinos
                 </button>
+                <button
+                   onClick={() => {
+                     setActiveProfileTab('chat');
+                     stopCamera();
+                   }}
+                   className={`px-6 py-3 text-xs font-bold uppercase tracking-widest transition-all border-b-2 whitespace-nowrap shrink-0 ${
+                     activeProfileTab === 'chat'
+                       ? 'text-primary border-primary bg-primary/5'
+                       : 'text-zinc-400 border-transparent hover:text-white'
+                   }`}
+                 >
+                   Mensagens
+                 </button>
            </div>
 
             {/* Tab content container */}
@@ -3470,6 +3484,22 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                     );
                   })()
                 )}
+              </div>
+            )}
+
+            {activeProfileTab === 'chat' && selectedStudent && currentUser && (
+              <div className="bg-surface-container border border-surface-highest rounded-xl p-6">
+                <div className="flex items-center gap-2 mb-4 border-b border-surface-highest pb-2">
+                  <h3 className="font-heading font-semibold text-base text-white">Canal de Chat Direto</h3>
+                </div>
+                <div className="max-w-xl">
+                  <ChatComponent
+                    studentId={selectedStudent.id.toString()}
+                    coachId={currentUser.id.toString()}
+                    senderId={currentUser.id.toString()}
+                    senderName={currentUser.name || ''}
+                  />
+                </div>
               </div>
             )}
           </div>

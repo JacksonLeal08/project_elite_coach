@@ -860,8 +860,15 @@ export default function ConfigView({ currentUser, onUserUpdate, brandSettings, f
         }
       });
 
-      alert('Caches de arquivos e dados locais limpos com sucesso! O aplicativo será recarregado para baixar os novos ícones e atualizações.');
-      window.location.reload();
+      setAlertModal({
+        isOpen: true,
+        type: 'success',
+        title: 'Caches e Dados Limpos',
+        message: `Olá ${currentUser?.name || 'Treinador'}, os caches de arquivos e dados locais foram limpos com sucesso!\n\nO aplicativo será recarregado automaticamente ao fechar este aviso para aplicar as novas atualizações do sistema.`,
+        onConfirm: () => {
+          window.location.reload();
+        }
+      });
     } catch (e) {
       console.error('Erro ao limpar cache:', e);
       window.location.reload();
