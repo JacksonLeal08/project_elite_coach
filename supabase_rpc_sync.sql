@@ -1,6 +1,9 @@
 -- Script SQL para criar a função RPC no Supabase
 -- Execute este script no SQL Editor do painel do seu Supabase.
 
+-- Remove a função existente se houver, pois o Postgres não permite alterar o tipo de retorno diretamente
+DROP FUNCTION IF EXISTS public.sync_profile_by_email(text, text, text, timestamptz);
+
 CREATE OR REPLACE FUNCTION public.sync_profile_by_email(
   p_email text,
   p_name text,
