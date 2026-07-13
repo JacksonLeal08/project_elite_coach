@@ -19,8 +19,9 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // Sempre inicializa no tema escuro ao recarregar a página
-    setTheme('dark');
+    // Tenta ler o tema salvo no localStorage, caso contrário o padrão é 'dark'
+    const savedTheme = (localStorage.getItem('app_theme') as Theme) || 'dark';
+    setTheme(savedTheme);
     setMounted(true);
   }, []);
 

@@ -1523,42 +1523,44 @@ function MainApp({
         </header>
 
         {/* Scrollable Content Wrapper (Fixed overall layout, scroll only in center) */}
-        <div className="flex-1 flex flex-col justify-between overflow-hidden p-4 md:p-8 pb-20 md:pb-8">
+        <div className="flex-1 flex flex-col overflow-hidden p-4 md:p-8 pb-20 md:pb-8">
            {/* Center Content Panel */}
-           <div className="flex-1 overflow-y-auto pr-0 sm:pr-1 min-h-0">
-              <AnimatePresence mode="wait">
-                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-                    {activeTab === 'dashboard' && <DashboardView currentUser={currentUser} />}
-                    {activeTab === 'alunos' && (
-                      <AlunosView 
-                        currentUser={currentUser} 
-                        redirectStudentId={redirectStudentId}
-                        redirectTab={redirectTab}
-                        clearRedirect={() => {
-                          setRedirectStudentId(null);
-                          setRedirectTab(null);
-                        }}
-                      />
-                    )}
-                    {activeTab === 'protocolos' && <ProtocolosView />}
-                    {activeTab === 'biblioteca' && <BibliotecaView currentUser={currentUser} />}
-                    {activeTab === 'financeiro' && <FinanceiroView currentUser={currentUser} />}
-                    {activeTab === 'config' && <ConfigView currentUser={currentUser} onUserUpdate={(updatedUser: any) => setCurrentUser(updatedUser)} brandSettings={brandSettings} fetchBrandSettings={fetchBrandSettings} />}
-                    {activeTab === 'inspecoes' && <InspecoesView currentUser={currentUser} />}
-                 </motion.div>
-              </AnimatePresence>
-           </div>
+           <div className="flex-1 overflow-y-auto pr-0 sm:pr-1 min-h-0 flex flex-col justify-between">
+              <div className="flex-1 pb-4">
+                 <AnimatePresence mode="wait">
+                    <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+                       {activeTab === 'dashboard' && <DashboardView currentUser={currentUser} />}
+                       {activeTab === 'alunos' && (
+                         <AlunosView 
+                           currentUser={currentUser} 
+                           redirectStudentId={redirectStudentId}
+                           redirectTab={redirectTab}
+                           clearRedirect={() => {
+                             setRedirectStudentId(null);
+                             setRedirectTab(null);
+                           }}
+                         />
+                       )}
+                       {activeTab === 'protocolos' && <ProtocolosView />}
+                       {activeTab === 'biblioteca' && <BibliotecaView currentUser={currentUser} />}
+                       {activeTab === 'financeiro' && <FinanceiroView currentUser={currentUser} />}
+                       {activeTab === 'config' && <ConfigView currentUser={currentUser} onUserUpdate={(updatedUser: any) => setCurrentUser(updatedUser)} brandSettings={brandSettings} fetchBrandSettings={fetchBrandSettings} />}
+                       {activeTab === 'inspecoes' && <InspecoesView currentUser={currentUser} />}
+                    </motion.div>
+                 </AnimatePresence>
+              </div>
 
-           {/* Global Page Footer */}
-           <footer className="py-1.5 mt-4 border-t border-surface-highest/20 text-center shrink-0 z-10 bg-surface/80 backdrop-blur-sm">
-             <div className="text-[7.5px] sm:text-[9px] text-zinc-500 font-medium tracking-wide whitespace-nowrap overflow-x-auto scrollbar-none flex items-center justify-center gap-1 sm:gap-1.5 px-2">
-               <span>© 2026 - Todos os direitos reservados</span>
-               <span className="text-[#dfbf80]/30 shrink-0">|</span>
-               <span>JIMMP Info</span>
-               <span className="text-[#dfbf80]/30 shrink-0">|</span>
-               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.3.1</span>
-             </div>
-           </footer>
+              {/* Global Page Footer */}
+              <footer className="py-2 mt-8 border-t border-surface-highest/20 text-center shrink-0 z-10 bg-surface/30 backdrop-blur-sm rounded-lg">
+                <div className="text-[7.5px] sm:text-[9px] text-zinc-500 font-medium tracking-wide whitespace-nowrap overflow-x-auto scrollbar-none flex items-center justify-center gap-1 sm:gap-1.5 px-2 py-0.5">
+                  <span>© 2026 - Todos os direitos reservados</span>
+                  <span className="text-[#dfbf80]/30 shrink-0">|</span>
+                  <span>JIMMP Info</span>
+                  <span className="text-[#dfbf80]/30 shrink-0">|</span>
+                  <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.3.2</span>
+                </div>
+              </footer>
+           </div>
         </div>
       </main>
 
@@ -1791,7 +1793,7 @@ function MainApp({
       </AnimatePresence>
 
       {/* Floating AI Agent Button */}
-      <div className={`fixed ${showMobileMoreMenu ? 'bottom-[310px]' : 'bottom-28 md:bottom-24'} right-6 z-[80] transition-all duration-300`} data-tour="ai-agent">
+      <div className={`fixed ${showMobileMoreMenu ? 'bottom-[310px]' : 'bottom-20 md:bottom-8'} right-6 md:right-8 z-[80] transition-all duration-300`} data-tour="ai-agent">
         <button 
           onClick={() => setShowAiAgent(true)}
           className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-primary-dim text-black flex items-center justify-center shadow-[0_4px_20px_rgba(212,175,55,0.4)] hover:scale-110 active:scale-95 transition-all duration-200 group relative"
