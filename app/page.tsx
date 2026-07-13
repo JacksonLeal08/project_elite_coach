@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight, Sun, Moon, MessageSquare } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight, Sun, Moon, MessageSquare, Star } from 'lucide-react';
 import { ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
@@ -2138,6 +2138,46 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
   // Chat states
   const [coachId, setCoachId] = useState<string | null>(null);
   const [showChat, setShowChat] = useState<boolean>(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingStars, setRatingStars] = useState(5);
+  const [ratingFeedback, setRatingFeedback] = useState('');
+  const [savingRating, setSavingRating] = useState(false);
+
+  const handleSaveChatRating = async () => {
+    if (!student?.id || !coachId) return;
+    setSavingRating(true);
+    try {
+      const { data: room, error: findError } = await supabase
+        .from('chat_rooms')
+        .select('id')
+        .eq('student_id', student.id)
+        .eq('coach_id', coachId)
+        .maybeSingle();
+
+      if (findError) throw findError;
+
+      if (room) {
+        const { error } = await supabase
+          .from('chat_rooms')
+          .update({
+            rating: ratingStars,
+            rating_feedback: ratingFeedback || null
+          })
+          .eq('id', room.id);
+
+        if (error) throw error;
+        alert('Obrigado! Sua avaliação foi registrada com sucesso.');
+        setShowRatingModal(false);
+      } else {
+        alert('Nenhuma sala de chat ativa para avaliação.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert('Erro ao salvar avaliação. Tente novamente.');
+    } finally {
+      setSavingRating(false);
+    }
+  };
 
   useEffect(() => {
     const fetchCoachId = async () => {
@@ -4163,12 +4203,25 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
                     <p className="text-[9px] text-zinc-400">Canal direto em tempo real</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setShowChat(false)}
-                  className="w-8 h-8 rounded-lg bg-surface hover:bg-surface-high border border-surface-highest/60 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setRatingStars(5);
+                      setRatingFeedback('');
+                      setShowRatingModal(true);
+                    }}
+                    className="h-8 px-2.5 rounded-lg bg-surface hover:bg-surface-high border border-surface-highest/60 flex items-center gap-1.5 text-[9px] font-bold text-[#dfbf80] hover:text-primary transition-colors uppercase"
+                    title="Avaliar Atendimento"
+                  >
+                    <Star className="w-3.5 h-3.5 fill-current" /> Avaliar
+                  </button>
+                  <button 
+                    onClick={() => setShowChat(false)}
+                    className="w-8 h-8 rounded-lg bg-surface hover:bg-surface-high border border-surface-highest/60 flex items-center justify-center text-zinc-400 hover:text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {/* Chat Body */}
@@ -4185,6 +4238,70 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
           </div>
         )}
       </AnimatePresence>
+
+      {/* Chat Rating Modal Dialog */}
+      {showRatingModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-surface-container border border-[#dfbf80]/30 rounded-2xl p-6 max-w-sm w-full space-y-5 shadow-2xl relative overflow-hidden"
+          >
+            <div className="space-y-1 text-center">
+              <h3 className="text-base font-heading font-bold text-white uppercase tracking-wider">Avaliar Atendimento</h3>
+              <p className="text-[10px] text-zinc-400">Classifique a atenção do seu treinador</p>
+            </div>
+
+            {/* Stars Selector */}
+            <div className="flex justify-center gap-2 py-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  type="button"
+                  onClick={() => setRatingStars(star)}
+                  className="transition-transform active:scale-90 p-1"
+                >
+                  <Star
+                    className={`w-7 h-7 transition-colors ${
+                      star <= ratingStars ? 'text-primary fill-current' : 'text-zinc-600'
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+
+            {/* Textarea feedback */}
+            <div className="space-y-1">
+              <label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider block">Mensagem de Feedback (Opcional)</label>
+              <textarea
+                value={ratingFeedback}
+                onChange={(e) => setRatingFeedback(e.target.value)}
+                className="w-full bg-surface border border-surface-highest rounded px-3 py-2 text-white text-xs outline-none focus:border-primary h-20 resize-none"
+                placeholder="Escreva como foi o suporte prestado..."
+              />
+            </div>
+
+            {/* Actions buttons */}
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowRatingModal(false)}
+                className="flex-1 py-2.5 bg-surface-high border border-surface-highest text-zinc-400 hover:text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveChatRating}
+                disabled={savingRating}
+                className="flex-1 py-2.5 bg-primary text-black font-bold uppercase tracking-wider text-[10px] rounded-xl hover:bg-primary-dim transition-all shadow-[0_0_12px_rgba(212,175,55,0.2)] disabled:opacity-50"
+              >
+                {savingRating ? 'Enviando...' : 'Salvar Avaliação'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="mt-16 text-center text-[8px] text-zinc-600 font-medium tracking-widest select-none uppercase py-6 border-t border-surface-highest/30">

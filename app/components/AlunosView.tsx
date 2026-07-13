@@ -331,6 +331,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
   const [loadingSchedules, setLoadingSchedules] = useState<boolean>(false);
   const [savingSchedule, setSavingSchedule] = useState<boolean>(false);
   const [newSchedule, setNewSchedule] = useState({ date: '', time: '', notes: '', status: 'Agendado' });
+  const [quickChatStudent, setQuickChatStudent] = useState<any | null>(null);
 
   // Goals State
   const [goals, setGoals] = useState<StudentGoal | null>(null);
@@ -4126,8 +4127,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSelectedStudent(s);
-                              setActiveProfileTab('chat');
+                              setQuickChatStudent(s);
                             }}
                             className="p-1.5 rounded bg-surface hover:bg-surface-high border border-surface-highest text-zinc-400 hover:text-primary transition-colors"
                             title="Chat com o Aluno"
@@ -4183,8 +4183,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedStudent(s);
-                      setActiveProfileTab('chat');
+                      setQuickChatStudent(s);
                     }}
                     className="w-8 h-8 rounded-lg bg-surface-high border border-surface-highest hover:border-primary/50 text-zinc-400 hover:text-primary transition-all flex items-center justify-center shrink-0"
                     title="Abrir Chat"
@@ -4646,6 +4645,42 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
       )}
 
 
+
+      {/* Floating Quick Chat Popup */}
+      {quickChatStudent && (
+        <div className="fixed bottom-16 right-4 sm:right-6 w-[340px] max-w-[calc(100vw-32px)] h-[480px] bg-surface-container border-2 border-primary/30 rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.8)] z-40 flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
+          <div className="bg-surface-high px-4 py-3 border-b border-surface-highest/40 flex justify-between items-center shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full border border-primary/30 overflow-hidden bg-surface flex items-center justify-center shrink-0">
+                {quickChatStudent.photo_avatar_url ? (
+                  <img src={quickChatStudent.photo_avatar_url} alt={quickChatStudent.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xs font-bold text-[#dfbf80]">{quickChatStudent.name.charAt(0).toUpperCase()}</span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <h4 className="font-bold text-white text-xs truncate leading-tight">{quickChatStudent.name}</h4>
+                <span className="text-[8px] text-primary uppercase font-bold tracking-wider">Chat Rápido</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setQuickChatStudent(null)}
+              className="p-1 rounded bg-surface hover:bg-surface-highest text-zinc-400 hover:text-white transition-colors"
+              title="Fechar Chat"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex-1 bg-surface/10 overflow-hidden">
+            <ChatComponent
+              studentId={quickChatStudent.id.toString()}
+              coachId={(currentUser?.id || '').toString()}
+              senderId={(currentUser?.id || '').toString()}
+              senderName={quickChatStudent.name}
+            />
+          </div>
+        </div>
+      )}
 
       <CustomAlertModal
         isOpen={alertModal.isOpen}
