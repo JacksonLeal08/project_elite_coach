@@ -634,8 +634,7 @@ export default function ConfigView({ currentUser, onUserUpdate, brandSettings, f
           if (lowerMsg.includes('already registered') || 
               lowerMsg.includes('already exists') || 
               lowerMsg.includes('registered') || 
-              lowerMsg.includes('user-already-exists') || 
-              error.status === 422) {
+              lowerMsg.includes('user-already-exists')) {
             
             // Check if profile exists in profiles table
             const { data: existingProfile } = await supabase
