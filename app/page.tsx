@@ -22,23 +22,35 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [publicToken, setPublicToken] = useState<string>('');
 
-  const [brandSettings, setBrandSettings] = useState<any>({
-    name: 'Elite Coach',
-    specialty: 'Premium',
-    instagram: '@elitecoach',
-    whatsapp: '+55 11 99999-9999',
-    logoUrl: '/logo.png',
-    pdfTemplate: '1',
-    colorPrimary: '#d4af37',
-    colorPrimaryDim: '#b5952f',
-    colorSurface: '#0a1410',
-    colorSurfaceContainer: '#12241c',
-    colorSurfaceHigh: '#1a3428',
-    colorSurfaceHighest: '#224233',
-    fontTitle: 'Montserrat',
-    fontBody: 'Inter',
-    textScale: 'Padrão',
-    borderRadius: 'Moderno'
+  const [brandSettings, setBrandSettings] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('elite_coach_brand_settings');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+    return {
+      name: 'Elite Coach',
+      specialty: 'Premium',
+      instagram: '@elitecoach',
+      whatsapp: '+55 11 99999-9999',
+      logoUrl: '/logo.png',
+      pdfTemplate: '1',
+      colorPrimary: '#d4af37',
+      colorPrimaryDim: '#b5952f',
+      colorSurface: '#0a1410',
+      colorSurfaceContainer: '#12241c',
+      colorSurfaceHigh: '#1a3428',
+      colorSurfaceHighest: '#224233',
+      fontTitle: 'Montserrat',
+      fontBody: 'Inter',
+      textScale: 'Padrão',
+      borderRadius: 'Moderno'
+    };
   });
 
   useEffect(() => {
@@ -130,6 +142,9 @@ export default function App() {
         };
 
         setBrandSettings(updated);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('elite_coach_brand_settings', JSON.stringify(updated));
+        }
         applyBrandStyles(updated, theme);
         document.title = updated.name;
       } else {
@@ -1275,8 +1290,8 @@ function MainApp({
       {/* Sidebar for Desktop */}
       <aside className="hidden md:flex md:w-64 border-r border-surface-highest bg-surface-container flex-col shrink-0">
         <div className="p-6 border-b border-surface-highest flex flex-col items-center justify-center text-center">
-          <div className="h-[72px] w-[72px] flex items-center justify-center mb-3 shrink-0">
-             <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="h-full w-full object-contain filter drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]" />
+          <div className="h-16 w-auto max-w-[180px] flex items-center justify-center mb-3 shrink-0 overflow-hidden">
+             <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]" />
           </div>
           <div className="flex flex-col items-center overflow-hidden">
              <span className="font-title font-black text-white text-[14px] tracking-widest uppercase leading-tight drop-shadow-sm truncate max-w-[200px]">{brandSettings.name}</span>
@@ -1589,13 +1604,13 @@ function MainApp({
             initial={{ scale: 0, opacity: 0 }} 
             animate={{ scale: 1, opacity: 1 }} 
             exit={{ scale: 0, opacity: 0 }}
-            className="fixed bottom-6 right-6 z-50 flex items-end flex-col gap-2 cursor-grab active:cursor-grabbing"
+            className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-50 flex items-end flex-col gap-1 cursor-grab active:cursor-grabbing"
             style={{ touchAction: 'none' }}
           >
              <button onPointerDown={(e) => e.stopPropagation()} onClick={() => setShowSupportBtn(false)} className="w-6 h-6 bg-surface-highest text-zinc-400 rounded-full flex items-center justify-center hover:bg-zinc-800 transition-colors shadow-lg">
                 <X className="w-3 h-3" />
              </button>
-             <button onPointerDown={(e) => e.stopPropagation()} onClick={handleSupportClick} className="w-16 h-16 rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-transform group relative shadow-[0_0_15px_rgba(37,211,102,0.4)] overflow-hidden bg-transparent border-none outline-none">
+             <button onPointerDown={(e) => e.stopPropagation()} onClick={handleSupportClick} className="w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-transform group relative shadow-[0_0_15px_rgba(37,211,102,0.4)] overflow-hidden bg-transparent border-none outline-none">
                  <img src="https://i.ibb.co/p63JHmDM/372108180-WHATSAPP-ICON-1080.gif" alt="WhatsApp" className="w-full h-full object-cover scale-110 pointer-events-none" />
                  {/* Popup info */}
                  <div className="absolute right-full mr-4 top-1/2 -translate-y-1/2 bg-surface-high border border-surface-highest text-white text-xs px-3 py-2 rounded shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
@@ -3099,8 +3114,8 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
       <header className="border-b border-surface-highest bg-surface-container/50 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 flex items-center justify-center shrink-0">
-              <img src={brandSettings?.logoUrl || "/logo.png"} alt={brandSettings?.name || "Logo"} className="h-full w-full object-contain filter drop-shadow-[0_1px_5px_rgba(255,255,255,0.1)]" />
+            <div className="h-10 w-auto max-w-[120px] flex items-center justify-center shrink-0 overflow-hidden">
+              <img src={brandSettings?.logoUrl || "/logo.png"} alt={brandSettings?.name || "Logo"} className="max-h-full max-w-full object-contain filter drop-shadow-[0_1px_5px_rgba(255,255,255,0.1)]" />
             </div>
             <div>
               <h1 className="font-title font-black text-white text-[11px] sm:text-xs tracking-widest uppercase leading-tight">{brandSettings?.name || "Elite Coach"}</h1>
