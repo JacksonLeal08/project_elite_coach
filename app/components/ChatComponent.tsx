@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabase';
-import { Send, MessageSquare, Loader2, Share2, Image, Mic, Star, Sparkles } from 'lucide-react';
+import { Send, MessageSquare, Loader2, Share2, Image, Mic, Star, Sparkles, CornerUpLeft, Edit2, Trash2, X } from 'lucide-react';
 
 interface ChatComponentProps {
   studentId: string;
@@ -21,6 +21,9 @@ interface Message {
   read: boolean;
   message_type?: 'text' | 'image' | 'audio';
   reactions?: Record<string, string[]>;
+  reply_to_id?: string | null;
+  is_edited?: boolean;
+  deleted_for_everyone?: boolean;
 }
 
 export default function ChatComponent({
@@ -46,6 +49,49 @@ export default function ChatComponent({
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Reply, Edit and local delete states
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [localDeletedIds, setLocalDeletedIds] = useState<string[]>([]);
+
+  // Carregar mensagens excluídas localmente
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`deleted_chat_msgs_${senderId}`);
+      if (saved) {
+        setLocalDeletedIds(JSON.parse(saved));
+      }
+    }
+  }, [senderId]);
+
+  const handleDeleteLocal = (msgId: string) => {
+    const updated = [...localDeletedIds, msgId];
+    setLocalDeletedIds(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`deleted_chat_msgs_${senderId}`, JSON.stringify(updated));
+    }
+  };
+
+  const handleDeleteForEveryone = async (msgId: string) => {
+    try {
+      const { error } = await supabase
+        .from('chat_messages')
+        .update({
+          deleted_for_everyone: true,
+          message: '🚫 Esta mensagem foi apagada'
+        })
+        .eq('id', msgId);
+
+      if (error) throw error;
+
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msgId ? { ...m, deleted_for_everyone: true, message: '🚫 Esta mensagem foi apagada' } : m))
+      );
+    } catch (err) {
+      console.error('Erro ao apagar mensagem:', err);
+    }
+  };
 
   // Play synthetic premium ding sound on new messages
   const playNotificationSound = () => {
@@ -320,7 +366,7 @@ export default function ChatComponent({
     }
   };
 
-  // 6. Enviar Mensagem de Texto
+  // 6. Enviar ou Editar Mensagem
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !roomId || sending) return;
@@ -330,17 +376,41 @@ export default function ChatComponent({
     setNewMessage('');
 
     try {
-      const { error } = await supabase
-        .from('chat_messages')
-        .insert({
+      if (editingMessage) {
+        const { error } = await supabase
+          .from('chat_messages')
+          .update({
+            message: text,
+            is_edited: true
+          })
+          .eq('id', editingMessage.id);
+
+        if (error) throw error;
+
+        setMessages((prev) =>
+          prev.map((m) => (m.id === editingMessage.id ? { ...m, message: text, is_edited: true } : m))
+        );
+        setEditingMessage(null);
+      } else {
+        const insertPayload: any = {
           room_id: roomId,
           sender_id: senderId,
           message: text,
           message_type: 'text'
-        });
+        };
 
-      if (error) throw error;
-      await triggerChatNotification();
+        if (replyingTo) {
+          insertPayload.reply_to_id = replyingTo.id;
+        }
+
+        const { error } = await supabase
+          .from('chat_messages')
+          .insert(insertPayload);
+
+        if (error) throw error;
+        await triggerChatNotification();
+        setReplyingTo(null);
+      }
     } catch (err) {
       console.error('Erro ao enviar mensagem:', err);
       setNewMessage(text);
@@ -480,74 +550,163 @@ export default function ChatComponent({
             <p className="text-[9px] max-w-[200px] leading-relaxed">Inicie a conversa enviando uma mensagem no campo abaixo.</p>
           </div>
         ) : (
-          messages.map((msg) => {
-            const isMe = msg.sender_id === senderId;
-            return (
-              <div
-                key={msg.id}
-                className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
-              >
+          messages
+            .filter((msg) => !localDeletedIds.includes(msg.id))
+            .map((msg) => {
+              const isMe = msg.sender_id === senderId;
+              return (
                 <div
-                  className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-xs shadow-md relative group/msg ${
-                    isMe
-                      ? 'bg-primary text-black rounded-tr-none'
-                      : 'bg-surface-high border border-surface-highest text-white rounded-tl-none'
-                  }`}
+                  key={msg.id}
+                  className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
                 >
-                  {/* Floating emoji reactions bar */}
                   <div
-                    className={`absolute top-0 -translate-y-[85%] opacity-0 group-hover/msg:opacity-100 transition-opacity bg-surface-high border border-surface-highest rounded-lg p-0.5 shadow-lg flex gap-1 z-10 ${
-                      isMe ? 'right-0' : 'left-0'
+                    className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-xs shadow-md relative group/msg ${
+                      isMe
+                        ? 'bg-primary text-black rounded-tr-none'
+                        : 'bg-surface-high border border-surface-highest text-white rounded-tl-none'
                     }`}
                   >
-                    {['👍', '❤️', '🔥', '😂', '👏'].map((emoji) => (
-                      <button
-                        key={emoji}
-                        type="button"
-                        onClick={() => handleAddReaction(msg.id, emoji)}
-                        className="hover:scale-125 transition-transform p-0.5 text-[11px]"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Message body */}
-                  {isImageMessage(msg) ? (
-                    <a
-                      href={msg.message}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block max-w-full rounded overflow-hidden border border-surface-highest bg-black"
-                    >
-                      <img
-                        src={msg.message}
-                        alt="Imagem enviada"
-                        className="max-w-full h-auto object-contain max-h-48 hover:scale-105 transition-transform"
-                      />
-                    </a>
-                  ) : isAudioMessage(msg) ? (
-                    <div className="flex items-center gap-2 py-1 bg-surface-high/65 px-3 py-2 rounded-lg border border-surface-highest/50">
-                      <Mic className="w-4 h-4 text-primary animate-pulse shrink-0" />
-                      <audio src={msg.message} controls className="w-48 max-w-full h-8 brightness-90 contrast-125 select-none" />
-                    </div>
-                  ) : (
-                    <p className="break-words leading-relaxed whitespace-pre-wrap">{msg.message}</p>
-                  )}
-
-                  {/* Time and unread indicator */}
-                  <div className="flex items-center justify-between gap-2 mt-1">
-                    <span
-                      className={`text-[7px] font-mono ${
-                        isMe ? 'text-black/60' : 'text-zinc-500'
+                    {/* Floating emoji and actions bar */}
+                    <div
+                      className={`absolute top-0 -translate-y-[85%] opacity-0 group-hover/msg:opacity-100 transition-opacity bg-surface-high border border-surface-highest rounded-lg p-1 shadow-lg flex items-center gap-1 z-10 ${
+                        isMe ? 'right-0' : 'left-0'
                       }`}
                     >
-                      {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </span>
-                  </div>
+                      {/* Emojis */}
+                      <div className="flex gap-0.5">
+                        {['👍', '❤️', '🔥', '😂', '👏'].map((emoji) => (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={() => handleAddReaction(msg.id, emoji)}
+                            className="hover:scale-125 transition-transform p-0.5 text-[10px]"
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+
+                      {!msg.deleted_for_everyone && (
+                        <>
+                          <div className="w-[1px] h-3 bg-surface-highest mx-0.5" />
+                          
+                          {/* Responder */}
+                          <button
+                            type="button"
+                            onClick={() => setReplyingTo(msg)}
+                            className="p-1 rounded hover:bg-surface text-zinc-400 hover:text-primary transition-colors"
+                            title="Responder"
+                          >
+                            <CornerUpLeft className="w-3 h-3" />
+                          </button>
+
+                          {/* Editar (apenas minhas mensagens de texto) */}
+                          {isMe && msg.message_type === 'text' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMessage(msg);
+                                setNewMessage(msg.message);
+                                setReplyingTo(null);
+                              }}
+                              className="p-1 rounded hover:bg-surface text-zinc-400 hover:text-[#dfbf80] transition-colors"
+                              title="Editar"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+                          )}
+
+                          {/* Apagar */}
+                          <div className="relative group/delete">
+                            <button
+                              type="button"
+                              className="p-1 rounded hover:bg-surface text-zinc-400 hover:text-red-400 transition-colors"
+                              title="Apagar"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                            
+                            {/* Submenu de exclusão */}
+                            <div className={`absolute bottom-full mb-1 hidden group-hover/delete:flex flex-col bg-surface-high border border-surface-highest rounded shadow-lg py-0.5 z-20 text-[9px] min-w-[95px] ${
+                              isMe ? 'right-0' : 'left-0'
+                            }`}>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteLocal(msg.id)}
+                                className="px-2 py-1 text-left text-zinc-300 hover:bg-surface hover:text-white transition-colors"
+                              >
+                                Apagar para mim
+                              </button>
+                              {isMe && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteForEveryone(msg.id)}
+                                  className="px-2 py-1 text-left text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors border-t border-surface-highest/40"
+                                >
+                                  Apagar para todos
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Bloco de mensagem respondida */}
+                    {msg.reply_to_id && (
+                      (() => {
+                        const repliedMsg = messages.find(m => m.id === msg.reply_to_id);
+                        if (!repliedMsg) return null;
+                        return (
+                          <div className={`mb-1.5 p-1.5 rounded text-[10px] border-l-2 bg-black/15 text-left truncate max-w-full ${
+                            isMe ? 'border-black/50 text-black/80' : 'border-primary/50 text-zinc-300'
+                          }`}>
+                            <span className="font-bold block text-[8px] uppercase tracking-wider">
+                              {repliedMsg.sender_id === senderId ? 'Você' : (repliedMsg.sender_id === coachId ? 'Professor' : 'Aluno')}
+                            </span>
+                            {repliedMsg.message_type === 'image' ? '📷 [Imagem]' : (repliedMsg.message_type === 'audio' ? '🎵 [Áudio]' : repliedMsg.message)}
+                          </div>
+                        );
+                      })()
+                    )}
+
+                    {/* Message body */}
+                    {isImageMessage(msg) ? (
+                      <a
+                        href={msg.message}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block max-w-full rounded overflow-hidden border border-surface-highest bg-black"
+                      >
+                        <img
+                          src={msg.message}
+                          alt="Imagem enviada"
+                          className="max-w-full h-auto object-contain max-h-48 hover:scale-105 transition-transform"
+                        />
+                      </a>
+                    ) : isAudioMessage(msg) ? (
+                      <div className="flex items-center gap-2 py-1 bg-surface-high/65 px-3 py-2 rounded-lg border border-surface-highest/50">
+                        <Mic className="w-4 h-4 text-primary animate-pulse shrink-0" />
+                        <audio src={msg.message} controls className="w-48 max-w-full h-8 brightness-90 contrast-125 select-none" />
+                      </div>
+                    ) : (
+                      <p className="break-words leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                    )}
+
+                    {/* Time and unread indicator */}
+                    <div className="flex items-center justify-between gap-2 mt-1">
+                      <span
+                        className={`text-[7px] font-mono ${
+                          isMe ? 'text-black/60' : 'text-zinc-500'
+                        }`}
+                      >
+                        {msg.is_edited && !msg.deleted_for_everyone && <span className="italic mr-1">(editada)</span>}
+                        {new Date(msg.created_at).toLocaleTimeString('pt-BR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </span>
+                    </div>
 
                   {/* Emoji Reactions count list */}
                   {msg.reactions && Object.keys(msg.reactions).length > 0 && (
@@ -580,71 +739,110 @@ export default function ChatComponent({
       {/* Input Form */}
       <form
         onSubmit={handleSendMessage}
-        className="p-3 bg-surface/50 border-t border-surface-highest/60 flex gap-2 items-center relative"
+        className="p-3 bg-surface/50 border-t border-surface-highest/60 flex flex-col gap-2 relative"
       >
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleImageUpload}
-          accept="image/*"
-          className="hidden"
-        />
-        <button
-          type="button"
-          disabled={isRecording || sending}
-          onClick={() => fileInputRef.current?.click()}
-          className="p-2.5 rounded-lg bg-surface-high hover:bg-surface-highest text-zinc-400 hover:text-primary transition-all shrink-0 disabled:opacity-30"
-          title="Enviar Imagem"
-        >
-          <Image className="w-4 h-4" />
-        </button>
-
-        {isRecording ? (
-          <div className="flex-1 bg-red-950/20 border border-red-500/30 rounded-lg px-3 py-2 flex items-center justify-between text-[11px] text-red-400 animate-pulse">
-            <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-              Gravando voz ({recordingTime}s)...
-            </span>
+        {/* Reply Context Bar */}
+        {replyingTo && (
+          <div className="flex justify-between items-center bg-surface-high/60 border-l-2 border-primary px-3 py-1.5 rounded text-[10px] text-zinc-300 mb-1 w-full shrink-0">
+            <div className="truncate text-left">
+              <span className="font-bold block text-[8px] text-primary uppercase tracking-wider">Respondendo a {replyingTo.sender_id === senderId ? 'Você' : 'Treinador'}</span>
+              <span className="italic">{replyingTo.message_type === 'image' ? '📷 Imagem' : (replyingTo.message_type === 'audio' ? '🎵 Áudio' : replyingTo.message)}</span>
+            </div>
             <button
               type="button"
-              onClick={stopRecording}
-              className="px-2.5 py-1 bg-red-500 text-white rounded text-[9px] font-bold uppercase hover:bg-red-600 transition-colors"
+              onClick={() => setReplyingTo(null)}
+              className="p-0.5 hover:bg-surface-highest rounded text-zinc-500 hover:text-white transition-colors"
             >
-              Parar & Enviar
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
-        ) : (
-          <>
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Digite sua mensagem..."
-              className="flex-1 bg-surface-high text-white text-xs px-4 py-2.5 rounded-lg border border-surface-highest/65 focus:border-primary/50 focus:outline-none placeholder-zinc-500"
-            />
-            <button
-              type="button"
-              disabled={sending}
-              onClick={startRecording}
-              className="p-2.5 rounded-lg bg-surface-high hover:bg-surface-highest text-zinc-400 hover:text-primary transition-all shrink-0 disabled:opacity-30"
-              title="Gravar Áudio"
-            >
-              <Mic className="w-4 h-4" />
-            </button>
-          </>
         )}
 
-        <button
-          type="submit"
-          disabled={!newMessage.trim() || sending || isRecording}
-          className="w-9 h-9 shrink-0 rounded-lg bg-primary text-black flex items-center justify-center hover:bg-primary-dim active:scale-95 disabled:opacity-50 transition-all shadow-md"
-        >
-          {sending ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+        {/* Edit Context Bar */}
+        {editingMessage && (
+          <div className="flex justify-between items-center bg-surface-high/60 border-l-2 border-[#dfbf80] px-3 py-1.5 rounded text-[10px] text-zinc-300 mb-1 w-full shrink-0">
+            <div className="truncate text-left">
+              <span className="font-bold block text-[8px] text-[#dfbf80] uppercase tracking-wider">Editando Mensagem</span>
+              <span className="italic">{editingMessage.message}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingMessage(null);
+                setNewMessage('');
+              }}
+              className="p-0.5 hover:bg-surface-highest rounded text-zinc-500 hover:text-white transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        <div className="flex gap-2 items-center w-full">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImageUpload}
+            accept="image/*"
+            className="hidden"
+          />
+          <button
+            type="button"
+            disabled={isRecording || sending}
+            onClick={() => fileInputRef.current?.click()}
+            className="p-2.5 rounded-lg bg-surface-high hover:bg-surface-highest text-zinc-400 hover:text-primary transition-all shrink-0 disabled:opacity-30"
+            title="Enviar Imagem"
+          >
+            <Image className="w-4 h-4" />
+          </button>
+
+          {isRecording ? (
+            <div className="flex-1 bg-red-950/20 border border-red-500/30 rounded-lg px-3 py-2 flex items-center justify-between text-[11px] text-red-400 animate-pulse">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                Gravando voz ({recordingTime}s)...
+              </span>
+              <button
+                type="button"
+                onClick={stopRecording}
+                className="px-2.5 py-1 bg-red-500 text-white rounded text-[9px] font-bold uppercase hover:bg-red-600 transition-colors"
+              >
+                Parar & Enviar
+              </button>
+            </div>
           ) : (
-            <Send className="w-4 h-4" />
+            <>
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                placeholder="Digite sua mensagem..."
+                className="flex-1 bg-surface-high text-white text-xs px-4 py-2.5 rounded-lg border border-surface-highest/65 focus:border-primary/50 focus:outline-none placeholder-zinc-500"
+              />
+              <button
+                type="button"
+                disabled={sending}
+                onClick={startRecording}
+                className="p-2.5 rounded-lg bg-surface-high hover:bg-surface-highest text-zinc-400 hover:text-primary transition-all shrink-0 disabled:opacity-30"
+                title="Gravar Áudio"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+            </>
           )}
-        </button>
+
+          <button
+            type="submit"
+            disabled={!newMessage.trim() || sending || isRecording}
+            className="w-9 h-9 shrink-0 rounded-lg bg-primary text-black flex items-center justify-center hover:bg-primary-dim active:scale-95 disabled:opacity-50 transition-all shadow-md"
+          >
+            {sending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+          </button>
+        </div>
       </form>
     </div>
   );

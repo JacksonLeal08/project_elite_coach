@@ -20,7 +20,7 @@ export default function BibliotecaView({ currentUser }: BibliotecaViewProps) {
     if (cat.includes('cardio')) {
       bgGradient = 'from-red-500/20 to-red-500/5 text-red-400 border-red-500/30';
       IconComponent = Activity;
-    } else if (cat.includes('pernas')) {
+    } else if (cat.includes('pernas') || cat.includes('glúteo')) {
       bgGradient = 'from-emerald-500/20 to-emerald-500/5 text-emerald-400 border-emerald-500/30';
       IconComponent = Trophy;
     } else if (cat.includes('braços') || cat.includes('peito') || cat.includes('costas') || cat.includes('ombros')) {
@@ -92,7 +92,7 @@ export default function BibliotecaView({ currentUser }: BibliotecaViewProps) {
     });
   };
 
-  const categories = ['Todos', 'Pernas', 'Peito', 'Costas', 'Ombros', 'Braços', 'Abdômen', 'Cardio', 'Outros'];
+  const categories = ['Todos', 'Pernas', 'Glúteo', 'Peito', 'Costas', 'Ombros', 'Braços', 'Abdômen', 'Cardio', 'Outros'];
 
   const fetchExercises = async () => {
     setLoading(true);

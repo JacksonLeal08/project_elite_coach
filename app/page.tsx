@@ -613,7 +613,7 @@ export default function App() {
               transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
               className="w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center z-10"
             >
-              <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(223,191,128,0.4)]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
+              <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="w-full h-full rounded-full object-cover drop-shadow-[0_0_20px_var(--color-primary)]" onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} />
               <div className="hidden flex-col items-center justify-center text-primary">
                 <Dumbbell className="w-12 h-12 animate-pulse text-primary drop-shadow-[0_0_15px_var(--color-primary)]" />
               </div>
@@ -2439,7 +2439,7 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
               <img 
                 src={brandSettings?.logoUrl || "/logo.png"} 
                 alt={brandSettings?.name || "Logo"} 
-                className="w-full h-full object-contain drop-shadow-[0_0_15px_rgba(223,191,128,0.4)]" 
+                className="w-full h-full rounded-full object-cover drop-shadow-[0_0_15px_rgba(223,191,128,0.4)]" 
                 onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling?.classList.remove('hidden'); }} 
               />
               <div className="hidden flex-col items-center justify-center text-primary">
