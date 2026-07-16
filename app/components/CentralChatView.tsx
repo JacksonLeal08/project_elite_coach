@@ -27,7 +27,7 @@ export default function CentralChatView({
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [lastMessages, setLastMessages] = useState<Record<string, { text: string; time: string }>>({});
+  const [lastMessages, setLastMessages] = useState<Record<string, { text: string; time: string; rawTime?: string }>>({});
 
   // 1. Carregar lista de alunos
   useEffect(() => {
@@ -35,9 +35,8 @@ export default function CentralChatView({
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from('profiles')
+          .from('students')
           .select('id, name, photo_avatar_url, email')
-          .eq('role', 'Aluno')
           .order('name', { ascending: true });
 
         if (error) throw error;
@@ -70,7 +69,7 @@ export default function CentralChatView({
       if (error) throw error;
 
       if (data) {
-        const previews: Record<string, { text: string; time: string }> = {};
+        const previews: Record<string, { text: string; time: string; rawTime?: string }> = {};
         studentList.forEach(student => {
           const studentMsgs = data.filter(m => {
             const room = m.chat_rooms;
@@ -86,7 +85,8 @@ export default function CentralChatView({
               time: new Date(lastMsg.created_at).toLocaleTimeString('pt-BR', {
                 hour: '2-digit',
                 minute: '2-digit'
-              })
+              }),
+              rawTime: lastMsg.created_at
             };
           }
         });
@@ -101,6 +101,19 @@ export default function CentralChatView({
   const filteredStudents = students.filter(student =>
     student.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Ordenar alunos por data da última mensagem descendente, e ordem alfabética de quem não tem conversa
+  const sortedStudents = [...filteredStudents].sort((a, b) => {
+    const timeA = lastMessages[a.id]?.rawTime || '';
+    const timeB = lastMessages[b.id]?.rawTime || '';
+
+    if (timeA && !timeB) return -1;
+    if (!timeA && timeB) return 1;
+    if (timeA && timeB) {
+      return new Date(timeB).getTime() - new Date(timeA).getTime();
+    }
+    return a.name.localeCompare(b.name);
+  });
 
   return (
     <div className="h-[calc(100vh-120px)] min-h-[500px] flex rounded-2xl bg-surface-container border border-surface-highest/40 overflow-hidden shadow-2xl animate-fade-in">
@@ -138,12 +151,12 @@ export default function CentralChatView({
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
               <span className="text-[10px] uppercase font-bold tracking-wider">Carregando contatos...</span>
             </div>
-          ) : filteredStudents.length === 0 ? (
+          ) : sortedStudents.length === 0 ? (
             <div className="p-8 text-center text-xs text-zinc-500 italic">
               Nenhum aluno encontrado.
             </div>
           ) : (
-            filteredStudents.map(student => {
+            sortedStudents.map(student => {
               const isSelected = selectedStudent?.id === student.id;
               const hasUnread = unreadStudents.includes(student.id.toString());
               const preview = lastMessages[student.id];

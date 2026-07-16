@@ -209,7 +209,7 @@ export default function App() {
           sender_id,
           profiles:sender_id (
             name,
-            photo_avatar_url
+            avatar_url
           )
         `)
         .eq('read', false)
@@ -222,7 +222,7 @@ export default function App() {
             uniqueChats[m.sender_id] = {
               senderId: m.sender_id,
               name: m.profiles?.name || 'Aluno',
-              avatarUrl: m.profiles?.photo_avatar_url || '',
+              avatarUrl: m.profiles?.avatar_url || '',
               roomId: m.room_id
             };
           }
@@ -1283,7 +1283,7 @@ function MainApp({
   useEffect(() => {
     if (currentTourStep === null) {
       document.querySelectorAll('[data-tour]').forEach(el => {
-        el.classList.remove('ring-4', 'ring-[#dfbf80]', 'ring-offset-2', 'ring-offset-black', 'scale-105', 'z-[60]', 'relative');
+        el.classList.remove('ring-4', 'ring-[#dfbf80]', 'ring-offset-2', 'ring-offset-black', 'scale-105', 'z-[60]', 'relative', 'z-[99]');
       });
       return;
     }
@@ -1292,12 +1292,19 @@ function MainApp({
     if (!step) return;
 
     document.querySelectorAll('[data-tour]').forEach(el => {
-      el.classList.remove('ring-4', 'ring-[#dfbf80]', 'ring-offset-2', 'ring-offset-black', 'scale-105', 'z-[60]', 'relative');
+      el.classList.remove('ring-4', 'ring-[#dfbf80]', 'ring-offset-2', 'ring-offset-black', 'scale-105', 'z-[60]', 'relative', 'z-[99]');
     });
 
     const targetEl = document.querySelector(`[data-tour="${step.target}"]`) || document.querySelector(`[data-tour="${step.target}-mobile"]`);
     if (targetEl) {
-      targetEl.classList.add('ring-4', 'ring-[#dfbf80]', 'ring-offset-2', 'ring-offset-black', 'scale-105', 'z-[60]', 'relative');
+      targetEl.classList.add('ring-4', 'ring-[#dfbf80]', 'ring-offset-2', 'ring-offset-black', 'scale-105');
+      
+      const isFixedOrAbsolute = targetEl.className.includes('fixed') || targetEl.className.includes('absolute');
+      if (!isFixedOrAbsolute) {
+        targetEl.classList.add('relative', 'z-[60]');
+      } else {
+        targetEl.classList.add('z-[99]');
+      }
       targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [currentTourStep]);
@@ -1722,7 +1729,7 @@ function MainApp({
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
                <span>JIMMP Info</span>
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
-               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.3.5</span>
+               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.4.1</span>
              </div>
            </footer>
         </div>
@@ -2134,9 +2141,10 @@ function MainApp({
       </AnimatePresence>
 
       {/* Floating AI Agent Button */}
-      <div className={`fixed ${showMobileMoreMenu ? 'bottom-[310px]' : 'bottom-28 md:bottom-8'} right-6 md:right-8 z-[80] transition-all duration-300`} data-tour="ai-agent">
+      <div className={`fixed ${showMobileMoreMenu ? 'bottom-[310px]' : 'bottom-28 md:bottom-8'} right-6 md:right-8 z-[80] transition-all duration-300`}>
         <button 
           onClick={() => setShowAiAgent(true)}
+          data-tour="ai-agent"
           className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-primary-dim text-black flex items-center justify-center shadow-[0_4px_20px_rgba(212,175,55,0.4)] hover:scale-110 active:scale-95 transition-all duration-200 group relative"
           title="Agente de Ajuda IA 24h"
         >
