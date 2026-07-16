@@ -54,6 +54,7 @@ export default function ChatComponent({
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [localDeletedIds, setLocalDeletedIds] = useState<string[]>([]);
+  const [activeDeleteMenuId, setActiveDeleteMenuId] = useState<string | null>(null);
 
   // Carregar mensagens excluídas localmente
   useEffect(() => {
@@ -96,28 +97,28 @@ export default function ChatComponent({
   // Play synthetic premium ding sound on new messages
   const playNotificationSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
       
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
-      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.08); // A5
+      osc.frequency.setValueAtTime(880, ctx.currentTime); // High pitch Premium chime
+      osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
       
-      gain.gain.setValueAtTime(0.06, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
       
-      osc.start(audioCtx.currentTime);
-      osc.stop(audioCtx.currentTime + 0.12);
-    } catch (err) {
-      console.warn('AudioContext failed:', err);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + 0.35);
+    } catch (e) {
+      // audio context blocked or not supported
     }
   };
 
-  // 1. Obter ou Criar a Sala de Chat
+  // 1. Inicializar Sala de Chat
   useEffect(() => {
     const initChatRoom = async () => {
       if (!studentId || !coachId) return;
@@ -168,6 +169,15 @@ export default function ChatComponent({
 
         if (error) throw error;
         setMessages(data || []);
+
+        // Marcar mensagens recebidas como lidas no carregamento inicial
+        const unreadMsgs = (data || []).filter(m => m.sender_id !== senderId && !m.read);
+        if (unreadMsgs.length > 0) {
+          await supabase
+            .from('chat_messages')
+            .update({ read: true })
+            .in('id', unreadMsgs.map(m => m.id));
+        }
       } catch (err) {
         console.error('Erro ao carregar mensagens:', err);
       } finally {
@@ -195,6 +205,12 @@ export default function ChatComponent({
                 if (prev.some((m) => m.id === newMsg.id)) return prev;
                 if (newMsg.sender_id !== senderId) {
                   playNotificationSound();
+                  // Marcar nova mensagem como lida em tempo real
+                  supabase
+                    .from('chat_messages')
+                    .update({ read: true })
+                    .eq('id', newMsg.id)
+                    .then();
                 }
                 return [...prev, newMsg];
               });
@@ -234,33 +250,31 @@ export default function ChatComponent({
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         stream.getTracks().forEach(track => track.stop());
 
-        setSending(true);
+        // 1. Try direct Supabase storage upload if available
         try {
           const fileName = `${roomId}/voice_${Date.now()}.webm`;
-          
           const { data, error } = await supabase.storage
             .from('chat-attachments')
             .upload(fileName, audioBlob, { contentType: 'audio/webm' });
-
-          if (error) {
-            console.warn('Storage error, fallback to base64 voice note:', error);
-            const reader = new FileReader();
-            reader.readAsDataURL(audioBlob);
-            reader.onloadend = async () => {
-              const base64data = reader.result as string;
-              await sendAttachmentMessage(base64data, 'audio');
-            };
-          } else if (data) {
-            const { data: urlData } = supabase.storage
+            
+          if (!error && data) {
+            const { data: { publicUrl } } = supabase.storage
               .from('chat-attachments')
               .getPublicUrl(fileName);
-            await sendAttachmentMessage(urlData.publicUrl, 'audio');
+            await sendAttachmentMessage(publicUrl, 'audio');
+            return;
           }
-        } catch (err) {
-          console.error(err);
-        } finally {
-          setSending(false);
+        } catch (storageErr) {
+          // ignore storage error, proceed to base64 fallback
         }
+
+        // 2. Base64 fallback if storage fails
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = () => {
+          const base64data = reader.result as string;
+          sendAttachmentMessage(base64data, 'audio');
+        };
       };
 
       mediaRecorder.start();
@@ -270,7 +284,7 @@ export default function ChatComponent({
         setRecordingTime(prev => prev + 1);
       }, 1000);
     } catch (err) {
-      console.error(err);
+      console.error('Erro ao acessar microfone:', err);
       alert('Não foi possível acessar o microfone. Verifique as permissões.');
     }
   };
@@ -283,7 +297,7 @@ export default function ChatComponent({
     }
   };
 
-  // 5. Envio de Imagem
+  // 5. Envio de Imagens (Upload ou Base64 Fallback)
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !roomId || sending) return;
@@ -294,33 +308,34 @@ export default function ChatComponent({
     }
 
     setSending(true);
+    // 1. Try Supabase Storage
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${roomId}/img_${Date.now()}.${fileExt}`;
-
       const { data, error } = await supabase.storage
         .from('chat-attachments')
-        .upload(fileName, file, { contentType: file.type });
+        .upload(fileName, file);
 
-      if (error) {
-        console.warn('Storage error, fallback to base64 image:', error);
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onloadend = async () => {
-          const base64data = reader.result as string;
-          await sendAttachmentMessage(base64data, 'image');
-        };
-      } else if (data) {
-        const { data: urlData } = supabase.storage
+      if (!error && data) {
+        const { data: { publicUrl } } = supabase.storage
           .from('chat-attachments')
           .getPublicUrl(fileName);
-        await sendAttachmentMessage(urlData.publicUrl, 'image');
+        await sendAttachmentMessage(publicUrl, 'image');
+        setSending(false);
+        return;
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSending(false);
+    } catch (storageErr) {
+      // ignore storage error, proceed to base64
     }
+
+    // 2. Base64 Fallback
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onloadend = async () => {
+      const base64data = reader.result as string;
+      await sendAttachmentMessage(base64data, 'image');
+      setSending(false);
+    };
   };
 
   const triggerChatNotification = async () => {
@@ -453,28 +468,36 @@ export default function ChatComponent({
         prev.map((m) => (m.id === msgId ? { ...m, reactions: updatedReactions } : m))
       );
     } catch (err) {
-      console.error(err);
+      console.error('Erro ao adicionar reação:', err);
     }
   };
 
-  // 8. Compartilhamento / Exportação da Conversa (Coach only)
+  // 8. Compartilhamento Externo de Conversas
   const handleShareChat = () => {
-    if (messages.length === 0) return;
-    const formatted = messages
-      .map((msg) => {
-        const date = new Date(msg.created_at).toLocaleString('pt-BR');
-        const sender = msg.sender_id === coachId ? 'Professor' : 'Aluno';
-        let body = msg.message;
-        if (msg.message_type === 'image') body = '[Imagem Anexa]';
-        if (msg.message_type === 'audio') body = '[Mensagem de Áudio]';
-        return `[${date}] ${sender}: ${body}`;
-      })
-      .join('\n');
+    try {
+      const chatText = messages
+        .filter((msg) => !localDeletedIds.includes(msg.id))
+        .map((msg) => {
+          const sender = msg.sender_id === coachId ? 'Treinador' : 'Aluno';
+          const time = new Date(msg.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          const content = msg.message_type === 'image' ? '[Imagem]' : msg.message_type === 'audio' ? '[Áudio]' : msg.message;
+          return `[${time}] ${sender}: ${content}`;
+        })
+        .join('\n');
 
-    navigator.clipboard
-      .writeText(`--- Histórico de Conversa Elite Coach ---\n\n${formatted}`)
-      .then(() => alert('Histórico copiado para a área de transferência!'))
-      .catch((err) => console.error(err));
+      const textToShare = `Elite Coach - Relatório de Conversa com ${senderName}:\n\n${chatText}`;
+      if (navigator.share) {
+        navigator.share({
+          title: `Elite Coach - Conversa com ${senderName}`,
+          text: textToShare
+        });
+      } else {
+        navigator.clipboard.writeText(textToShare);
+        alert('Histórico de conversas copiado para a área de transferência!');
+      }
+    } catch (e) {
+      console.error('Erro ao compartilhar conversa:', e);
+    }
   };
 
   const isImageMessage = (msg: Message) => {
@@ -515,8 +538,8 @@ export default function ChatComponent({
   }
 
   return (
-    <div className="flex flex-col h-full bg-surface-container/60 border border-surface-highest/40 rounded-xl overflow-hidden shadow-inner">
-      {/* Header bar */}
+    <div className="flex flex-col h-full bg-surface-container select-none">
+      {/* Header Info */}
       <div className="bg-surface-high/60 border-b border-surface-highest/40 p-3 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-2 text-zinc-300">
           <MessageSquare className="w-3.5 h-3.5 text-primary" />
@@ -542,7 +565,10 @@ export default function ChatComponent({
       </div>
 
       {/* Messages Timeline */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[280px] max-h-[420px] scrollbar-none">
+      <div 
+        onClick={() => setActiveDeleteMenuId(null)}
+        className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[280px] max-h-[420px] scrollbar-none"
+      >
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full py-16 text-zinc-500 gap-2 text-center px-4">
             <Sparkles className="w-6 h-6 text-primary/40 animate-pulse" />
@@ -617,36 +643,52 @@ export default function ChatComponent({
                           )}
 
                           {/* Apagar */}
-                          <div className="relative group/delete">
+                          <div className="relative">
                             <button
                               type="button"
-                              className="p-1 rounded hover:bg-surface text-zinc-400 hover:text-red-400 transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveDeleteMenuId(activeDeleteMenuId === msg.id ? null : msg.id);
+                              }}
+                              className={`p-1 rounded hover:bg-surface transition-colors ${
+                                activeDeleteMenuId === msg.id ? 'bg-surface text-red-400' : 'text-zinc-400 hover:text-red-400'
+                              }`}
                               title="Apagar"
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
                             
                             {/* Submenu de exclusão */}
-                            <div className={`absolute bottom-full mb-1 hidden group-hover/delete:flex flex-col bg-surface-high border border-surface-highest rounded shadow-lg py-0.5 z-20 text-[9px] min-w-[95px] ${
-                              isMe ? 'right-0' : 'left-0'
-                            }`}>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteLocal(msg.id)}
-                                className="px-2 py-1 text-left text-zinc-300 hover:bg-surface hover:text-white transition-colors"
-                              >
-                                Apagar para mim
-                              </button>
-                              {isMe && (
+                            {activeDeleteMenuId === msg.id && (
+                              <div className={`absolute bottom-full mb-2 flex flex-col bg-surface-high border border-surface-highest rounded-lg shadow-xl py-1 z-30 text-[10px] min-w-[110px] ${
+                                isMe ? 'right-0' : 'left-0'
+                              }`}>
                                 <button
                                   type="button"
-                                  onClick={() => handleDeleteForEveryone(msg.id)}
-                                  className="px-2 py-1 text-left text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors border-t border-surface-highest/40"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteLocal(msg.id);
+                                    setActiveDeleteMenuId(null);
+                                  }}
+                                  className="px-3 py-1.5 text-left text-zinc-200 hover:bg-surface hover:text-white transition-colors"
                                 >
-                                  Apagar para todos
+                                  Apagar para mim
                                 </button>
-                              )}
-                            </div>
+                                {isMe && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteForEveryone(msg.id);
+                                      setActiveDeleteMenuId(null);
+                                    }}
+                                    className="px-3 py-1.5 text-left text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors border-t border-surface-highest/40"
+                                  >
+                                    Apagar para todos
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </>
                       )}

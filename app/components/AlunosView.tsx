@@ -112,9 +112,28 @@ interface AlunosViewProps {
   redirectStudentId?: string | number | null;
   redirectTab?: 'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance' | null;
   clearRedirect?: () => void;
+  quickChatStudent: any | null;
+  setQuickChatStudent: (student: any | null) => void;
+  isChatMinimized: boolean;
+  setIsChatMinimized: (min: boolean) => void;
+  isChatExpanded: boolean;
+  setIsChatExpanded: (exp: boolean) => void;
+  unreadStudents: string[];
 }
 
-export default function AlunosView({ currentUser, redirectStudentId, redirectTab, clearRedirect }: AlunosViewProps) {
+export default function AlunosView({
+  currentUser,
+  redirectStudentId,
+  redirectTab,
+  clearRedirect,
+  quickChatStudent,
+  setQuickChatStudent,
+  isChatMinimized,
+  setIsChatMinimized,
+  isChatExpanded,
+  setIsChatExpanded,
+  unreadStudents
+}: AlunosViewProps) {
   const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -331,8 +350,6 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
   const [loadingSchedules, setLoadingSchedules] = useState<boolean>(false);
   const [savingSchedule, setSavingSchedule] = useState<boolean>(false);
   const [newSchedule, setNewSchedule] = useState({ date: '', time: '', notes: '', status: 'Agendado' });
-  const [quickChatStudent, setQuickChatStudent] = useState<any | null>(null);
-  const [isChatMinimized, setIsChatMinimized] = useState<boolean>(false);
 
   // Goals State
   const [goals, setGoals] = useState<StudentGoal | null>(null);
@@ -4191,15 +4208,23 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
                       e.stopPropagation();
                       setQuickChatStudent(s);
                       setIsChatMinimized(false);
+                      setIsChatExpanded(false);
                     }}
-                    className={`w-8 h-8 rounded-lg border transition-all flex items-center justify-center shrink-0 ${
+                    className={`w-8 h-8 rounded-lg border transition-all flex items-center justify-center shrink-0 relative ${
                       quickChatStudent?.id === s.id
                         ? 'bg-primary/20 border-primary text-primary animate-pulse shadow-[0_0_12px_rgba(212,175,55,0.4)]'
-                        : 'bg-surface-high border-surface-highest hover:border-primary/50 text-zinc-400 hover:text-primary'
+                        : unreadStudents.includes(s.id.toString())
+                          ? 'bg-red-950/20 border-red-500/50 text-red-400 animate-pulse'
+                          : 'bg-surface-high border-surface-highest hover:border-primary/50 text-zinc-400 hover:text-primary'
                     }`}
                     title="Abrir Chat"
                   >
                     <MessageSquare className="w-4 h-4" />
+                    <span className={`absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full border border-surface-container ${
+                      unreadStudents.includes(s.id.toString()) 
+                        ? 'bg-red-500 animate-pulse' 
+                        : 'bg-green-500'
+                    }`} />
                   </button>
                 </div>
 
@@ -4657,78 +4682,7 @@ export default function AlunosView({ currentUser, redirectStudentId, redirectTab
 
 
 
-      {/* Floating Quick Chat Popup */}
-      {quickChatStudent && !isChatMinimized && (
-        <div className="fixed bottom-20 right-4 sm:right-24 w-[340px] max-w-[calc(100vw-32px)] h-[480px] bg-surface-container border-2 border-primary/30 rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.8)] z-40 flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
-          <div className="bg-surface-high px-4 py-3 border-b border-surface-highest/40 flex justify-between items-center shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full border border-primary/30 overflow-hidden bg-surface flex items-center justify-center shrink-0">
-                {quickChatStudent.photo_avatar_url ? (
-                  <img src={quickChatStudent.photo_avatar_url} alt={quickChatStudent.name} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-xs font-bold text-[#dfbf80]">{quickChatStudent.name.charAt(0).toUpperCase()}</span>
-                )}
-              </div>
-              <div className="min-w-0">
-                <h4 className="font-bold text-white text-xs truncate leading-tight">{quickChatStudent.name}</h4>
-                <span className="text-[8px] text-primary uppercase font-bold tracking-wider">Chat Rápido</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setIsChatMinimized(true)}
-                className="p-1 rounded bg-surface hover:bg-surface-highest text-zinc-400 hover:text-white transition-colors"
-                title="Minimizar Chat"
-              >
-                <Minimize2 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setQuickChatStudent(null)}
-                className="p-1 rounded bg-surface hover:bg-surface-highest text-zinc-400 hover:text-white transition-colors"
-                title="Fechar Chat"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 bg-surface/10 overflow-hidden">
-            <ChatComponent
-              studentId={quickChatStudent.id.toString()}
-              coachId={(currentUser?.id || '').toString()}
-              senderId={(currentUser?.id || '').toString()}
-              senderName={quickChatStudent.name}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Floating Chat Minimizado Redondo */}
-      {quickChatStudent && isChatMinimized && (
-        <div className="fixed bottom-20 right-4 sm:right-24 z-40 animate-in fade-in duration-200">
-          <button
-            onClick={() => setIsChatMinimized(false)}
-            className="w-12 h-12 rounded-full bg-primary text-black flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all relative border border-black group"
-            title={`Chat aberto com ${quickChatStudent.name}`}
-          >
-            <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-surface-high">
-              {quickChatStudent.photo_avatar_url ? (
-                <img src={quickChatStudent.photo_avatar_url} alt={quickChatStudent.name} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-xs font-bold text-[#dfbf80]">{quickChatStudent.name.charAt(0).toUpperCase()}</span>
-              )}
-            </div>
-            {/* Indicador de chat aberto piscante */}
-            <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-            </span>
-            {/* Tooltip com nome do aluno */}
-            <div className="absolute right-full mr-2 bg-black/85 text-white text-[9px] font-bold py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap uppercase tracking-wider">
-              {quickChatStudent.name}
-            </div>
-          </button>
-        </div>
-      )}
+      {/* Chat flutuante removido desta view e elevado para renderização global no page.tsx */}
 
       <CustomAlertModal
         isOpen={alertModal.isOpen}

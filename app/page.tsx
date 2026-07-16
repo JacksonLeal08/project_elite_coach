@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight, Sun, Moon, MessageSquare, Star } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight, Sun, Moon, MessageSquare, Star, Minimize2, Maximize2 } from 'lucide-react';
 import { ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
@@ -189,6 +189,51 @@ export default function App() {
   // Notifications States & Handlers
   const [notifications, setNotifications] = useState<any[]>([]);
   const [showNotificationsModal, setShowNotificationsModal] = useState<boolean>(false);
+
+  // Elevated Chat & Unread states
+  const [quickChatStudent, setQuickChatStudent] = useState<any | null>(null);
+  const [isChatMinimized, setIsChatMinimized] = useState(false);
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
+  const [unreadChats, setUnreadChats] = useState<Array<{ senderId: string; name: string; avatarUrl: string; roomId: string }>>([]);
+
+  const unreadStudents = unreadChats.map(c => c.senderId);
+
+  const fetchUnreadChats = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const { data } = await supabase
+        .from('chat_messages')
+        .select(`
+          room_id, 
+          sender_id,
+          profiles:sender_id (
+            name,
+            photo_avatar_url
+          )
+        `)
+        .eq('read', false)
+        .neq('sender_id', currentUser.id);
+
+      if (data) {
+        const uniqueChats: Record<string, any> = {};
+        data.forEach((m: any) => {
+          if (m.sender_id && !uniqueChats[m.sender_id]) {
+            uniqueChats[m.sender_id] = {
+              senderId: m.sender_id,
+              name: m.profiles?.name || 'Aluno',
+              avatarUrl: m.profiles?.photo_avatar_url || '',
+              roomId: m.room_id
+            };
+          }
+        });
+        setUnreadChats(Object.values(uniqueChats));
+      } else {
+        setUnreadChats([]);
+      }
+    } catch (e) {
+      console.error('Erro ao buscar chats não lidos:', e);
+    }
+  };
 
   // Notification redirect states
   const [redirectStudentId, setRedirectStudentId] = useState<string | number | null>(null);
@@ -385,12 +430,37 @@ export default function App() {
     return () => clearInterval(interval);
   }, [currentUser]);
 
-  // Notifications Polling
+  // Notifications and Chats Polling + Realtime
   useEffect(() => {
     if (!currentUser) return;
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // Poll every 30 seconds
-    return () => clearInterval(interval);
+    fetchUnreadChats();
+
+    const interval = setInterval(() => {
+      fetchNotifications();
+      fetchUnreadChats();
+    }, 20000); // Poll every 20 seconds
+
+    // Subscrição em tempo real para novas notificações e chats
+    const channel = supabase
+      .channel('global-chat-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'chat_messages'
+        },
+        () => {
+          fetchUnreadChats();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, [currentUser]);
 
 
@@ -867,6 +937,14 @@ export default function App() {
       handleNotificationDetails={handleNotificationDetails}
       brandSettings={brandSettings}
       fetchBrandSettings={fetchBrandSettings}
+      quickChatStudent={quickChatStudent}
+      setQuickChatStudent={setQuickChatStudent}
+      isChatMinimized={isChatMinimized}
+      setIsChatMinimized={setIsChatMinimized}
+      isChatExpanded={isChatExpanded}
+      setIsChatExpanded={setIsChatExpanded}
+      unreadStudents={unreadStudents}
+      unreadChats={unreadChats}
     />
   );
 }
@@ -958,7 +1036,15 @@ function MainApp({
   setRedirectTab,
   handleNotificationDetails,
   brandSettings,
-  fetchBrandSettings
+  fetchBrandSettings,
+  quickChatStudent,
+  setQuickChatStudent,
+  isChatMinimized,
+  setIsChatMinimized,
+  isChatExpanded,
+  setIsChatExpanded,
+  unreadStudents,
+  unreadChats
 }: { 
   currentUser: User | null, 
   setCurrentUser: React.Dispatch<React.SetStateAction<User | null>>, 
@@ -979,7 +1065,15 @@ function MainApp({
   setRedirectTab: React.Dispatch<React.SetStateAction<'general' | 'anamnesis' | 'goals' | 'schedule' | 'attendance' | null>>,
   handleNotificationDetails: (n: any) => void,
   brandSettings: any,
-  fetchBrandSettings: () => Promise<void>
+  fetchBrandSettings: () => Promise<void>,
+  quickChatStudent: any | null,
+  setQuickChatStudent: (student: any | null) => void,
+  isChatMinimized: boolean,
+  setIsChatMinimized: (min: boolean) => void,
+  isChatExpanded: boolean,
+  setIsChatExpanded: (exp: boolean) => void,
+  unreadStudents: string[],
+  unreadChats: any[]
 }) {
 
   const { theme, toggleTheme } = useTheme();
@@ -1509,9 +1603,9 @@ function MainApp({
                 >
                    <Bell className="w-4 h-4" />
                 </button>
-                {notifications.filter(n => !n.read).length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center border border-surface pointer-events-none z-10">
-                    {notifications.filter(n => !n.read).length}
+                {(notifications.filter(n => !n.read).length > 0 || unreadStudents.length > 0) && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center border border-surface pointer-events-none z-10 animate-pulse">
+                    {notifications.filter(n => !n.read).length + unreadStudents.length}
                   </span>
                 )}
               </div>
@@ -1569,6 +1663,13 @@ function MainApp({
                           setRedirectStudentId(null);
                           setRedirectTab(null);
                         }}
+                        quickChatStudent={quickChatStudent}
+                        setQuickChatStudent={setQuickChatStudent}
+                        isChatMinimized={isChatMinimized}
+                        setIsChatMinimized={setIsChatMinimized}
+                        isChatExpanded={isChatExpanded}
+                        setIsChatExpanded={setIsChatExpanded}
+                        unreadStudents={unreadStudents}
                       />
                     )}
                     {activeTab === 'protocolos' && <ProtocolosView />}
@@ -1620,6 +1721,151 @@ function MainApp({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Floating Quick Chat Popup */}
+      {quickChatStudent && !isChatMinimized && (
+        isChatExpanded ? (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="w-[850px] max-w-full h-[650px] max-h-[85vh] bg-surface-container border-2 border-primary/30 rounded-2xl shadow-[0_15px_45px_rgba(0,0,0,0.9)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+              <div className="bg-surface-high px-4 py-3 border-b border-surface-highest/40 flex justify-between items-center shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full border border-primary/30 overflow-hidden bg-surface flex items-center justify-center shrink-0">
+                    {quickChatStudent.photo_avatar_url ? (
+                      <img src={quickChatStudent.photo_avatar_url} alt={quickChatStudent.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xs font-bold text-[#dfbf80]">{quickChatStudent.name.charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="font-bold text-white text-xs truncate leading-tight">{quickChatStudent.name}</h4>
+                    <span className="text-[8px] text-primary uppercase font-bold tracking-wider">Chat Rápido - Tela Cheia</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setIsChatExpanded(false)}
+                    className="p-1 rounded bg-surface hover:bg-surface-highest text-zinc-400 hover:text-white transition-colors"
+                    title="Minimizar Tela Cheia"
+                  >
+                    <Minimize2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsChatMinimized(true);
+                      setIsChatExpanded(false);
+                    }}
+                    className="p-1 rounded bg-surface hover:bg-surface-highest text-zinc-400 hover:text-white transition-colors"
+                    title="Minimizar Chat"
+                  >
+                    <Minimize2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setQuickChatStudent(null);
+                      setIsChatExpanded(false);
+                    }}
+                    className="p-1 rounded bg-surface hover:bg-surface-highest text-zinc-400 hover:text-white transition-colors"
+                    title="Fechar Chat"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 bg-surface/10 overflow-hidden">
+                <ChatComponent
+                  studentId={quickChatStudent.id.toString()}
+                  coachId={(currentUser?.id || '').toString()}
+                  senderId={(currentUser?.id || '').toString()}
+                  senderName={quickChatStudent.name}
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="fixed bottom-20 right-4 sm:right-24 w-[340px] max-w-[calc(100vw-32px)] h-[480px] bg-surface-container border-2 border-primary/30 rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.8)] z-[80] flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-300">
+            <div className="bg-surface-high px-4 py-3 border-b border-surface-highest/40 flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full border border-primary/30 overflow-hidden bg-surface flex items-center justify-center shrink-0">
+                  {quickChatStudent.photo_avatar_url ? (
+                    <img src={quickChatStudent.photo_avatar_url} alt={quickChatStudent.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xs font-bold text-[#dfbf80]">{quickChatStudent.name.charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-bold text-white text-xs truncate leading-tight">{quickChatStudent.name}</h4>
+                  <span className="text-[8px] text-primary uppercase font-bold tracking-wider">Chat Rápido</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsChatExpanded(true)}
+                  className="p-1 rounded bg-surface hover:bg-surface-highest text-zinc-400 hover:text-white transition-colors"
+                  title="Expandir Tela Cheia"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setIsChatMinimized(true)}
+                  className="p-1 rounded bg-surface hover:bg-surface-highest text-zinc-400 hover:text-white transition-colors"
+                  title="Minimizar Chat"
+                >
+                  <Minimize2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setQuickChatStudent(null)}
+                  className="p-1 rounded bg-surface hover:bg-surface-highest text-zinc-400 hover:text-white transition-colors"
+                  title="Fechar Chat"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-surface/10 overflow-hidden">
+              <ChatComponent
+                studentId={quickChatStudent.id.toString()}
+                coachId={(currentUser?.id || '').toString()}
+                senderId={(currentUser?.id || '').toString()}
+                senderName={quickChatStudent.name}
+              />
+            </div>
+          </div>
+        )
+      )}
+
+      {/* Floating Chat Minimizado Redondo */}
+      {quickChatStudent && isChatMinimized && (
+        <div className="fixed bottom-20 right-4 sm:right-24 z-[80] animate-in fade-in duration-200">
+          <button
+            onClick={() => setIsChatMinimized(false)}
+            className="w-12 h-12 rounded-full bg-primary text-black flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all relative border border-black group"
+            title={`Chat aberto com ${quickChatStudent.name}`}
+          >
+            <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-surface-high">
+              {quickChatStudent.photo_avatar_url ? (
+                <img src={quickChatStudent.photo_avatar_url} alt={quickChatStudent.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xs font-bold text-[#dfbf80]">{quickChatStudent.name.charAt(0).toUpperCase()}</span>
+              )}
+            </div>
+            {/* Indicador de chat aberto piscante (Vermelho se não lido, Verde se lido) */}
+            <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+              {unreadStudents.includes(quickChatStudent.id.toString()) ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                </>
+              ) : (
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+              )}
+            </span>
+            {/* Tooltip com nome do aluno */}
+            <div className="absolute right-full mr-2 bg-black/85 text-white text-[9px] font-bold py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap uppercase tracking-wider">
+              {quickChatStudent.name}
+            </div>
+          </button>
+        </div>
+      )}
 
       {/* Zoom Profile Photo Modal */}
       <AnimatePresence>
@@ -1730,7 +1976,7 @@ function MainApp({
             >
               <div className="flex items-center justify-between border-b border-surface-highest pb-3 mb-4">
                 <h3 className="text-sm font-bold text-[#dfbf80] uppercase tracking-wider flex items-center gap-2">
-                  🔔 Notificações ({notifications.filter(n => !n.read).length} não lidas)
+                  🔔 Notificações ({notifications.filter(n => !n.read).length + unreadStudents.length} não lidas)
                 </h3>
                 <button 
                   onClick={() => setShowNotificationsModal(false)}
@@ -1752,7 +1998,39 @@ function MainApp({
               )}
 
               <div className="flex-1 overflow-y-auto space-y-3 pr-1 scrollbar-none">
-                {notifications.length === 0 ? (
+                {unreadChats.map((chat) => (
+                  <div 
+                    key={chat.senderId}
+                    onClick={() => {
+                      setQuickChatStudent({
+                        id: chat.senderId,
+                        name: chat.name,
+                        photo_avatar_url: chat.avatarUrl
+                      });
+                      setIsChatMinimized(false);
+                      setIsChatExpanded(false);
+                      setShowNotificationsModal(false);
+                    }}
+                    className="p-3 bg-primary/10 border border-primary/20 rounded-xl hover:bg-primary/20 transition-all cursor-pointer flex items-center justify-between text-xs animate-pulse"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-full border border-primary/30 overflow-hidden shrink-0 flex items-center justify-center bg-surface">
+                        {chat.avatarUrl ? (
+                          <img src={chat.avatarUrl} alt={chat.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[10px] font-bold text-[#dfbf80]">{chat.name.charAt(0).toUpperCase()}</span>
+                        )}
+                      </div>
+                      <div className="text-left">
+                        <p className="font-bold text-white uppercase tracking-wider text-[8px]">Mensagem no Chat</p>
+                        <p className="text-zinc-300 text-[10px] mt-0.5">Você tem novas mensagens de <span className="text-primary font-bold">{chat.name}</span>.</p>
+                      </div>
+                    </div>
+                    <span className="h-2 w-2 rounded-full bg-red-500 shrink-0" />
+                  </div>
+                ))}
+
+                {notifications.length === 0 && unreadChats.length === 0 ? (
                   <div className="p-8 text-center text-xs text-zinc-500 italic">
                     Nenhuma notificação registrada.
                   </div>
