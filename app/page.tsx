@@ -5,6 +5,7 @@ import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadshe
 import { ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
+import CentralChatView from './components/CentralChatView';
 import ProtocolosView from './components/ProtocolosView';
 import InspecoesView from './components/InspecoesView';
 import ConfigView from './components/ConfigView';
@@ -1369,6 +1370,7 @@ function MainApp({
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard className="w-5 h-5"/> },
     { id: 'alunos', label: 'Alunos', icon: <Users className="w-5 h-5"/> },
+    { id: 'chat', label: 'Central de Chat', icon: <MessageSquare className="w-5 h-5"/> },
     { id: 'protocolos', label: 'Criar Treino', icon: <Dumbbell className="w-5 h-5"/> },
     { id: 'biblioteca', label: 'Biblioteca', icon: <BookOpen className="w-5 h-5"/> },
     { id: 'inspecoes', label: 'Inspeções de Campo', icon: <FileSpreadsheet className="w-5 h-5"/> },
@@ -1399,14 +1401,19 @@ function MainApp({
               key={item.id}
               onClick={() => setActiveTab(item.id)}
               data-tour={item.id === 'dashboard' ? 'dashboard' : item.id === 'alunos' ? 'alunos' : item.id === 'protocolos' ? 'criar-treino' : undefined}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all relative ${
                 activeTab === item.id 
                   ? 'bg-primary/10 text-primary border border-primary/20 shadow-[inset_0_0_15px_rgba(212,175,55,0.05)]' 
                   : 'text-zinc-400 hover:text-zinc-100 hover:bg-surface-high'
               }`}
             >
               {item.icon}
-              {item.label}
+              <span className="flex-1 text-left">{item.label}</span>
+              {item.id === 'chat' && unreadStudents.length > 0 && (
+                <span className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center animate-pulse">
+                  {unreadStudents.length}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -1495,6 +1502,26 @@ function MainApp({
               </div>
 
               <div className="grid grid-cols-3 gap-3">
+                <button
+                  onClick={() => {
+                    setActiveTab('chat');
+                    setShowMobileMoreMenu(false);
+                  }}
+                  className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all gap-2 text-center relative ${
+                    activeTab === 'chat'
+                      ? 'bg-primary/10 border-primary text-primary shadow-[0_0_10px_rgba(212,175,55,0.1)]'
+                      : 'bg-surface border-surface-highest text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <MessageSquare className="w-5 h-5 text-primary" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">Chat</span>
+                  {unreadStudents.length > 0 && (
+                    <span className="absolute top-1.5 right-1.5 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center animate-pulse">
+                      {unreadStudents.length}
+                    </span>
+                  )}
+                </button>
+
                 <button
                   onClick={() => {
                     setActiveTab('biblioteca');
@@ -1654,6 +1681,13 @@ function MainApp({
               <AnimatePresence mode="wait">
                  <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
                     {activeTab === 'dashboard' && <DashboardView currentUser={currentUser} />}
+                    {activeTab === 'chat' && (
+                      <CentralChatView 
+                        currentUser={currentUser} 
+                        unreadStudents={unreadStudents} 
+                        setQuickChatStudent={setQuickChatStudent}
+                      />
+                    )}
                     {activeTab === 'alunos' && (
                       <AlunosView 
                         currentUser={currentUser} 
@@ -1737,7 +1771,7 @@ function MainApp({
                     )}
                   </div>
                   <div className="min-w-0">
-                    <h4 className="font-bold text-white text-xs truncate leading-tight">{quickChatStudent.name}</h4>
+                    <h4 className="font-bold !text-white text-xs truncate leading-tight">{quickChatStudent.name}</h4>
                     <span className="text-[8px] text-primary uppercase font-bold tracking-wider">Chat Rápido - Tela Cheia</span>
                   </div>
                 </div>
@@ -1793,7 +1827,7 @@ function MainApp({
                   )}
                 </div>
                 <div className="min-w-0">
-                  <h4 className="font-bold text-white text-xs truncate leading-tight">{quickChatStudent.name}</h4>
+                  <h4 className="font-bold !text-white text-xs truncate leading-tight">{quickChatStudent.name}</h4>
                   <span className="text-[8px] text-primary uppercase font-bold tracking-wider">Chat Rápido</span>
                 </div>
               </div>
@@ -1860,7 +1894,7 @@ function MainApp({
               )}
             </span>
             {/* Tooltip com nome do aluno */}
-            <div className="absolute right-full mr-2 bg-black/85 text-white text-[9px] font-bold py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap uppercase tracking-wider">
+            <div className="absolute right-full mr-2 bg-zinc-950 !text-white text-[9px] font-extrabold py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap uppercase tracking-wider border border-zinc-800 shadow-xl pointer-events-none z-50">
               {quickChatStudent.name}
             </div>
           </button>

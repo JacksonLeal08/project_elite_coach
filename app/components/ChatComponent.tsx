@@ -26,6 +26,124 @@ interface Message {
   deleted_for_everyone?: boolean;
 }
 
+function PremiumAudioPlayer({ src }: { src: string }) {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const onLoadedMetadata = () => {
+      if (audio.duration && !isNaN(audio.duration) && isFinite(audio.duration)) {
+        setDuration(audio.duration);
+      }
+    };
+    
+    const onTimeUpdate = () => setCurrentTime(audio.currentTime || 0);
+    
+    const onEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener('loadedmetadata', onLoadedMetadata);
+    audio.addEventListener('timeupdate', onTimeUpdate);
+    audio.addEventListener('ended', onEnded);
+
+    // Se já estiver carregado
+    if (audio.duration && !isNaN(audio.duration)) {
+      setDuration(audio.duration);
+    }
+
+    return () => {
+      audio.removeEventListener('loadedmetadata', onLoadedMetadata);
+      audio.removeEventListener('timeupdate', onTimeUpdate);
+      audio.removeEventListener('ended', onEnded);
+    };
+  }, [src]);
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      audio.pause();
+      setIsPlaying(false);
+    } else {
+      audio.play().then(() => {
+        setIsPlaying(true);
+      }).catch((err) => {
+        console.error("Erro ao tocar áudio:", err);
+      });
+    }
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const val = parseFloat(e.target.value);
+    audio.currentTime = val;
+    setCurrentTime(val);
+  };
+
+  const formatTime = (time: number) => {
+    if (isNaN(time) || !isFinite(time)) return '0:00';
+    const mins = Math.floor(time / 60);
+    const secs = Math.floor(time % 60);
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  return (
+    <div className="flex items-center gap-3 bg-surface-high border border-surface-highest/60 rounded-xl px-4 py-2.5 w-[260px] max-w-full shadow-md select-none text-white my-1">
+      <audio ref={audioRef} src={src} preload="metadata" />
+      
+      {/* Botão Play/Pause */}
+      <button 
+        type="button" 
+        onClick={togglePlay}
+        className="w-8 h-8 rounded-full bg-primary hover:scale-105 active:scale-95 transition-all flex items-center justify-center text-black shrink-0 shadow-md animate-in fade-in duration-200"
+      >
+        {isPlaying ? (
+          <span className="flex items-center gap-0.5 justify-center">
+            <span className="w-1 h-3 bg-black rounded-sm" />
+            <span className="w-1 h-3 bg-black rounded-sm" />
+          </span>
+        ) : (
+          <svg className="w-3.5 h-3.5 fill-current text-black ml-0.5" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+        )}
+      </button>
+
+      {/* Visual da Onda / Slider */}
+      <div className="flex-1 flex flex-col gap-1 min-w-0">
+        <div className="flex items-center gap-1.5 h-3 relative">
+          <input 
+            type="range" 
+            min="0"
+            max={duration || 100}
+            value={currentTime}
+            onChange={handleSeek}
+            className="w-full accent-primary h-1 bg-surface-highest rounded-lg appearance-none cursor-pointer range-sm"
+          />
+        </div>
+        
+        {/* Metadados e Duração */}
+        <div className="flex justify-between items-center text-[8.5px] text-zinc-400 font-mono">
+          <span>{formatTime(currentTime)}</span>
+          <div className="flex items-center gap-1">
+            <Mic className="w-2.5 h-2.5 text-primary" />
+            <span>Áudio ({formatTime(duration)})</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatComponent({
   studentId,
   coachId,
@@ -727,10 +845,7 @@ export default function ChatComponent({
                         />
                       </a>
                     ) : isAudioMessage(msg) ? (
-                      <div className="flex items-center gap-2 py-1 bg-surface-high/65 px-3 py-2 rounded-lg border border-surface-highest/50">
-                        <Mic className="w-4 h-4 text-primary animate-pulse shrink-0" />
-                        <audio src={msg.message} controls className="w-48 max-w-full h-8 brightness-90 contrast-125 select-none" />
-                      </div>
+                      <PremiumAudioPlayer src={msg.message} />
                     ) : (
                       <p className="break-words leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                     )}
