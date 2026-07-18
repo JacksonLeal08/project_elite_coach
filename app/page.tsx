@@ -2751,6 +2751,89 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
     };
   }, []);
 
+  // Escutar mensagens não lidas do aluno
+  useEffect(() => {
+    const student = data?.student;
+    if (!student?.id || !coachId) return;
+
+    const fetchUnreadMessagesCount = async () => {
+      try {
+        const { data: room } = await supabase
+          .from('chat_rooms')
+          .select('id')
+          .eq('student_id', student.id)
+          .eq('coach_id', coachId)
+          .maybeSingle();
+
+        if (room) {
+          const { count, error } = await supabase
+            .from('chat_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('room_id', room.id)
+            .eq('read', false)
+            .neq('sender_id', student.id.toString());
+
+          if (!error && count !== null) {
+            setUnreadChatMessagesCount(count);
+          }
+        }
+      } catch (err) {
+        console.error('Erro ao buscar mensagens não lidas:', err);
+      }
+    };
+
+    fetchUnreadMessagesCount();
+
+    const channel = supabase
+      .channel('unread-chat-count')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'chat_messages',
+        },
+        (payload) => {
+          fetchUnreadMessagesCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [data?.student, coachId]);
+
+  // Marcar chat como lido ao abrir
+  useEffect(() => {
+    const student = data?.student;
+    if (showChat && student?.id && coachId) {
+      const markChatAsRead = async () => {
+        try {
+          const { data: room } = await supabase
+            .from('chat_rooms')
+            .select('id')
+            .eq('student_id', student.id)
+            .eq('coach_id', coachId)
+            .maybeSingle();
+
+          if (room) {
+            await supabase
+              .from('chat_messages')
+              .update({ read: true })
+              .eq('room_id', room.id)
+              .neq('sender_id', student.id.toString())
+              .eq('read', false);
+            
+            setUnreadChatMessagesCount(0);
+          }
+        } catch (err) {
+          console.error(err);
+        }
+      };
+      markChatAsRead();
+    }
+  }, [showChat, data?.student, coachId]);
 
   if (loading) {
     return (
@@ -2823,88 +2906,6 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
   }
 
   const { student, goals, evaluations, anamnesis, latest_workout } = data;
-
-  // Escutar mensagens não lidas do aluno
-  useEffect(() => {
-    if (!student?.id || !coachId) return;
-
-    const fetchUnreadMessagesCount = async () => {
-      try {
-        const { data: room } = await supabase
-          .from('chat_rooms')
-          .select('id')
-          .eq('student_id', student.id)
-          .eq('coach_id', coachId)
-          .maybeSingle();
-
-        if (room) {
-          const { count, error } = await supabase
-            .from('chat_messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('room_id', room.id)
-            .eq('read', false)
-            .neq('sender_id', student.id.toString());
-
-          if (!error && count !== null) {
-            setUnreadChatMessagesCount(count);
-          }
-        }
-      } catch (err) {
-        console.error('Erro ao buscar mensagens não lidas:', err);
-      }
-    };
-
-    fetchUnreadMessagesCount();
-
-    const channel = supabase
-      .channel('unread-chat-count')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'chat_messages',
-        },
-        (payload) => {
-          fetchUnreadMessagesCount();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [student, coachId]);
-
-  // Marcar chat como lido ao abrir
-  useEffect(() => {
-    if (showChat && student?.id && coachId) {
-      const markChatAsRead = async () => {
-        try {
-          const { data: room } = await supabase
-            .from('chat_rooms')
-            .select('id')
-            .eq('student_id', student.id)
-            .eq('coach_id', coachId)
-            .maybeSingle();
-
-          if (room) {
-            await supabase
-              .from('chat_messages')
-              .update({ read: true })
-              .eq('room_id', room.id)
-              .neq('sender_id', student.id.toString())
-              .eq('read', false);
-            
-            setUnreadChatMessagesCount(0);
-          }
-        } catch (err) {
-          console.error(err);
-        }
-      };
-      markChatAsRead();
-    }
-  }, [showChat, student, coachId]);
 
   const handleSaveChatRating = async () => {
     if (!student?.id || !coachId) return;
