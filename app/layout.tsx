@@ -8,9 +8,10 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const montserrat = Montserrat({ subsets: ['latin'], variable: '--font-montserrat' });
 
 export const metadata: Metadata = {
-  title: BRANDING.shortName,
+  title: BRANDING.name,
   description: BRANDING.description,
   manifest: '/manifest.json',
+  metadataBase: new URL('https://elitecoachcrm.com.br'),
   icons: {
     icon: '/favicon.png',
     apple: '/icon-192.png',
@@ -19,6 +20,41 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: 'default',
     title: BRANDING.shortName,
+  },
+  openGraph: {
+    title: BRANDING.name,
+    description: BRANDING.description,
+    url: 'https://elitecoachcrm.com.br',
+    siteName: BRANDING.name,
+    images: [
+      {
+        url: '/logo.png',
+        width: 512,
+        height: 512,
+        alt: BRANDING.name,
+      }
+    ],
+    locale: 'pt_BR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: BRANDING.name,
+    description: BRANDING.description,
+    images: ['/logo.png'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    nocache: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      noimageindex: false,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
   },
   other: {
     'mobile-web-app-capable': 'yes',

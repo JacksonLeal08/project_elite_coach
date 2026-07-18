@@ -1,0 +1,9 @@
+# robots.txt para Elite Coach CRM
+User-agent: *
+Allow: /$
+Disallow: /api/
+Disallow: /?token=
+Disallow: /_next/
+Disallow: /static/
+
+Sitemap: https://elitecoachcrm.com.br/sitemap.xml

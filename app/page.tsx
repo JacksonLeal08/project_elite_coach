@@ -1620,6 +1620,7 @@ function MainApp({
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-[100dvh] md:h-screen overflow-hidden pb-16 md:pb-0">
+        <h1 className="sr-only">Elite Coach CRM - Painel Administrativo de Assessoria Esportiva</h1>
         {/* Header */}
         <header className="h-16 border-b border-surface-highest bg-surface/50 backdrop-blur flex items-center justify-between px-4 md:px-8">
            <div className="flex items-center bg-surface-high rounded-full border border-surface-highest px-3 py-1.5 w-44 sm:w-64 md:w-96 focus-within:border-primary/50 transition-colors">
@@ -2711,7 +2712,7 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
     fetchData(true);
     const interval = setInterval(() => {
       fetchData(false);
-    }, 10000); // Silent background polling every 10 seconds to catch trainer updates
+    }, 45000); // Silent background polling every 45 seconds to catch trainer updates
     return () => clearInterval(interval);
   }, [token]);
 
