@@ -79,6 +79,13 @@ body {
   color: #09090b !important;
 }
 
+.light-theme .text-zinc-50,
+.light-theme .text-zinc-100,
+.light-theme .text-slate-50,
+.light-theme .text-slate-100 {
+  color: #09090b !important;
+}
+
 .light-theme .text-zinc-200 {
   color: #18181b !important;
 }

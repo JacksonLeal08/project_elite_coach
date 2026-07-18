@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabase';
 import { Search, MessageSquare, Sparkles, User, ChevronRight, Loader2 } from 'lucide-react';
 import ChatComponent from './ChatComponent';
@@ -28,6 +28,41 @@ export default function CentralChatView({
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [lastMessages, setLastMessages] = useState<Record<string, { text: string; time: string; rawTime?: string }>>({});
+
+  // Divisor arrastável (Splitter) states e handlers
+  const [sidebarWidth, setSidebarWidth] = useState(320);
+  const [isResizing, setIsResizing] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing || !containerRef.current) return;
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const newWidth = e.clientX - containerRect.left;
+      if (newWidth >= 220 && newWidth <= 460) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   // 1. Carregar lista de alunos
   useEffect(() => {
@@ -63,7 +98,7 @@ export default function CentralChatView({
       // Buscar todas as mensagens agrupadas por sala
       const { data, error } = await supabase
         .from('chat_messages')
-        .select('room_id, message, created_at, sender_id, chat_rooms!inner(student_id)')
+        .select('room_id, message, created_at, sender_id, message_type, chat_rooms!inner(student_id)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -78,10 +113,23 @@ export default function CentralChatView({
           });
           if (studentMsgs.length > 0) {
             const lastMsg = studentMsgs[0];
+            const isMsgAudio = lastMsg.message_type === 'audio' || 
+                               lastMsg.message.startsWith('data:audio/') ||
+                               (lastMsg.message.startsWith('http') && (
+                                 lastMsg.message.toLowerCase().endsWith('.webm') ||
+                                 lastMsg.message.toLowerCase().endsWith('.wav') ||
+                                 lastMsg.message.toLowerCase().endsWith('.mp3') ||
+                                 lastMsg.message.toLowerCase().endsWith('.ogg') ||
+                                 lastMsg.message.toLowerCase().endsWith('.m4a') ||
+                                 lastMsg.message.toLowerCase().includes('audio')
+                               ));
+
             previews[student.id] = {
-              text: lastMsg.message.startsWith('http') 
-                ? (lastMsg.message.includes('/chat-attachments/') ? '📷 [Mídia]' : '🔗 [Link]')
-                : lastMsg.message,
+              text: isMsgAudio 
+                ? '🎤 [Áudio]' 
+                : lastMsg.message.startsWith('http') 
+                  ? (lastMsg.message.includes('/chat-attachments/') ? '📷 [Mídia]' : '🔗 [Link]')
+                  : lastMsg.message,
               time: new Date(lastMsg.created_at).toLocaleTimeString('pt-BR', {
                 hour: '2-digit',
                 minute: '2-digit'
@@ -116,10 +164,16 @@ export default function CentralChatView({
   });
 
   return (
-    <div className="h-[calc(100vh-120px)] min-h-[500px] flex rounded-2xl bg-surface-container border border-surface-highest/40 overflow-hidden shadow-2xl animate-fade-in">
+    <div 
+      ref={containerRef}
+      className="h-[calc(100vh-120px)] min-h-[500px] flex rounded-2xl bg-surface-container border border-surface-highest/40 overflow-hidden shadow-2xl animate-fade-in"
+    >
       
       {/* Coluna Esquerda: Contatos */}
-      <div className="w-full md:w-[320px] shrink-0 border-r border-surface-highest/40 flex flex-col bg-surface-high/30">
+      <div 
+        style={{ width: typeof window !== 'undefined' && window.innerWidth >= 768 ? sidebarWidth : '100%' }}
+        className={`${selectedStudent ? 'hidden md:flex' : 'flex'} shrink-0 border-r border-surface-highest/40 flex-col bg-surface-high/30`}
+      >
         
         {/* Header de Busca */}
         <div className="p-4 border-b border-surface-highest/40 flex flex-col gap-3">
@@ -214,8 +268,14 @@ export default function CentralChatView({
         </div>
       </div>
 
+      {/* Splitter arrastável (Apenas Desktop) */}
+      <div 
+        onMouseDown={startResizing}
+        className="hidden md:block w-1 hover:w-1.5 hover:bg-primary/50 cursor-col-resize transition-all bg-surface-highest/20 self-stretch z-20 shrink-0"
+      />
+ 
       {/* Coluna Direita: Chat Viewport */}
-      <div className="flex-1 flex flex-col bg-surface-high/10">
+      <div className={`${!selectedStudent ? 'hidden md:flex' : 'flex'} flex-1 flex-col bg-surface-high/10`}>
         {selectedStudent ? (
           <div className="flex-1 h-full overflow-hidden flex flex-col">
             <ChatComponent
@@ -223,6 +283,7 @@ export default function CentralChatView({
               coachId={(currentUser?.id || '').toString()}
               senderId={(currentUser?.id || '').toString()}
               senderName={selectedStudent.name}
+              onBack={() => setSelectedStudent(null)}
             />
           </div>
         ) : (

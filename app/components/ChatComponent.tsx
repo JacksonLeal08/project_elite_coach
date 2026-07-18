@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../utils/supabase';
-import { Send, MessageSquare, Loader2, Share2, Image, Mic, Star, Sparkles, CornerUpLeft, Edit2, Trash2, X } from 'lucide-react';
+import { Send, MessageSquare, Loader2, Share2, Image, Mic, Star, Sparkles, CornerUpLeft, Edit2, Trash2, X, ChevronLeft } from 'lucide-react';
 
 interface ChatComponentProps {
   studentId: string;
@@ -10,6 +10,7 @@ interface ChatComponentProps {
   senderId: string;
   senderName: string;
   isPublic?: boolean;
+  onBack?: () => void;
 }
 
 interface Message {
@@ -150,6 +151,7 @@ export default function ChatComponent({
   senderId,
   senderName,
   isPublic = false,
+  onBack,
 }: ChatComponentProps) {
   const [roomId, setRoomId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -620,8 +622,22 @@ export default function ChatComponent({
 
   const isImageMessage = (msg: Message) => {
     if (msg.message_type === 'image') return true;
+    if (msg.message_type === 'audio') return false;
     const text = msg.message || '';
     if (text.startsWith('data:image/')) return true;
+    if (text.startsWith('data:audio/')) return false;
+
+    const lowerText = text.toLowerCase();
+    if (lowerText.endsWith('.webm') || 
+        lowerText.endsWith('.wav') || 
+        lowerText.endsWith('.mp3') || 
+        lowerText.endsWith('.ogg') || 
+        lowerText.endsWith('.m4a') ||
+        lowerText.includes('audio') ||
+        lowerText.includes('chat-audio')) {
+      return false;
+    }
+
     if (text.startsWith('http') && (
       text.toLowerCase().endsWith('.png') ||
       text.toLowerCase().endsWith('.jpg') ||
@@ -639,9 +655,12 @@ export default function ChatComponent({
     if (text.startsWith('data:audio/')) return true;
     if (text.startsWith('http') && (
       text.toLowerCase().endsWith('.webm') ||
-      text.toLowerCase().endsWith('.mp3') ||
       text.toLowerCase().endsWith('.wav') ||
-      text.toLowerCase().endsWith('.ogg')
+      text.toLowerCase().endsWith('.mp3') ||
+      text.toLowerCase().endsWith('.ogg') ||
+      text.toLowerCase().endsWith('.m4a') ||
+      text.toLowerCase().includes('audio') ||
+      text.toLowerCase().includes('chat-audio')
     )) return true;
     return false;
   };
@@ -658,8 +677,17 @@ export default function ChatComponent({
   return (
     <div className="flex flex-col h-full bg-surface-container select-none">
       {/* Header Info */}
-      <div className="bg-surface-high/60 border-b border-surface-highest/40 p-3 flex justify-between items-center shrink-0">
+      <div className="bg-surface-high border-b border-surface-highest/40 p-3 flex justify-between items-center shrink-0 z-10 shadow-sm relative">
         <div className="flex items-center gap-2 text-zinc-300">
+          {onBack && (
+            <button 
+              type="button"
+              onClick={onBack}
+              className="md:hidden mr-1 p-1 hover:bg-surface-high/80 rounded-lg text-zinc-400 hover:text-white transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
           <MessageSquare className="w-3.5 h-3.5 text-primary" />
           <span className="text-[10px] font-bold uppercase tracking-wider">{senderName}</span>
         </div>
@@ -685,7 +713,7 @@ export default function ChatComponent({
       {/* Messages Timeline */}
       <div 
         onClick={() => setActiveDeleteMenuId(null)}
-        className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[280px] max-h-[420px] scrollbar-none"
+        className="flex-1 overflow-y-auto p-4 space-y-4 min-h-[200px] scrollbar-none relative z-0"
       >
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full py-16 text-zinc-500 gap-2 text-center px-4">
