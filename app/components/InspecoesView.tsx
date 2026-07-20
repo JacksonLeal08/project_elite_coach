@@ -432,12 +432,72 @@ export default function InspecoesView({ currentUser }: InspecoesViewProps) {
 
               <div className="space-y-2 border-t border-surface-highest/40 pt-4">
                 <span className="text-[9px] text-zinc-500 uppercase block font-bold">Métricas Subjetivas</span>
-                <div className="flex justify-between text-xs p-2 bg-surface-high/30 rounded-lg">
-                  <span className="text-zinc-400">Qualidade do Sono</span>
+                
+                <div className="flex justify-between items-center text-xs p-2.5 bg-surface-high/30 rounded-lg border border-surface-highest/15">
+                  <div className="flex items-center gap-2">
+                    <svg 
+                      className="w-4.5 h-4.5 shrink-0 filter drop-shadow-[0_0_5px_rgba(223,191,128,0.6)]" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      xmlns="http://www.w3.org/2000/svg"
+                      style={{ animation: 'float 2.5s infinite ease-in-out', transformOrigin: 'center' }}
+                    >
+                      <style>{`
+                        @keyframes float {
+                          0% { transform: translateY(0px) rotate(0deg); }
+                          50% { transform: translateY(-2px) rotate(-6deg); }
+                          100% { transform: translateY(0px) rotate(0deg); }
+                        }
+                      `}</style>
+                      <defs>
+                        <radialGradient id="sleep3D" cx="30%" cy="30%" r="70%" fx="30%" fy="30%">
+                          <stop offset="0%" stopColor="#fff2cc" />
+                          <stop offset="35%" stopColor="#dfbf80" />
+                          <stop offset="70%" stopColor="#a68411" />
+                          <stop offset="100%" stopColor="#594400" />
+                        </radialGradient>
+                      </defs>
+                      <path 
+                        d="M12.3 2a10 10 0 0 0-1.9 19.8 10 10 0 1 1 10.3-12.3 8.3 8.3 0 0 0-8.4-7.5z" 
+                        fill="url(#sleep3D)"
+                      />
+                    </svg>
+                    <span className="text-zinc-400">Qualidade do Sono</span>
+                  </div>
                   <span className="text-[#dfbf80] font-bold font-mono">{lastInspection.sleep || 'N/A'}/10</span>
                 </div>
-                <div className="flex justify-between text-xs p-2 bg-surface-high/30 rounded-lg">
-                  <span className="text-zinc-400">Nível de Energia</span>
+
+                <div className="flex justify-between items-center text-xs p-2.5 bg-surface-high/30 rounded-lg border border-surface-highest/15">
+                  <div className="flex items-center gap-2">
+                    <svg 
+                      className="w-4.5 h-4.5 shrink-0 filter drop-shadow-[0_0_6px_rgba(255,170,0,0.7)]" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      xmlns="http://www.w3.org/2000/svg"
+                      style={{ animation: 'sparkle 1.8s infinite ease-in-out', transformOrigin: 'center' }}
+                    >
+                      <style>{`
+                        @keyframes sparkle {
+                          0% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(255,170,0,0.5)); }
+                          50% { transform: scale(1.15); filter: drop-shadow(0 0 8px rgba(255,170,0,0.8)); }
+                          100% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(255,170,0,0.5)); }
+                        }
+                      `}</style>
+                      <defs>
+                        <radialGradient id="energy3D" cx="35%" cy="35%" r="65%" fx="35%" fy="35%">
+                          <stop offset="0%" stopColor="#ffe680" />
+                          <stop offset="35%" stopColor="#ffaa00" />
+                          <stop offset="75%" stopColor="#cc6600" />
+                          <stop offset="100%" stopColor="#662200" />
+                        </radialGradient>
+                      </defs>
+                      <path 
+                        d="M13 10V3L4 14h7v7l9-11h-7z" 
+                        fill="url(#energy3D)"
+                      />
+                    </svg>
+                    <span className="text-zinc-400">Nível de Energia</span>
+                  </div>
                   <span className="text-[#dfbf80] font-bold font-mono">{lastInspection.energy || 'N/A'}/10</span>
                 </div>
               </div>
