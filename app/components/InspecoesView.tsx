@@ -86,7 +86,7 @@ export default function InspecoesView({ currentUser }: InspecoesViewProps) {
         .from('field_inspections')
         .select('*')
         .eq('student_id', studentId)
-        .order('created_at', { ascending: false })
+        .order('date', { ascending: false })
         .limit(1);
 
       if (error) {
