@@ -1685,9 +1685,16 @@ function MainApp({
         {/* Scrollable Content Wrapper (Fixed overall layout, scroll only in center) */}
         <div className="flex-1 flex flex-col overflow-hidden p-4 md:p-8 pb-24 md:pb-8">
            {/* Center Content Panel */}
-           <div className="flex-1 overflow-y-auto pr-0 sm:pr-1 min-h-0">
+           <div className={`flex-1 min-h-0 pr-0 sm:pr-1 ${activeTab === 'chat' ? 'overflow-hidden h-full flex flex-col' : 'overflow-y-auto'}`}>
               <AnimatePresence mode="wait">
-                 <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
+                 <motion.div 
+                   key={activeTab} 
+                   className={activeTab === 'chat' ? 'h-full flex flex-col' : ''}
+                   initial={{ opacity: 0, y: 10 }} 
+                   animate={{ opacity: 1, y: 0 }} 
+                   exit={{ opacity: 0, y: -10 }} 
+                   transition={{ duration: 0.2 }}
+                 >
                     {activeTab === 'dashboard' && <DashboardView currentUser={currentUser} />}
                     {activeTab === 'chat' && (
                       <CentralChatView 

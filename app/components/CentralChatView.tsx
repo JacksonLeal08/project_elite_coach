@@ -166,7 +166,7 @@ export default function CentralChatView({
   return (
     <div 
       ref={containerRef}
-      className="h-[calc(100vh-120px)] min-h-[500px] flex rounded-2xl bg-surface-container border border-surface-highest/40 overflow-hidden shadow-2xl animate-fade-in"
+      className="h-full min-h-[500px] flex rounded-2xl bg-surface-container border border-surface-highest/40 overflow-hidden shadow-2xl animate-fade-in"
     >
       
       {/* Coluna Esquerda: Contatos */}
