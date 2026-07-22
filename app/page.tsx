@@ -12,6 +12,8 @@ import ConfigView from './components/ConfigView';
 import BibliotecaView from './components/BibliotecaView';
 import FinanceiroView from './components/FinanceiroView';
 import ChatComponent from './components/ChatComponent';
+import PWAInstallBanner from './components/PWAInstallBanner';
+import OfflineIndicator from './components/OfflineIndicator';
 import { supabase } from './utils/supabase';
 import { User } from './types';
 import { getOfflineQueue, queueOfflineOperation, runOfflineSync } from './utils/offline';
@@ -1389,7 +1391,9 @@ function MainApp({
   }
 
   return (
-    <div className="min-h-screen flex bg-surface">
+    <div className="min-h-screen flex bg-surface relative">
+      <OfflineIndicator />
+      <PWAInstallBanner />
       {/* Sidebar for Desktop */}
       <aside className="hidden md:flex md:w-64 border-r border-surface-highest bg-surface-container flex-col shrink-0">
         <div className="p-6 border-b border-surface-highest flex flex-col items-center justify-center text-center">

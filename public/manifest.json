@@ -4,9 +4,11 @@
   "description": "Gestão de alta performance e criador de treinos inteligente.",
   "start_url": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#0a1410",
   "theme_color": "#d4af37",
   "orientation": "portrait-primary",
+  "categories": ["sports", "fitness", "health", "productivity"],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -19,6 +21,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Central de Treinos",
+      "short_name": "Treinos",
+      "description": "Acessar protocolos e treinos",
+      "url": "/?tab=protocolos",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Central de Chat",
+      "short_name": "Chat",
+      "description": "Enviar mensagens ao treinador",
+      "url": "/?tab=chat",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
