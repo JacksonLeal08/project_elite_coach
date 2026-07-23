@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight, Sun, Moon, MessageSquare, Star, Minimize2, Maximize2, ExternalLink } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight, Sun, Moon, MessageSquare, Star, Minimize2, Maximize2, ExternalLink, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
@@ -1081,6 +1081,23 @@ function MainApp({
 }) {
 
   const { theme, toggleTheme } = useTheme();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('elite_coach_sidebar_collapsed') === 'true';
+    }
+    return false;
+  });
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('elite_coach_sidebar_collapsed', String(next));
+      }
+      return next;
+    });
+  };
+
   const [time, setTime] = useState<string>('');
   const [date, setDate] = useState<string>('');
   const [showZoom, setShowZoom] = useState<boolean>(false);
@@ -1395,54 +1412,100 @@ function MainApp({
     <div className="min-h-screen flex bg-surface relative">
       <OfflineIndicator />
       <PWAInstallBanner />
-      {/* Sidebar for Desktop */}
-      <aside className="hidden md:flex md:w-64 border-r border-surface-highest bg-surface-container flex-col shrink-0">
-        <div className="p-6 border-b border-surface-highest flex flex-col items-center justify-center text-center">
-          <div className="h-16 w-auto max-w-[180px] flex items-center justify-center mb-3 shrink-0 overflow-hidden">
-             <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]" />
-          </div>
-          <div className="flex flex-col items-center overflow-hidden">
-             <span className="font-title font-black text-white text-[14px] tracking-widest uppercase leading-tight drop-shadow-sm truncate max-w-[200px]">{brandSettings.name}</span>
-             <span className="text-primary text-[9px] font-bold tracking-[0.25em] uppercase mt-1 drop-shadow-sm truncate max-w-[200px]">{brandSettings.specialty}</span>
-          </div>
+      {/* Sidebar para Desktop com suporte a Recolhimento (Padrão Working Scale) */}
+      <aside className={`hidden md:flex ${sidebarCollapsed ? 'md:w-20' : 'md:w-64'} border-r border-surface-highest bg-surface-container flex-col shrink-0 transition-all duration-300 relative group/sidebar`}>
+        {/* Header do Menu com Logo e Botão de Toggle (Minimizar / Expandir) */}
+        <div className={`p-4 border-b border-surface-highest flex ${sidebarCollapsed ? 'flex-col items-center gap-3' : 'items-center justify-between'} relative transition-all`}>
+          {!sidebarCollapsed ? (
+            <>
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="h-10 w-10 flex items-center justify-center shrink-0 overflow-hidden">
+                  <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]" />
+                </div>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="font-title font-black text-white text-[13px] tracking-wider uppercase leading-tight truncate">{brandSettings.name}</span>
+                  <span className="text-primary text-[8.5px] font-bold tracking-[0.2em] uppercase mt-0.5 truncate">{brandSettings.specialty}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-lg bg-surface-high hover:bg-surface border border-surface-highest text-zinc-400 hover:text-white transition-colors shrink-0"
+                title="Recolher menu lateral (Working Scale)"
+              >
+                <PanelLeftClose className="w-4 h-4 text-[#dfbf80]" />
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="h-9 w-9 flex items-center justify-center shrink-0 overflow-hidden">
+                <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain" />
+              </div>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="p-1.5 rounded-lg bg-surface-high hover:bg-surface border border-[#dfbf80]/40 text-[#dfbf80] hover:text-white transition-all shadow-md"
+                title="Expandir menu lateral"
+              >
+                <PanelLeftOpen className="w-4 h-4" />
+              </button>
+            </>
+          )}
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        {/* Navegação de Menus */}
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto scrollbar-none">
           {navItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              data-tour={item.id === 'dashboard' ? 'dashboard' : item.id === 'alunos' ? 'alunos' : item.id === 'protocolos' ? 'criar-treino' : undefined}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all relative ${
-                activeTab === item.id 
-                  ? 'bg-primary/10 text-primary border border-primary/20 shadow-[inset_0_0_15px_rgba(212,175,55,0.05)]' 
-                  : 'text-zinc-400 hover:text-zinc-100 hover:bg-surface-high'
-              }`}
-            >
-              {item.icon}
-              <span className="flex-1 text-left">{item.label}</span>
-              {item.id === 'chat' && unreadStudents.length > 0 && (
-                <span className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center animate-pulse">
-                  {unreadStudents.length}
-                </span>
+            <div key={item.id} className="relative group/navitem">
+              <button
+                type="button"
+                onClick={() => setActiveTab(item.id)}
+                data-tour={item.id === 'dashboard' ? 'dashboard' : item.id === 'alunos' ? 'alunos' : item.id === 'protocolos' ? 'criar-treino' : undefined}
+                className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-3.5'} py-3 rounded-xl text-sm font-medium transition-all relative ${
+                  activeTab === item.id 
+                    ? 'bg-primary/10 text-primary border border-primary/30 shadow-[inset_0_0_15px_rgba(212,175,55,0.08)]' 
+                    : 'text-zinc-400 hover:text-zinc-100 hover:bg-surface-high border border-transparent'
+                }`}
+              >
+                <div className="shrink-0">{item.icon}</div>
+                {!sidebarCollapsed && <span className="flex-1 text-left truncate">{item.label}</span>}
+                {item.id === 'chat' && unreadStudents.length > 0 && (
+                  <span className={`bg-red-500 text-white text-[8.5px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center animate-pulse ${sidebarCollapsed ? 'absolute top-1 right-1' : ''}`}>
+                    {unreadStudents.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Tooltip ao passar o ponteiro do mouse quando recolhido (Estilo Working Scale) */}
+              {sidebarCollapsed && (
+                <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 hidden group-hover/navitem:flex items-center gap-2 bg-zinc-950/95 border border-[#dfbf80]/40 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-2xl z-50 whitespace-nowrap backdrop-blur-md animate-in fade-in duration-150 pointer-events-none">
+                  <span className="text-[#dfbf80]">•</span>
+                  <span>{item.label}</span>
+                </div>
               )}
-            </button>
+            </div>
           ))}
         </nav>
 
-        <div className="p-4 border-t border-surface-highest bg-surface-high/10 flex flex-col gap-2">
-          {/* Digital Clock & Date */}
-          <div className="text-center py-2 select-none">
-            <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-[0.2em] mb-1">
-              Horário do Sistema
+        {/* Rodapé com Horário do Sistema */}
+        <div className="p-3 border-t border-surface-highest bg-surface-high/10 flex flex-col gap-2">
+          {!sidebarCollapsed ? (
+            <div className="text-center py-1.5 select-none">
+              <div className="text-[8.5px] font-bold text-zinc-500 uppercase tracking-[0.2em] mb-0.5">
+                Horário do Sistema
+              </div>
+              <div className="text-xl font-bold tracking-wider text-white font-title">
+                {time || '00:00:00'}
+              </div>
+              <div className="text-[9.5px] text-zinc-400 font-medium mt-0.5 truncate">
+                {date || 'Quinta-feira, 28 de maio 2026'}
+              </div>
             </div>
-            <div className="text-2xl font-bold tracking-wider text-white font-title">
-              {time || '00:00:00'}
+          ) : (
+            <div className="text-center py-1 font-mono text-[9px] text-[#dfbf80] font-bold tracking-wider" title={time}>
+              {time ? time.substring(0, 5) : '00:00'}
             </div>
-            <div className="text-[10px] text-zinc-400 font-medium mt-1 truncate">
-              {date || 'Quinta-feira, 28 de maio 2026'}
-            </div>
-          </div>
+          )}
         </div>
       </aside>
 

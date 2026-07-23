@@ -815,9 +815,11 @@ export default function ProtocolosView() {
            </div>
         </div>
 
-        <div className="lg:col-span-2 bg-surface-container border border-surface-highest rounded-xl p-6 flex flex-col">
-           <div className="flex justify-between items-center mb-6">
-              <h3 className="font-heading font-semibold text-lg text-white">Preview do Protocolo</h3>
+        <div className="lg:col-span-2 bg-surface-container border border-surface-highest rounded-xl p-5 sm:p-6 flex flex-col h-full min-h-[620px] max-h-[calc(100vh-170px)] shadow-lg relative">
+           <div className="flex justify-between items-center mb-4 pb-3 border-b border-surface-highest/50">
+              <h3 className="font-heading font-semibold text-lg text-white flex items-center gap-2">
+                <span>Preview do Protocolo</span>
+              </h3>
               <div className="flex gap-2">
                  <button onClick={handleExportPDF} disabled={!workoutData} className="disabled:opacity-50 px-3 py-1.5 bg-surface border border-surface-highest rounded text-zinc-300 hover:text-white transition-colors text-xs font-bold uppercase flex items-center gap-1 group">
                     <Download className="w-3 h-3 group-hover:text-primary transition-colors"/> PDF
@@ -845,8 +847,8 @@ export default function ProtocolosView() {
            )}
 
            {workoutData && workoutData.days && !isGenerating && (
-             <div className="flex-1 flex flex-col">
-                <div className="flex items-center gap-2 border-b border-surface-highest pb-4 overflow-x-auto scrollbar-none">
+             <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex items-center gap-2 border-b border-surface-highest pb-3 overflow-x-auto scrollbar-none shrink-0">
                    {workoutData.days.map((d, i) => (
                      <div key={i} className="relative group flex items-center">
                        <button 
@@ -875,7 +877,8 @@ export default function ProtocolosView() {
                    </button>
                 </div>
 
-                <div className="mt-4 flex-1 overflow-y-auto max-h-[500px] pr-1">
+                {/* Lista de Exercícios com Rolagem Interna sem cortes */}
+                <div className="mt-3 flex-1 overflow-y-auto max-h-[calc(100vh-320px)] pr-1.5 scrollbar-thin scrollbar-thumb-surface-highest space-y-3 pb-6">
                    <AnimatePresence mode="popLayout">
                      <motion.div
                        key={activeDayIdx}
