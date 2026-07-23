@@ -1081,23 +1081,6 @@ function MainApp({
 }) {
 
   const { theme, toggleTheme } = useTheme();
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('elite_coach_sidebar_collapsed') === 'true';
-    }
-    return false;
-  });
-
-  const toggleSidebar = () => {
-    setSidebarCollapsed(prev => {
-      const next = !prev;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('elite_coach_sidebar_collapsed', String(next));
-      }
-      return next;
-    });
-  };
-
   const [time, setTime] = useState<string>('');
   const [date, setDate] = useState<string>('');
   const [showZoom, setShowZoom] = useState<boolean>(false);
@@ -1412,115 +1395,55 @@ function MainApp({
     <div className="min-h-screen flex bg-surface relative">
       <OfflineIndicator />
       <PWAInstallBanner />
-      {/* Sidebar para Desktop com suporte a Recolhimento (Padrão Working Scale) */}
-      <aside className={`hidden md:flex ${sidebarCollapsed ? 'md:w-20' : 'md:w-64'} border-r border-surface-highest bg-surface-container flex-col shrink-0 transition-all duration-300 relative group/sidebar`}>
-        {/* Header do Menu com Logo Ampliada no Topo e Nome Completo em Linha Própria sem cortes */}
-        <div className={`p-4 border-b border-surface-highest flex flex-col ${sidebarCollapsed ? 'items-center gap-3' : ''} transition-all`}>
-          {!sidebarCollapsed ? (
-            <div className="flex flex-col w-full">
-              {/* Linha Superior: Logo em Squircle à esquerda + Botão de Toggle à direita */}
-              <div className="flex items-center justify-between w-full">
-                <div className="relative group/logo flex items-center gap-2">
-                  <div className="h-12 w-12 flex items-center justify-center shrink-0 overflow-hidden rounded-2xl bg-surface-high/90 border border-primary/30 p-1.5 shadow-[0_0_15px_rgba(212,175,55,0.15)] relative transition-transform duration-300 hover:scale-105">
-                    <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_8px_rgba(212,175,55,0.3)]" />
-                    {/* Status Dot / Active Indicator */}
-                    <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-surface-container shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={toggleSidebar}
-                  className="p-2 rounded-xl bg-surface-high/80 hover:bg-surface border border-primary/30 hover:border-primary text-primary hover:text-white transition-all duration-200 shrink-0 shadow-md hover:scale-105 active:scale-95 group/btn"
-                  title="Recolher Menu"
-                  aria-label="Recolher Menu"
-                >
-                  <PanelLeftClose className="w-4.5 h-4.5 text-primary group-hover/btn:text-white transition-colors" />
-                </button>
-              </div>
-
-              {/* Linha Inferior: Nome Completo da Empresa/Sistema 100% livre de cortes */}
-              <div className="mt-3 flex flex-col w-full min-w-0">
-                <span className="font-title font-black text-white text-[13.5px] tracking-wider uppercase drop-shadow-sm leading-tight block truncate">
-                  {brandSettings.name || 'ELITE COACH CRM'}
-                </span>
-                <span className="text-primary text-[8.5px] font-bold tracking-[0.24em] uppercase mt-1 drop-shadow-sm block truncate">
-                  {brandSettings.specialty || 'GESTÃO DE ALTA PERFORMANCE'}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <>
-              <div className="h-11 w-11 flex items-center justify-center shrink-0 overflow-hidden rounded-2xl bg-surface-high/90 border border-primary/30 p-1.5 shadow-[0_0_15px_rgba(212,175,55,0.15)] relative">
-                <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_8px_rgba(212,175,55,0.3)]" />
-                <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-surface-container" />
-              </div>
-              <button
-                type="button"
-                onClick={toggleSidebar}
-                className="p-2 rounded-xl bg-surface-high/80 hover:bg-surface border border-primary/40 hover:border-primary text-primary hover:text-white transition-all duration-200 shadow-md hover:scale-105 active:scale-95 group/btn"
-                title="Expandir Menu"
-                aria-label="Expandir Menu"
-              >
-                <PanelLeftOpen className="w-4.5 h-4.5 text-primary group-hover/btn:text-white transition-colors" />
-              </button>
-            </>
-          )}
+      {/* Sidebar para Desktop (Fixa e Elegante) */}
+      <aside className="hidden md:flex md:w-64 border-r border-surface-highest bg-surface-container flex-col shrink-0">
+        <div className="p-6 border-b border-surface-highest flex flex-col items-center justify-center text-center">
+          <div className="h-16 w-auto max-w-[180px] flex items-center justify-center mb-3 shrink-0 overflow-hidden">
+            <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]" />
+          </div>
+          <div className="flex flex-col items-center overflow-hidden">
+            <span className="font-title font-black text-white text-[14px] tracking-widest uppercase leading-tight drop-shadow-sm truncate max-w-[200px]">{brandSettings.name || 'Elite Coach CRM'}</span>
+            <span className="text-primary text-[9px] font-bold tracking-[0.25em] uppercase mt-1 drop-shadow-sm truncate max-w-[200px]">{brandSettings.specialty || 'PREMIUM'}</span>
+          </div>
         </div>
 
-        {/* Navegação de Menus */}
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto scrollbar-none">
+        <nav className="flex-1 p-4 space-y-1">
           {navItems.map(item => (
-            <div key={item.id} className="relative group/navitem">
-              <button
-                type="button"
-                onClick={() => setActiveTab(item.id)}
-                data-tour={item.id === 'dashboard' ? 'dashboard' : item.id === 'alunos' ? 'alunos' : item.id === 'protocolos' ? 'criar-treino' : undefined}
-                className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center px-0' : 'gap-3 px-3.5'} py-3 rounded-xl text-sm font-medium transition-all relative ${
-                  activeTab === item.id 
-                    ? 'bg-primary/10 text-primary border border-primary/30 shadow-[inset_0_0_15px_rgba(212,175,55,0.08)]' 
-                    : 'text-zinc-400 hover:text-zinc-100 hover:bg-surface-high border border-transparent'
-                }`}
-              >
-                <div className="shrink-0">{item.icon}</div>
-                {!sidebarCollapsed && <span className="flex-1 text-left truncate">{item.label}</span>}
-                {item.id === 'chat' && unreadStudents.length > 0 && (
-                  <span className={`bg-red-500 text-white text-[8.5px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center animate-pulse ${sidebarCollapsed ? 'absolute top-1 right-1' : ''}`}>
-                    {unreadStudents.length}
-                  </span>
-                )}
-              </button>
-
-              {/* Tooltip ao passar o ponteiro do mouse quando recolhido (Estilo Working Scale) */}
-              {sidebarCollapsed && (
-                <div className="absolute left-full ml-3 top-1/2 -translate-y-1/2 hidden group-hover/navitem:flex items-center gap-2 bg-zinc-950/95 border border-[#dfbf80]/40 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-2xl z-50 whitespace-nowrap backdrop-blur-md animate-in fade-in duration-150 pointer-events-none">
-                  <span className="text-[#dfbf80]">•</span>
-                  <span>{item.label}</span>
-                </div>
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveTab(item.id)}
+              data-tour={item.id === 'dashboard' ? 'dashboard' : item.id === 'alunos' ? 'alunos' : item.id === 'protocolos' ? 'criar-treino' : undefined}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all relative ${
+                activeTab === item.id 
+                  ? 'bg-primary/10 text-primary border border-primary/20 shadow-[inset_0_0_15px_rgba(212,175,55,0.05)]' 
+                  : 'text-zinc-400 hover:text-zinc-100 hover:bg-surface-high'
+              }`}
+            >
+              {item.icon}
+              <span className="flex-1 text-left">{item.label}</span>
+              {item.id === 'chat' && unreadStudents.length > 0 && (
+                <span className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center animate-pulse">
+                  {unreadStudents.length}
+                </span>
               )}
-            </div>
+            </button>
           ))}
         </nav>
 
-        {/* Rodapé com Horário do Sistema */}
-        <div className="p-3 border-t border-surface-highest bg-surface-high/10 flex flex-col gap-2">
-          {!sidebarCollapsed ? (
-            <div className="text-center py-1.5 select-none">
-              <div className="text-[8.5px] font-bold text-zinc-500 uppercase tracking-[0.2em] mb-0.5">
-                Horário do Sistema
-              </div>
-              <div className="text-xl font-bold tracking-wider text-white font-title">
-                {time || '00:00:00'}
-              </div>
-              <div className="text-[9.5px] text-zinc-400 font-medium mt-0.5 truncate">
-                {date || 'Quinta-feira, 28 de maio 2026'}
-              </div>
+        <div className="p-4 border-t border-surface-highest bg-surface-high/10 flex flex-col gap-2">
+          {/* Digital Clock & Date */}
+          <div className="text-center py-2 select-none">
+            <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-[0.2em] mb-1">
+              Horário do Sistema
             </div>
-          ) : (
-            <div className="text-center py-1 font-mono text-[9px] text-[#dfbf80] font-bold tracking-wider" title={time}>
-              {time ? time.substring(0, 5) : '00:00'}
+            <div className="text-2xl font-bold tracking-wider text-white font-title">
+              {time || '00:00:00'}
             </div>
-          )}
+            <div className="text-[10px] text-zinc-400 font-medium mt-1 truncate">
+              {date || 'Quinta-feira, 28 de maio 2026'}
+            </div>
+          </div>
         </div>
       </aside>
 
