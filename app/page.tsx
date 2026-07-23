@@ -2196,8 +2196,12 @@ function MainApp({
                     <Sparkles className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="text-xs font-bold text-white uppercase tracking-wider">Agente de IA 24h</h3>
-                    <p className="text-[9px] text-[#dfbf80] font-bold uppercase tracking-widest">Elite Coach Assistant</p>
+                    <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                      Agente de IA 24h
+                    </h3>
+                    <p className="text-[8.5px] text-[#dfbf80] font-mono font-bold uppercase tracking-wider">
+                      DeepSeek V3 + Gemini • Motor Ativo
+                    </p>
                   </div>
                 </div>
                 <button 

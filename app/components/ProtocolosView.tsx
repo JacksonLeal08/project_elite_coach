@@ -618,9 +618,9 @@ export default function ProtocolosView() {
            <button onClick={() => setFocusMode(!focusMode)} className="text-xs bg-surface-high text-zinc-300 border border-surface-highest px-3 py-1.5 rounded font-bold uppercase tracking-widest flex items-center gap-2 hover:border-primary/50 transition">
               <Search className="w-3 h-3" /> Modo Foco
            </button>
-           <span className="text-xs bg-primary/20 text-primary border border-primary/30 px-2 py-1.5 rounded font-bold uppercase tracking-widest flex items-center gap-1 shadow-[0_0_10px_rgba(212,175,55,0.2)]">
-              <Zap className="w-3 h-3" /> IA Agent
-           </span>
+            <span className="text-[10px] sm:text-xs bg-primary/10 text-[#dfbf80] border border-[#dfbf80]/40 px-2.5 py-1.5 rounded-lg font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_12px_rgba(212,175,55,0.25)]">
+               <Zap className="w-3.5 h-3.5 fill-[#dfbf80]/30" /> IA Agent: DeepSeek + Gemini
+            </span>
          </div>
       </div>
 
