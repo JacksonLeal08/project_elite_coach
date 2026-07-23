@@ -175,6 +175,7 @@ export default function ChatComponent({
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [localDeletedIds, setLocalDeletedIds] = useState<string[]>([]);
   const [activeDeleteMenuId, setActiveDeleteMenuId] = useState<string | null>(null);
+  const [activeActionMsgId, setActiveActionMsgId] = useState<string | null>(null);
 
   // Carregar mensagens excluídas localmente
   useEffect(() => {
@@ -730,17 +731,23 @@ export default function ChatComponent({
                 <div
                   key={msg.id}
                   className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
+                  onClick={() => setActiveActionMsgId(activeActionMsgId === msg.id ? null : msg.id)}
                 >
                   <div
-                    className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-xs shadow-md relative group/msg ${
+                    className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-3.5 py-2 text-xs shadow-md relative group/msg cursor-pointer ${
                       isMe
                         ? 'bg-primary text-black rounded-tr-none'
                         : 'bg-surface-high border border-surface-highest text-white rounded-tl-none'
                     }`}
                   >
-                    {/* Floating emoji and actions bar */}
+                    {/* Floating emoji and actions bar (visível por hover no desktop ou por toque no mobile) */}
                     <div
-                      className={`absolute top-0 -translate-y-[85%] opacity-0 group-hover/msg:opacity-100 transition-opacity bg-surface-high border border-surface-highest rounded-lg p-1 shadow-lg flex items-center gap-1 z-10 ${
+                      onClick={(e) => e.stopPropagation()}
+                      className={`absolute -top-9 transition-all duration-200 bg-surface-dark border border-surface-highest/80 rounded-xl p-1 shadow-2xl flex items-center gap-1 z-20 backdrop-blur-md ${
+                        activeActionMsgId === msg.id 
+                          ? 'opacity-100 scale-100 pointer-events-auto' 
+                          : 'opacity-0 pointer-events-none group-hover/msg:opacity-100 group-hover/msg:pointer-events-auto group-hover/msg:scale-100 scale-95'
+                      } ${
                         isMe ? 'right-0' : 'left-0'
                       }`}
                     >
@@ -750,8 +757,12 @@ export default function ChatComponent({
                           <button
                             key={emoji}
                             type="button"
-                            onClick={() => handleAddReaction(msg.id, emoji)}
-                            className="hover:scale-125 transition-transform p-0.5 text-[10px]"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddReaction(msg.id, emoji);
+                              setActiveActionMsgId(null);
+                            }}
+                            className="hover:scale-125 active:scale-95 transition-transform p-0.5 text-xs"
                           >
                             {emoji}
                           </button>
@@ -765,8 +776,12 @@ export default function ChatComponent({
                           {/* Responder */}
                           <button
                             type="button"
-                            onClick={() => setReplyingTo(msg)}
-                            className="p-1 rounded hover:bg-surface text-zinc-400 hover:text-primary transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setReplyingTo(msg);
+                              setActiveActionMsgId(null);
+                            }}
+                            className="p-1 rounded hover:bg-surface text-zinc-300 hover:text-primary transition-colors"
                             title="Responder"
                           >
                             <CornerUpLeft className="w-3 h-3" />
@@ -776,12 +791,14 @@ export default function ChatComponent({
                           {isMe && msg.message_type === 'text' && (
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 setEditingMessage(msg);
                                 setNewMessage(msg.message);
                                 setReplyingTo(null);
+                                setActiveActionMsgId(null);
                               }}
-                              className="p-1 rounded hover:bg-surface text-zinc-400 hover:text-[#dfbf80] transition-colors"
+                              className="p-1 rounded hover:bg-surface text-zinc-300 hover:text-[#dfbf80] transition-colors"
                               title="Editar"
                             >
                               <Edit2 className="w-3 h-3" />
@@ -797,7 +814,7 @@ export default function ChatComponent({
                                 setActiveDeleteMenuId(activeDeleteMenuId === msg.id ? null : msg.id);
                               }}
                               className={`p-1 rounded hover:bg-surface transition-colors ${
-                                activeDeleteMenuId === msg.id ? 'bg-surface text-red-400' : 'text-zinc-400 hover:text-red-400'
+                                activeDeleteMenuId === msg.id ? 'bg-surface text-red-400' : 'text-zinc-300 hover:text-red-400'
                               }`}
                               title="Apagar"
                             >
@@ -815,6 +832,7 @@ export default function ChatComponent({
                                     e.stopPropagation();
                                     handleDeleteLocal(msg.id);
                                     setActiveDeleteMenuId(null);
+                                    setActiveActionMsgId(null);
                                   }}
                                   className="px-3 py-1.5 text-left text-zinc-200 hover:bg-surface hover:text-white transition-colors"
                                 >
@@ -827,6 +845,7 @@ export default function ChatComponent({
                                       e.stopPropagation();
                                       handleDeleteForEveryone(msg.id);
                                       setActiveDeleteMenuId(null);
+                                      setActiveActionMsgId(null);
                                     }}
                                     className="px-3 py-1.5 text-left text-red-400 hover:bg-red-950/20 hover:text-red-300 transition-colors border-t border-surface-highest/40"
                                   >

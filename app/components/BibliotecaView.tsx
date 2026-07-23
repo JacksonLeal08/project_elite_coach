@@ -249,8 +249,10 @@ export default function BibliotecaView({ currentUser }: BibliotecaViewProps) {
     if (!url) return null;
     let videoId = '';
     
-    if (url.includes('youtu.be/')) {
-      videoId = url.split('youtu.be/')[1]?.split('?')[0] || '';
+    if (url.includes('youtube.com/shorts/')) {
+      videoId = url.split('youtube.com/shorts/')[1]?.split('?')[0]?.split('/')[0] || '';
+    } else if (url.includes('youtu.be/')) {
+      videoId = url.split('youtu.be/')[1]?.split('?')[0]?.split('/')[0] || '';
     } else if (url.includes('youtube.com/watch')) {
       try {
         const params = new URLSearchParams(url.split('?')[1]);

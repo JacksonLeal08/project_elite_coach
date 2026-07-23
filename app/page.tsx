@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight, Sun, Moon, MessageSquare, Star, Minimize2, Maximize2 } from 'lucide-react';
+import { Bell, Search, LayoutDashboard, Users, Dumbbell, Settings, FileSpreadsheet, X, ArrowRight, BookOpen, LogOut, CreditCard, Menu, Eye, EyeOff, ArrowLeft, User as UserIcon, Activity, Trophy, Calendar, Sparkles, ChevronRight, Sun, Moon, MessageSquare, Star, Minimize2, Maximize2, ExternalLink } from 'lucide-react';
 import { ResponsiveContainer, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, ReferenceLine } from 'recharts';
 import DashboardView from './components/DashboardView';
 import AlunosView from './components/AlunosView';
@@ -2603,15 +2603,22 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
 
   const getEmbedUrl = (url: string) => {
     if (!url) return '';
-    if (url.includes('youtube.com/embed/')) return url;
+    if (url.includes('youtube.com/embed/')) return `${url}${url.includes('?') ? '&' : '?'}autoplay=1&rel=0`;
     let videoId = '';
-    if (url.includes('youtu.be/')) {
-      videoId = url.split('youtu.be/')[1]?.split('?')[0];
+    if (url.includes('youtube.com/shorts/')) {
+      videoId = url.split('youtube.com/shorts/')[1]?.split('?')[0]?.split('/')[0] || '';
+    } else if (url.includes('youtu.be/')) {
+      videoId = url.split('youtu.be/')[1]?.split('?')[0]?.split('/')[0] || '';
     } else if (url.includes('youtube.com/watch')) {
-      const params = new URLSearchParams(url.split('?')[1]);
-      videoId = params.get('v') || '';
+      try {
+        const queryStr = url.split('?')[1] || '';
+        const params = new URLSearchParams(queryStr);
+        videoId = params.get('v') || '';
+      } catch {
+        videoId = '';
+      }
     }
-    return videoId ? `https://www.youtube.com/embed/${videoId}` : url;
+    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : url;
   };
 
   const fetchData = async (showLoading = false) => {
@@ -3861,18 +3868,18 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
                       const isChecked = activeDayProgressEntry?.checked_exercises?.includes(ex.name) || false;
                       
                       return (
-                        <div key={idx} className="pt-3 first:pt-0 flex items-center justify-between gap-4 group transition-all">
-                          <div className="flex items-center gap-3">
+                        <div key={idx} className="pt-3 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 group transition-all border-b border-surface-highest/20 last:border-b-0 pb-3 last:pb-0">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
                             <input
                               type="checkbox"
                               checked={isChecked}
                               disabled={isLocked}
                               onChange={() => handleToggleExercise(ex.name, activeWorkoutDayIdx, activeWeekIdx)}
-                              className="w-4.5 h-4.5 rounded border-surface-highest bg-surface-high text-primary focus:ring-primary accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                              className="w-4.5 h-4.5 rounded border-surface-highest bg-surface-high text-primary focus:ring-primary accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 mt-0.5"
                             />
-                            <div className="space-y-0.5">
-                              <h5 className={`font-bold text-xs sm:text-sm text-zinc-100 group-hover:text-primary transition-colors flex items-center gap-2 ${isChecked ? 'line-through text-zinc-500' : ''}`}>
-                                {ex.name}
+                            <div className="space-y-0.5 min-w-0 flex-1">
+                              <h5 className={`font-bold text-xs sm:text-sm text-zinc-100 group-hover:text-primary transition-colors flex flex-wrap items-center gap-2 ${isChecked ? 'line-through text-zinc-500' : ''}`}>
+                                <span>{ex.name}</span>
                                 {hasVideo && (
                                   <button
                                     onClick={() => {
@@ -3887,23 +3894,24 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
                                 )}
                               </h5>
                               {ex.notes && (
-                                <p className="text-[10px] sm:text-[10.5px] text-zinc-400 italic">
+                                <p className="text-[10px] sm:text-[10.5px] text-zinc-400 italic leading-relaxed">
                                   Obs: {ex.notes}
                                 </p>
                               )}
                             </div>
                           </div>
                           
-                          <div className="flex gap-2.5 font-mono text-[9.5px] sm:text-[10px] text-zinc-400 bg-surface px-2.5 py-1 rounded-lg border border-surface-highest/40 shrink-0">
-                            <div>
+                          {/* Bloco Séries / Reps / Pausa posicionado na parte inferior no mobile */}
+                          <div className="flex items-center justify-between sm:justify-start gap-2.5 font-mono text-[9.5px] sm:text-[10px] text-zinc-400 bg-surface px-3 py-1.5 rounded-lg border border-surface-highest/40 w-full sm:w-auto shrink-0 mt-1 sm:mt-0">
+                            <div className="text-center sm:text-left flex-1 sm:flex-initial">
                               <span className="text-[7.5px] text-zinc-500 uppercase font-bold block">Séries</span>
                               <span className="font-bold text-white text-xs">{ex.sets}</span>
                             </div>
-                            <div className="border-l border-surface-highest/40 pl-2.5">
+                            <div className="border-l border-surface-highest/40 pl-2.5 text-center sm:text-left flex-1 sm:flex-initial">
                               <span className="text-[7.5px] text-zinc-500 uppercase font-bold block">Reps</span>
                               <span className="font-bold text-white text-xs">{ex.reps}</span>
                             </div>
-                            <div className="border-l border-surface-highest/40 pl-2.5">
+                            <div className="border-l border-surface-highest/40 pl-2.5 text-center sm:text-left flex-1 sm:flex-initial">
                               <span className="text-[7.5px] text-zinc-500 uppercase font-bold block">Pausa</span>
                               <span className="font-bold text-white text-xs">{ex.rest}</span>
                             </div>
@@ -4451,23 +4459,34 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
               className="relative max-w-2xl w-full aspect-video bg-surface-container border border-surface-highest rounded-2xl overflow-hidden p-2 shadow-2xl cursor-default"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="absolute top-4 left-4 z-10 bg-black/60 px-3 py-1 rounded backdrop-blur-md text-xs font-bold text-white border border-white/10 uppercase tracking-wider">
+              <div className="absolute top-4 left-4 z-10 bg-black/70 px-3 py-1 rounded-lg backdrop-blur-md text-xs font-bold text-white border border-white/10 uppercase tracking-wider max-w-[55%] truncate">
                 🎥 {activeVideoTitle}
+              </div>
+              <div className="absolute top-4 right-14 z-10 flex items-center gap-2">
+                <a
+                  href={activeVideoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-black/70 hover:bg-black text-[10.5px] font-bold text-amber-300 px-3 py-1 rounded-full backdrop-blur-md transition-colors border border-amber-500/30 flex items-center gap-1.5"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Abrir no YouTube
+                </a>
               </div>
               <button 
                 onClick={() => setActiveVideoUrl(null)}
-                className="absolute top-4 right-4 z-10 bg-black/60 hover:bg-black text-white p-2 rounded-full backdrop-blur-sm transition-colors border border-white/10"
+                className="absolute top-4 right-4 z-10 bg-black/70 hover:bg-black text-white p-2 rounded-full backdrop-blur-sm transition-colors border border-white/10"
               >
                 <X className="w-4 h-4" />
               </button>
 
-              <div className="w-full h-full rounded-xl overflow-hidden bg-black flex items-center justify-center">
+              <div className="w-full h-full rounded-xl overflow-hidden bg-black flex items-center justify-center relative">
                 {activeVideoUrl.includes('youtube.com') || activeVideoUrl.includes('youtu.be') ? (
                   <iframe 
                     src={getEmbedUrl(activeVideoUrl)} 
                     title={activeVideoTitle} 
                     className="w-full h-full border-none" 
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
                     allowFullScreen 
                   />
                 ) : (
