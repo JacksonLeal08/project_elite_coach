@@ -1414,40 +1414,46 @@ function MainApp({
       <PWAInstallBanner />
       {/* Sidebar para Desktop com suporte a Recolhimento (Padrão Working Scale) */}
       <aside className={`hidden md:flex ${sidebarCollapsed ? 'md:w-20' : 'md:w-64'} border-r border-surface-highest bg-surface-container flex-col shrink-0 transition-all duration-300 relative group/sidebar`}>
-        {/* Header do Menu com Logo e Botão de Toggle (Minimizar / Expandir) */}
-        <div className={`p-4 border-b border-surface-highest flex ${sidebarCollapsed ? 'flex-col items-center gap-3' : 'items-center justify-between'} relative transition-all`}>
+        {/* Header do Menu com Logo e Botão de Toggle (Recolher / Expandir Menu) */}
+        <div className={`p-3.5 px-4 border-b border-surface-highest flex ${sidebarCollapsed ? 'flex-col items-center gap-3' : 'items-center justify-between gap-2.5'} relative transition-all`}>
           {!sidebarCollapsed ? (
             <>
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <div className="h-10 w-10 flex items-center justify-center shrink-0 overflow-hidden">
-                  <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_10px_rgba(255,255,255,0.15)]" />
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div className="h-10 w-10 flex items-center justify-center shrink-0 overflow-hidden rounded-xl bg-surface-high/60 border border-primary/20 p-1 shadow-inner">
+                  <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_8px_rgba(212,175,55,0.25)]" />
                 </div>
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="font-title font-black text-white text-[13px] tracking-wider uppercase leading-tight truncate">{brandSettings.name}</span>
-                  <span className="text-primary text-[8.5px] font-bold tracking-[0.2em] uppercase mt-0.5 truncate">{brandSettings.specialty}</span>
+                <div className="flex flex-col min-w-0 flex-1 justify-center leading-none">
+                  <span className="font-title font-black text-white text-[12.5px] tracking-wider uppercase drop-shadow-sm whitespace-nowrap overflow-hidden">
+                    {brandSettings.name || 'ELITE COACH CRM'}
+                  </span>
+                  <span className="text-primary text-[8px] font-bold tracking-[0.22em] uppercase mt-1 drop-shadow-sm truncate">
+                    {brandSettings.specialty || 'PREMIUM'}
+                  </span>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={toggleSidebar}
-                className="p-1.5 rounded-lg bg-surface-high hover:bg-surface border border-surface-highest text-zinc-400 hover:text-white transition-colors shrink-0"
-                title="Recolher menu lateral (Working Scale)"
+                className="p-2 rounded-xl bg-surface-high/80 hover:bg-surface border border-primary/30 hover:border-primary text-primary hover:text-white transition-all duration-200 shrink-0 shadow-md hover:scale-105 active:scale-95 group/btn"
+                title="Recolher Menu"
+                aria-label="Recolher Menu"
               >
-                <PanelLeftClose className="w-4 h-4 text-[#dfbf80]" />
+                <PanelLeftClose className="w-4 h-4 text-primary group-hover/btn:text-white transition-colors" />
               </button>
             </>
           ) : (
             <>
-              <div className="h-9 w-9 flex items-center justify-center shrink-0 overflow-hidden">
-                <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain" />
+              <div className="h-10 w-10 flex items-center justify-center shrink-0 overflow-hidden rounded-xl bg-surface-high/60 border border-primary/20 p-1 shadow-inner">
+                <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_8px_rgba(212,175,55,0.25)]" />
               </div>
               <button
                 type="button"
                 onClick={toggleSidebar}
-                className="p-1.5 rounded-lg bg-surface-high hover:bg-surface border border-[#dfbf80]/40 text-[#dfbf80] hover:text-white transition-all shadow-md"
-                title="Expandir menu lateral"
+                className="p-2 rounded-xl bg-surface-high/80 hover:bg-surface border border-primary/40 hover:border-primary text-primary hover:text-white transition-all duration-200 shadow-md hover:scale-105 active:scale-95 group/btn"
+                title="Expandir Menu"
+                aria-label="Expandir Menu"
               >
-                <PanelLeftOpen className="w-4 h-4" />
+                <PanelLeftOpen className="w-4 h-4 text-primary group-hover/btn:text-white transition-colors" />
               </button>
             </>
           )}

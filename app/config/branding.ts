@@ -5,5 +5,5 @@ export const BRANDING = {
   supportContact: 'Olá, preciso de suporte no Elite Coach CRM',
   defaultAdminName: 'Diretor Técnico',
   defaultAdminEmail: 'admin@elitecoach.com',
-  version: '1.6.0',
+  version: '1.6.1',
 };
