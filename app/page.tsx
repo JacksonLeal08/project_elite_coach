@@ -1414,37 +1414,46 @@ function MainApp({
       <PWAInstallBanner />
       {/* Sidebar para Desktop com suporte a Recolhimento (Padrão Working Scale) */}
       <aside className={`hidden md:flex ${sidebarCollapsed ? 'md:w-20' : 'md:w-64'} border-r border-surface-highest bg-surface-container flex-col shrink-0 transition-all duration-300 relative group/sidebar`}>
-        {/* Header do Menu com Logo e Botão de Toggle (Recolher / Expandir Menu) */}
-        <div className={`p-3.5 px-4 border-b border-surface-highest flex ${sidebarCollapsed ? 'flex-col items-center gap-3' : 'items-center justify-between gap-2.5'} relative transition-all`}>
+        {/* Header do Menu com Logo Ampliada no Topo e Nome Completo em Linha Própria sem cortes */}
+        <div className={`p-4 border-b border-surface-highest flex flex-col ${sidebarCollapsed ? 'items-center gap-3' : ''} transition-all`}>
           {!sidebarCollapsed ? (
-            <>
-              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <div className="h-10 w-10 flex items-center justify-center shrink-0 overflow-hidden rounded-xl bg-surface-high/60 border border-primary/20 p-1 shadow-inner">
-                  <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_8px_rgba(212,175,55,0.25)]" />
+            <div className="flex flex-col w-full">
+              {/* Linha Superior: Logo em Squircle à esquerda + Botão de Toggle à direita */}
+              <div className="flex items-center justify-between w-full">
+                <div className="relative group/logo flex items-center gap-2">
+                  <div className="h-12 w-12 flex items-center justify-center shrink-0 overflow-hidden rounded-2xl bg-surface-high/90 border border-primary/30 p-1.5 shadow-[0_0_15px_rgba(212,175,55,0.15)] relative transition-transform duration-300 hover:scale-105">
+                    <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_8px_rgba(212,175,55,0.3)]" />
+                    {/* Status Dot / Active Indicator */}
+                    <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-surface-container shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                  </div>
                 </div>
-                <div className="flex flex-col min-w-0 flex-1 justify-center leading-none">
-                  <span className="font-title font-black text-white text-[12.5px] tracking-wider uppercase drop-shadow-sm whitespace-nowrap overflow-hidden">
-                    {brandSettings.name || 'ELITE COACH CRM'}
-                  </span>
-                  <span className="text-primary text-[8px] font-bold tracking-[0.22em] uppercase mt-1 drop-shadow-sm truncate">
-                    {brandSettings.specialty || 'PREMIUM'}
-                  </span>
-                </div>
+
+                <button
+                  type="button"
+                  onClick={toggleSidebar}
+                  className="p-2 rounded-xl bg-surface-high/80 hover:bg-surface border border-primary/30 hover:border-primary text-primary hover:text-white transition-all duration-200 shrink-0 shadow-md hover:scale-105 active:scale-95 group/btn"
+                  title="Recolher Menu"
+                  aria-label="Recolher Menu"
+                >
+                  <PanelLeftClose className="w-4.5 h-4.5 text-primary group-hover/btn:text-white transition-colors" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={toggleSidebar}
-                className="p-2 rounded-xl bg-surface-high/80 hover:bg-surface border border-primary/30 hover:border-primary text-primary hover:text-white transition-all duration-200 shrink-0 shadow-md hover:scale-105 active:scale-95 group/btn"
-                title="Recolher Menu"
-                aria-label="Recolher Menu"
-              >
-                <PanelLeftClose className="w-4 h-4 text-primary group-hover/btn:text-white transition-colors" />
-              </button>
-            </>
+
+              {/* Linha Inferior: Nome Completo da Empresa/Sistema 100% livre de cortes */}
+              <div className="mt-3 flex flex-col w-full min-w-0">
+                <span className="font-title font-black text-white text-[13.5px] tracking-wider uppercase drop-shadow-sm leading-tight block truncate">
+                  {brandSettings.name || 'ELITE COACH CRM'}
+                </span>
+                <span className="text-primary text-[8.5px] font-bold tracking-[0.24em] uppercase mt-1 drop-shadow-sm block truncate">
+                  {brandSettings.specialty || 'GESTÃO DE ALTA PERFORMANCE'}
+                </span>
+              </div>
+            </div>
           ) : (
             <>
-              <div className="h-10 w-10 flex items-center justify-center shrink-0 overflow-hidden rounded-xl bg-surface-high/60 border border-primary/20 p-1 shadow-inner">
-                <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_8px_rgba(212,175,55,0.25)]" />
+              <div className="h-11 w-11 flex items-center justify-center shrink-0 overflow-hidden rounded-2xl bg-surface-high/90 border border-primary/30 p-1.5 shadow-[0_0_15px_rgba(212,175,55,0.15)] relative">
+                <img src={brandSettings.logoUrl || "/logo.png"} alt={brandSettings.name} className="max-h-full max-w-full object-contain filter drop-shadow-[0_2px_8px_rgba(212,175,55,0.3)]" />
+                <span className="absolute bottom-0.5 right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-surface-container" />
               </div>
               <button
                 type="button"
@@ -1453,7 +1462,7 @@ function MainApp({
                 title="Expandir Menu"
                 aria-label="Expandir Menu"
               >
-                <PanelLeftOpen className="w-4 h-4 text-primary group-hover/btn:text-white transition-colors" />
+                <PanelLeftOpen className="w-4.5 h-4.5 text-primary group-hover/btn:text-white transition-colors" />
               </button>
             </>
           )}
