@@ -27,21 +27,61 @@ INSTRUÇÕES:
 PERGUNTA DO USUÁRIO:
 ${question}`;
 
-    let response;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-lite",
-        contents: systemPrompt
-      });
-    } catch (err: any) {
-      console.error("Gemini failed in ask-ai route:", err);
-      return NextResponse.json({ 
-        error: "Serviço de IA indisponível temporariamente. Usando assistente local..." 
-      }, { status: 500 });
+    let aiAnswer: string | null = null;
+
+    // 1. Tentar gerar resposta via DeepSeek API
+    if (process.env.DEEPSEEK_API_KEY) {
+      try {
+        const dsRes = await fetch("https://api.deepseek.com/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+              {
+                role: "system",
+                content: "Você é o Agente de IA 24h do sistema Elite Coach CRM. Responda de forma extremamente clara, didática, amigável e concisa em português do Brasil (pt-BR)."
+              },
+              {
+                role: "user",
+                content: systemPrompt
+              }
+            ],
+            temperature: 0.5
+          })
+        });
+
+        if (dsRes.ok) {
+          const dsData = await dsRes.json();
+          aiAnswer = dsData?.choices?.[0]?.message?.content || null;
+        } else {
+          console.warn("DeepSeek API no ask-ai retornou status:", dsRes.status);
+        }
+      } catch (dsErr) {
+        console.warn("DeepSeek API no ask-ai falhou, acionando fallback Gemini:", dsErr);
+      }
     }
 
-    const text = response.text;
-    return NextResponse.json({ answer: text });
+    // 2. Fallback para Google Gemini
+    if (!aiAnswer) {
+      try {
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash-lite",
+          contents: systemPrompt
+        });
+        aiAnswer = response.text || null;
+      } catch (err: any) {
+        console.error("Gemini failed in ask-ai route:", err);
+        return NextResponse.json({ 
+          error: "Serviço de IA indisponível temporariamente." 
+        }, { status: 500 });
+      }
+    }
+
+    return NextResponse.json({ answer: aiAnswer });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

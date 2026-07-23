@@ -53,48 +53,95 @@ export async function POST(req: Request) {
     
     Analise criteriosamente as observações clínicas e a ficha de anamnese listadas para sugerir um treino 100% seguro e adaptado para a saúde e articulações do aluno.`;
 
-    let response;
-    try {
-      response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
+    let workoutJson: any = null;
+
+    // 1. Tentar geração via DeepSeek API (se DEEPSEEK_API_KEY estiver configurada)
+    if (process.env.DEEPSEEK_API_KEY) {
+      try {
+        const dsRes = await fetch("https://api.deepseek.com/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: "deepseek-chat",
+            messages: [
+              {
+                role: "system",
+                content: "Você é um especialista em fisiologia do exercício e treinador de alto rendimento. Responda APENAS com um JSON estritamente válido segundo o schema solicitado, sem marcações markdown ```json."
+              },
+              {
+                role: "user",
+                content: prompt
+              }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.3
+          })
+        });
+
+        if (dsRes.ok) {
+          const dsData = await dsRes.json();
+          let rawText = dsData?.choices?.[0]?.message?.content || "";
+          rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
+          if (rawText) {
+            workoutJson = JSON.parse(rawText);
+          }
+        } else {
+          console.warn("DeepSeek API respondeu com status:", dsRes.status, await dsRes.text());
         }
-      });
-    } catch (err: any) {
-      const errMsg = err.message || "";
-      const isApiKeyError = err.status === 403 || errMsg.includes("403") || errMsg.toLowerCase().includes("permission_denied") || errMsg.toLowerCase().includes("api key") || errMsg.toLowerCase().includes("leaked");
-      
-      if (isApiKeyError) {
-        return NextResponse.json({ 
-          error: "Sua chave de API do Gemini (GEMINI_API_KEY) está inválida, expirou ou foi bloqueada/vazada (Erro 403). Por favor, configure a nova chave no painel da Vercel e realize o Redeploy." 
-        }, { status: 403 });
+      } catch (dsErr) {
+        console.warn("DeepSeek API falhou, acionando fallback Gemini:", dsErr);
       }
-      
-      console.warn("gemini-2.5-flash failed, trying fallback gemini-2.5-flash-lite. Error:", errMsg);
+    }
+
+    // 2. Fallback para Google Gemini caso DeepSeek não retorne resultado
+    if (!workoutJson) {
+      let response;
       try {
         response = await ai.models.generateContent({
-          model: "gemini-2.5-flash-lite",
+          model: "gemini-2.5-flash",
           contents: prompt,
           config: {
             responseMimeType: "application/json",
           }
         });
-      } catch (fallbackErr: any) {
-        console.error("Fallback gemini-2.5-flash-lite also failed:", fallbackErr);
-        return NextResponse.json({ 
-          error: `Erro ao gerar protocolo (IA): ${fallbackErr.message || fallbackErr}` 
-        }, { status: 500 });
+      } catch (err: any) {
+        const errMsg = err.message || "";
+        const isApiKeyError = err.status === 403 || errMsg.includes("403") || errMsg.toLowerCase().includes("permission_denied") || errMsg.toLowerCase().includes("api key") || errMsg.toLowerCase().includes("leaked");
+        
+        if (isApiKeyError) {
+          return NextResponse.json({ 
+            error: "Sua chave de API do Gemini (GEMINI_API_KEY) está inválida ou bloqueada (Erro 403). Configure uma nova chave no painel." 
+          }, { status: 403 });
+        }
+        
+        console.warn("gemini-2.5-flash falhou, tentando fallback gemini-2.5-flash-lite:", errMsg);
+        try {
+          response = await ai.models.generateContent({
+            model: "gemini-2.5-flash-lite",
+            contents: prompt,
+            config: {
+              responseMimeType: "application/json",
+            }
+          });
+        } catch (fallbackErr: any) {
+          console.error("Fallback Gemini também falhou:", fallbackErr);
+          return NextResponse.json({ 
+            error: `Erro ao gerar protocolo (IA): ${fallbackErr.message || fallbackErr}` 
+          }, { status: 500 });
+        }
       }
+
+      const text = response?.text;
+      if (!text) throw new Error("Falha ao gerar treino pela IA");
+      workoutJson = JSON.parse(text);
     }
 
-    const text = response.text;
-    if (!text) throw new Error("Falha ao gerar treino");
-
-    return NextResponse.json(JSON.parse(text));
+    return NextResponse.json(workoutJson);
   } catch (error: any) {
-    console.error("Gemini erro:", error);
+    console.error("Erro no gerador de treinos com IA:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
