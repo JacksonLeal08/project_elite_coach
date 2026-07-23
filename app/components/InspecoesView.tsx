@@ -398,37 +398,35 @@ export default function InspecoesView({ currentUser }: InspecoesViewProps) {
                         <span className="text-[9px] text-zinc-500 uppercase block font-bold mb-0.5">Freq. Cardíaca</span>
                         <span className="text-white font-extrabold font-mono text-base">{lastInspection.heart_rate} <span className="text-[10px] text-zinc-500 font-normal">BPM</span></span>
                       </div>
-                      <div className="relative flex items-center justify-center p-1.5 bg-red-950/40 rounded-full border border-red-500/30">
-                        <svg 
-                          className="w-6 h-6 shrink-0 filter drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]" 
-                          viewBox="0 0 24 24" 
-                          fill="none" 
-                          xmlns="http://www.w3.org/2000/svg"
-                          style={{ animation: 'heartbeat 1.2s infinite ease-in-out', transformOrigin: 'center' }}
-                        >
-                          <style>{`
-                            @keyframes heartbeat {
-                              0% { transform: scale(1); }
-                              14% { transform: scale(1.18); }
-                              28% { transform: scale(1); }
-                              42% { transform: scale(1.18); }
-                              70% { transform: scale(1); }
-                            }
-                          `}</style>
-                          <defs>
-                            <radialGradient id="heart3D" cx="35%" cy="35%" r="65%" fx="35%" fy="35%">
-                              <stop offset="0%" stopColor="#ff5e5e" />
-                              <stop offset="35%" stopColor="#e60000" />
-                              <stop offset="75%" stopColor="#990000" />
-                              <stop offset="100%" stopColor="#540000" />
-                            </radialGradient>
-                          </defs>
-                          <path 
-                            d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" 
-                            fill="url(#heart3D)"
-                          />
-                        </svg>
-                      </div>
+                      <svg 
+                        className="w-7 h-7 shrink-0 filter drop-shadow-[0_0_8px_rgba(239,68,68,0.75)]" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        xmlns="http://www.w3.org/2000/svg"
+                        style={{ animation: 'heartbeat 1.2s infinite ease-in-out', transformOrigin: 'center' }}
+                      >
+                        <style>{`
+                          @keyframes heartbeat {
+                            0% { transform: scale(1); }
+                            14% { transform: scale(1.18); }
+                            28% { transform: scale(1); }
+                            42% { transform: scale(1.18); }
+                            70% { transform: scale(1); }
+                          }
+                        `}</style>
+                        <defs>
+                          <radialGradient id="heart3D" cx="35%" cy="35%" r="65%" fx="35%" fy="35%">
+                            <stop offset="0%" stopColor="#ff5e5e" />
+                            <stop offset="35%" stopColor="#e60000" />
+                            <stop offset="75%" stopColor="#990000" />
+                            <stop offset="100%" stopColor="#540000" />
+                          </radialGradient>
+                        </defs>
+                        <path 
+                          d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" 
+                          fill="url(#heart3D)"
+                        />
+                      </svg>
                     </div>
 
                     {/* Gráfico ECG Working Scale Animado */}
@@ -478,47 +476,47 @@ export default function InspecoesView({ currentUser }: InspecoesViewProps) {
                   const score = lastInspection.sleep ? Number(lastInspection.sleep) : null;
                   let levelName = 'Sem Dados';
                   let description = 'Nenhuma avaliação de sono registrada.';
-                  let badgeColor = 'text-zinc-400 border-zinc-700 bg-zinc-900/40';
+                  let badgeStyle = { color: '#a1a1aa', borderColor: '#3f3f46', backgroundColor: '#18181b' };
                   let strokeGlow = 'drop-shadow(0 0 4px rgba(255,255,255,0.2))';
 
                   if (score !== null) {
                     if (score <= 4) {
                       levelName = '1/3 - Atenção';
                       description = 'Qualidade de sono insuficiente. Recuperação neuromuscular comprometida.';
-                      badgeColor = 'text-red-400 border-red-500/30 bg-red-950/40';
+                      badgeStyle = { color: '#f87171', borderColor: 'rgba(239,68,68,0.4)', backgroundColor: 'rgba(127,29,29,0.5)' };
                       strokeGlow = 'drop-shadow(0 0 6px rgba(239,68,68,0.5))';
                     } else if (score <= 7) {
                       levelName = '2/3 - Moderado';
                       description = 'Qualidade de sono equilibrada. Boa reparação e descanso adequado.';
-                      badgeColor = 'text-amber-400 border-amber-500/30 bg-amber-950/40';
+                      badgeStyle = { color: '#fbbf24', borderColor: 'rgba(245,158,11,0.4)', backgroundColor: 'rgba(120,53,15,0.5)' };
                       strokeGlow = 'drop-shadow(0 0 8px rgba(223,191,128,0.7))';
                     } else {
                       levelName = '3/3 - Excelente';
                       description = 'Sono de alta performance! Descanso profundo e síntese máxima.';
-                      badgeColor = 'text-emerald-400 border-emerald-500/30 bg-emerald-950/40';
+                      badgeStyle = { color: '#4ade80', borderColor: 'rgba(34,197,94,0.4)', backgroundColor: 'rgba(20,83,45,0.5)' };
                       strokeGlow = 'drop-shadow(0 0 12px rgba(255,215,0,0.9))';
                     }
                   }
 
                   return (
                     <div className="relative group flex justify-between items-center text-xs p-2.5 bg-surface-high/30 hover:bg-surface-high/50 rounded-lg border border-surface-highest/15 transition-all duration-200 cursor-help">
-                      {/* Tooltip Legenda Explicativa */}
-                      <div className="absolute right-0 bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 w-60 p-2.5 bg-zinc-950/95 border border-amber-500/40 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.9)] backdrop-blur-md text-left">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                      {/* Tooltip Legenda Explicativa com Contraste Garantido */}
+                      <div className="absolute right-0 bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 w-60 p-3 bg-zinc-950 border border-amber-500/40 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.9)] backdrop-blur-md text-left">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: '#fcd34d' }}>
                             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                             Qualidade do Sono
                           </span>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${badgeColor}`}>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border" style={badgeStyle}>
                             {levelName}
                           </span>
                         </div>
-                        <p className="text-[11px] font-medium text-zinc-200 leading-snug">{description}</p>
-                        <div className="mt-1.5 text-[9px] text-zinc-400 font-mono flex items-center justify-between border-t border-zinc-800/80 pt-1">
-                          <span>Pontuação</span>
-                          <span className="font-bold text-amber-300">{score ? `${score}/10` : 'N/A'}</span>
+                        <p className="text-[11px] font-medium leading-relaxed" style={{ color: '#f4f4f5' }}>{description}</p>
+                        <div className="mt-2 text-[9px] font-mono flex items-center justify-between border-t border-zinc-800 pt-1.5">
+                          <span style={{ color: '#a1a1aa' }}>Pontuação</span>
+                          <span className="font-bold text-xs" style={{ color: '#fcd34d' }}>{score ? `${score}/10` : 'N/A'}</span>
                         </div>
-                        <div className="absolute top-full right-4 border-4 border-transparent border-t-zinc-950/95" />
+                        <div className="absolute top-full right-4 border-4 border-transparent border-t-zinc-950" />
                       </div>
 
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -623,47 +621,47 @@ export default function InspecoesView({ currentUser }: InspecoesViewProps) {
                   const score = lastInspection.energy ? Number(lastInspection.energy) : null;
                   let levelName = 'Sem Dados';
                   let description = 'Nenhuma avaliação de energia registrada.';
-                  let badgeColor = 'text-zinc-400 border-zinc-700 bg-zinc-900/40';
+                  let badgeStyle = { color: '#a1a1aa', borderColor: '#3f3f46', backgroundColor: '#18181b' };
                   let strokeGlow = 'drop-shadow(0 0 4px rgba(255,255,255,0.2))';
 
                   if (score !== null) {
                     if (score <= 4) {
                       levelName = '1/3 - Baixo';
                       description = 'Energia e disposição reduzidas. Cuidado com sobrecarga de treinos.';
-                      badgeColor = 'text-red-400 border-red-500/30 bg-red-950/40';
+                      badgeStyle = { color: '#f87171', borderColor: 'rgba(239,68,68,0.4)', backgroundColor: 'rgba(127,29,29,0.5)' };
                       strokeGlow = 'drop-shadow(0 0 6px rgba(239,68,68,0.5))';
                     } else if (score <= 7) {
                       levelName = '2/3 - Moderado';
                       description = 'Nível de energia disposto. Prontidão adequada para atividades físicas.';
-                      badgeColor = 'text-amber-400 border-amber-500/30 bg-amber-950/40';
+                      badgeStyle = { color: '#fbbf24', borderColor: 'rgba(245,158,11,0.4)', backgroundColor: 'rgba(120,53,15,0.5)' };
                       strokeGlow = 'drop-shadow(0 0 8px rgba(255,170,0,0.75))';
                     } else {
                       levelName = '3/3 - Máximo';
                       description = 'Vigor e disposição no auge! Prontidão total para alta intensidade.';
-                      badgeColor = 'text-emerald-400 border-emerald-500/30 bg-emerald-950/40';
+                      badgeStyle = { color: '#4ade80', borderColor: 'rgba(34,197,94,0.4)', backgroundColor: 'rgba(20,83,45,0.5)' };
                       strokeGlow = 'drop-shadow(0 0 14px rgba(255,200,0,0.95))';
                     }
                   }
 
                   return (
                     <div className="relative group flex justify-between items-center text-xs p-2.5 bg-surface-high/30 hover:bg-surface-high/50 rounded-lg border border-surface-highest/15 transition-all duration-200 cursor-help">
-                      {/* Tooltip Legenda Explicativa */}
-                      <div className="absolute right-0 bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 w-60 p-2.5 bg-zinc-950/95 border border-amber-500/40 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.9)] backdrop-blur-md text-left">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                      {/* Tooltip Legenda Explicativa com Contraste Garantido */}
+                      <div className="absolute right-0 bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-30 w-60 p-3 bg-zinc-950 border border-amber-500/40 rounded-xl shadow-[0_10px_25px_rgba(0,0,0,0.9)] backdrop-blur-md text-left">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5" style={{ color: '#fcd34d' }}>
                             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                             Nível de Energia
                           </span>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${badgeColor}`}>
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border" style={badgeStyle}>
                             {levelName}
                           </span>
                         </div>
-                        <p className="text-[11px] font-medium text-zinc-200 leading-snug">{description}</p>
-                        <div className="mt-1.5 text-[9px] text-zinc-400 font-mono flex items-center justify-between border-t border-zinc-800/80 pt-1">
-                          <span>Pontuação</span>
-                          <span className="font-bold text-amber-300">{score ? `${score}/10` : 'N/A'}</span>
+                        <p className="text-[11px] font-medium leading-relaxed" style={{ color: '#f4f4f5' }}>{description}</p>
+                        <div className="mt-2 text-[9px] font-mono flex items-center justify-between border-t border-zinc-800 pt-1.5">
+                          <span style={{ color: '#a1a1aa' }}>Pontuação</span>
+                          <span className="font-bold text-xs" style={{ color: '#fcd34d' }}>{score ? `${score}/10` : 'N/A'}</span>
                         </div>
-                        <div className="absolute top-full right-4 border-4 border-transparent border-t-zinc-950/95" />
+                        <div className="absolute top-full right-4 border-4 border-transparent border-t-zinc-950" />
                       </div>
 
                       <div className="flex items-center gap-2.5 min-w-0">
