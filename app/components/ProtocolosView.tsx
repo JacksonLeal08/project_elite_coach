@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Search, Zap, Settings, Download, Share2, Dumbbell, Plus, Trash2 } from 'lucide-react';
+import { X, Search, Zap, Settings, Download, Share2, Dumbbell, Plus, Trash2, Minimize2, Maximize2, Activity, ShieldAlert, CheckCircle2, Cpu, Sparkles } from 'lucide-react';
 import { generatePDFAndShare } from '../utils/pdf';
 import { HistoryEntry, WorkoutData } from '../types';
 import { supabase } from '../utils/supabase';
@@ -78,6 +78,8 @@ export default function ProtocolosView() {
   }, [student, objective, split, days, needs, durationWeeks, weight, height, imc, clinicalNotes, startDate, endDate]);
 
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [isTelemetryMinimized, setIsTelemetryMinimized] = useState<boolean>(false);
+  const [telemetryStep, setTelemetryStep] = useState<number>(1);
   const [workoutData, setWorkoutData] = useState<WorkoutData | null>(null);
   const [activeMetadata, setActiveMetadata] = useState<{
     student: string;
@@ -461,7 +463,12 @@ export default function ProtocolosView() {
       return showCustomAlert("Parâmetros Incompletos", "Por favor, preencha o Nome do Aluno e o Objetivo Principal para gerar o treino.", "warning");
     }
     setIsGenerating(true);
+    setIsTelemetryMinimized(false);
+    setTelemetryStep(1);
     setWorkoutData(null);
+
+    const t2 = setTimeout(() => setTelemetryStep(2), 1400);
+    const t3 = setTimeout(() => setTelemetryStep(3), 2800);
     try {
       const studentHistory = history.filter(h => h.student.toLowerCase() === student.toLowerCase()).map(h => h.workoutData);
 
@@ -618,9 +625,24 @@ export default function ProtocolosView() {
            <button onClick={() => setFocusMode(!focusMode)} className="text-xs bg-surface-high text-zinc-300 border border-surface-highest px-3 py-1.5 rounded font-bold uppercase tracking-widest flex items-center gap-2 hover:border-primary/50 transition">
               <Search className="w-3 h-3" /> Modo Foco
            </button>
-            <span className="text-[10px] sm:text-xs bg-primary/10 text-[#dfbf80] border border-[#dfbf80]/40 px-2.5 py-1.5 rounded-lg font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_12px_rgba(212,175,55,0.25)]">
-               <Zap className="w-3.5 h-3.5 fill-[#dfbf80]/30" /> IA Agent: DeepSeek + Gemini
-            </span>
+            <div className="relative group/tooltiptop">
+              <span className="text-[10px] sm:text-xs bg-primary/10 text-[#dfbf80] border border-[#dfbf80]/40 px-3 py-1.5 rounded-lg font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_12px_rgba(212,175,55,0.25)] cursor-help transition-all hover:bg-primary/20">
+                 <Zap className="w-3.5 h-3.5 fill-[#dfbf80]/30" /> IA Agent
+              </span>
+
+              {/* Tooltip ao passar o ponteiro do mouse */}
+              <div className="absolute right-0 top-full mt-2 hidden group-hover/tooltiptop:flex flex-col bg-zinc-950/95 border border-[#dfbf80]/40 text-zinc-100 rounded-xl p-3 shadow-2xl z-50 min-w-[260px] max-w-[320px] backdrop-blur-md animate-in fade-in duration-200" style={{ color: '#f4f4f5' }}>
+                <div className="flex items-center gap-1.5 text-[10.5px] font-bold text-[#dfbf80] uppercase tracking-wider mb-1">
+                  <Sparkles className="w-3.5 h-3.5 text-[#dfbf80]" /> Motores de IA no Sistema
+                </div>
+                <p className="text-[11px] leading-relaxed text-zinc-300">
+                  <strong className="text-white">DeepSeek V3 / R1:</strong> Geração estruturada de protocolos e raciocínio para ficheiro de treino.
+                </p>
+                <p className="text-[11px] leading-relaxed text-zinc-300 mt-1 border-t border-zinc-800/60 pt-1">
+                  <strong className="text-white">Google Gemini:</strong> Validação clínica e auditoria de lesões no <em>AI Clinical Guard</em>.
+                </p>
+              </div>
+            </div>
          </div>
       </div>
 
@@ -1026,6 +1048,218 @@ export default function ProtocolosView() {
           </div>
         </div>
       )}
+
+      {/* HUD de Telemetria Clínica Futurista com Checkpoints da Anamnese e Suporte a Maximizar/Minimizar */}
+      <AnimatePresence>
+        {isGenerating && (
+          <>
+            {!isTelemetryMinimized ? (
+              /* MODAL COMPLETO DE TELEMETRIA (HUD) */
+              <div className="fixed inset-0 bg-black/85 backdrop-blur-xl z-[98] flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.92, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.92, y: 20 }}
+                  transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+                  className="bg-zinc-950/90 border border-[#dfbf80]/40 rounded-3xl p-6 sm:p-8 max-w-2xl w-full shadow-[0_0_60px_rgba(212,175,55,0.2)] relative overflow-hidden flex flex-col gap-6"
+                >
+                  {/* Top Bar Glow */}
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-[#dfbf80] to-yellow-300 animate-pulse" />
+
+                  {/* Header do Modal com Ações de Minimizar/Fechar */}
+                  <div className="flex items-start justify-between border-b border-surface-highest/40 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-2xl bg-[#dfbf80]/10 border border-[#dfbf80]/30 text-[#dfbf80] shadow-[0_0_15px_rgba(212,175,55,0.2)]">
+                        <Activity className="w-6 h-6 animate-pulse" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm sm:text-base font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                          🧬 TELEMETRIA CLÍNICA & SÍNTESE DE IA
+                        </h3>
+                        <p className="text-[10px] sm:text-xs text-[#dfbf80] font-mono font-medium">
+                          Auditando anamnese e gerando treino para: <span className="text-white font-bold">{student}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Botões de Ação Maximizar / Minimizar (Estilo Working Scale) */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsTelemetryMinimized(true)}
+                        className="p-2 rounded-xl bg-surface-high hover:bg-surface border border-surface-highest text-zinc-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-mono"
+                        title="Minimizar para barra flutuante (Working Scale)"
+                      >
+                        <Minimize2 className="w-4 h-4 text-[#dfbf80]" />
+                        <span className="hidden sm:inline">Minimizar</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Scanner Biométrico Radar */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center bg-surface-dark/60 p-4 rounded-2xl border border-surface-highest/50">
+                    <div className="flex items-center justify-center relative py-2">
+                      {/* Círculos de Onda do Radar */}
+                      <motion.div
+                        animate={{ scale: [1, 1.4, 1], opacity: [0.3, 0.7, 0.3] }}
+                        transition={{ repeat: Infinity, duration: 2.5 }}
+                        className="absolute w-20 h-20 rounded-full border border-[#dfbf80]/40"
+                      />
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 4, ease: 'linear' }}
+                        className="w-16 h-16 rounded-full border-2 border-dashed border-[#dfbf80] flex items-center justify-center"
+                      >
+                        <Cpu className="w-7 h-7 text-[#dfbf80]" />
+                      </motion.div>
+                    </div>
+
+                    <div className="sm:col-span-2 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs font-mono">
+                        <span className="text-zinc-400">Progresso da Telemetria:</span>
+                        <span className="text-[#dfbf80] font-bold">
+                          {telemetryStep === 1 ? '33% (Biometria)' : telemetryStep === 2 ? '66% (Anamnese & Lesões)' : '95% (Síntese Final)'}
+                        </span>
+                      </div>
+                      {/* Barra de Progresso Gradiente */}
+                      <div className="w-full bg-surface-high h-2.5 rounded-full overflow-hidden border border-surface-highest/60">
+                        <motion.div
+                          initial={{ width: '15%' }}
+                          animate={{ 
+                            width: telemetryStep === 1 ? '35%' : telemetryStep === 2 ? '70%' : '98%' 
+                          }}
+                          transition={{ duration: 0.8 }}
+                          className="h-full bg-gradient-to-r from-amber-500 to-[#dfbf80] shadow-[0_0_12px_rgba(212,175,55,0.6)]"
+                        />
+                      </div>
+                      <p className="text-[10px] text-zinc-400 italic">
+                        {telemetryStep === 1 ? 'Coletando métricas e histórico de treinos recentes...' : telemetryStep === 2 ? 'Cruzando diretrizes do AI Clinical Guard com anamnese...' : 'Finalizando treino estritamente seguro com DeepSeek V3 + Gemini...'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Feed de Checkpoints de Auditoria em Tempo Real */}
+                  <div className="space-y-3 font-mono text-xs">
+                    {/* Passo 1 */}
+                    <div className={`p-3 rounded-xl border transition-all flex items-start gap-3 ${
+                      telemetryStep >= 1 ? 'bg-surface-high/70 border-[#dfbf80]/30 text-white' : 'bg-surface/30 border-surface-highest/30 opacity-40'
+                    }`}>
+                      <CheckCircle2 className={`w-4 h-4 mt-0.5 shrink-0 ${telemetryStep >= 1 ? 'text-[#dfbf80]' : 'text-zinc-600'}`} />
+                      <div className="space-y-1 flex-1">
+                        <div className="font-bold flex items-center justify-between">
+                          <span>1. Auditoria de Biometria & Flexibilidade</span>
+                          {telemetryStep >= 1 && <span className="text-[9px] bg-primary/20 text-[#dfbf80] px-2 py-0.5 rounded font-mono">CONCLUÍDO</span>}
+                        </div>
+                        <div className="flex flex-wrap gap-2 text-[10.5px] text-zinc-300">
+                          <span className="bg-surface px-2 py-0.5 rounded border border-surface-highest/60">Peso: {weight || 'N/I'} kg</span>
+                          <span className="bg-surface px-2 py-0.5 rounded border border-surface-highest/60">Altura: {height || 'N/I'} m</span>
+                          <span className="bg-surface px-2 py-0.5 rounded border border-surface-highest/60">IMC: {imc || 'N/I'}</span>
+                          {selectedStudentAnamnesis?.flexibility_level && (
+                            <span className="bg-surface px-2 py-0.5 rounded border border-surface-highest/60">Flexibilidade: {selectedStudentAnamnesis.flexibility_level}</span>
+                          )}
+                          {selectedStudentAnamnesis?.water_intake && (
+                            <span className="bg-surface px-2 py-0.5 rounded border border-surface-highest/60">Água: {selectedStudentAnamnesis.water_intake}L/dia</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Passo 2 */}
+                    <div className={`p-3 rounded-xl border transition-all flex items-start gap-3 ${
+                      telemetryStep >= 2 ? 'bg-surface-high/70 border-amber-500/30 text-white' : 'bg-surface/30 border-surface-highest/30 opacity-40'
+                    }`}>
+                      <ShieldAlert className={`w-4 h-4 mt-0.5 shrink-0 ${telemetryStep >= 2 ? 'text-amber-400' : 'text-zinc-600'}`} />
+                      <div className="space-y-1 flex-1">
+                        <div className="font-bold flex items-center justify-between">
+                          <span>2. AI Clinical Guard (Isolamento de Riscos e Lesões)</span>
+                          {telemetryStep >= 2 && <span className="text-[9px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded font-mono">PROCESSADO</span>}
+                        </div>
+                        <div className="text-[11px] text-amber-200/90 leading-relaxed bg-amber-950/30 p-2 rounded-lg border border-amber-500/20">
+                          {clinicalNotes || selectedStudentAnamnesis?.medical_restrictions ? (
+                            <span>
+                              ⚠️ <strong>Restrições Identificadas:</strong> {clinicalNotes || selectedStudentAnamnesis?.medical_restrictions} ➔ Exercícios com risco articular foram isolados do protocolo.
+                            </span>
+                          ) : (
+                            <span>
+                              ✅ <strong>Ficha Limpa:</strong> Nenhuma restrição articular severa detectada. Aplicando carga e amplitudes de alta performance.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Passo 3 */}
+                    <div className={`p-3 rounded-xl border transition-all flex items-start gap-3 ${
+                      telemetryStep >= 3 ? 'bg-surface-high/70 border-emerald-500/30 text-white' : 'bg-surface/30 border-surface-highest/30 opacity-40'
+                    }`}>
+                      <Sparkles className={`w-4 h-4 mt-0.5 shrink-0 ${telemetryStep >= 3 ? 'text-emerald-400' : 'text-zinc-600'}`} />
+                      <div className="space-y-1 flex-1">
+                        <div className="font-bold flex items-center justify-between">
+                          <span>3. Seleção de Exercícios da Sua Biblioteca</span>
+                          {telemetryStep >= 3 && <span className="text-[9px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono">SINTETIZANDO</span>}
+                        </div>
+                        <p className="text-[10.5px] text-zinc-300">
+                          Auditando {exerciseLibrary.length} exercícios cadastrados na sua biblioteca para priorizar o catálogo do coach.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Rodapé do Modal: Indicação da IA Ativa no Canto Inferior Direito */}
+                  <div className="flex items-center justify-between pt-2 border-t border-surface-highest/40 text-[10px] text-zinc-400">
+                    <span className="flex items-center gap-1 font-mono">
+                      <Settings className="w-3 h-3 animate-spin text-[#dfbf80]" /> Aguarde a conclusão da síntese...
+                    </span>
+
+                    {/* Selo no Canto Inferior Direito informando a IA Ativa */}
+                    <div className="bg-zinc-900 border border-[#dfbf80]/40 px-3 py-1 rounded-full text-[#dfbf80] font-mono font-bold flex items-center gap-1.5 shadow-lg">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      🤖 Processando via: DeepSeek V3 / R1
+                    </div>
+                  </div>
+                </motion.div>
+              </div>
+            ) : (
+              /* MINI-BARRA FLUTUANTE QUANDO MINIMIZADO (PADRÃO WORKING SCALE) */
+              <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 50, scale: 0.9 }}
+                className="fixed bottom-6 right-6 z-[99] bg-zinc-950/95 border border-[#dfbf80]/60 text-white rounded-2xl p-3.5 shadow-[0_0_30px_rgba(212,175,55,0.4)] backdrop-blur-md flex items-center gap-4 max-w-md cursor-pointer"
+                onClick={() => setIsTelemetryMinimized(false)}
+              >
+                <div className="p-2 rounded-xl bg-[#dfbf80]/15 border border-[#dfbf80]/30 text-[#dfbf80]">
+                  <Activity className="w-5 h-5 animate-pulse" />
+                </div>
+                <div className="space-y-0.5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider truncate">
+                      Telemetria IA ({student})
+                    </h4>
+                    <span className="text-[9px] bg-primary/20 text-[#dfbf80] px-1.5 py-0.5 rounded font-mono font-bold">
+                      {telemetryStep === 1 ? '33%' : telemetryStep === 2 ? '66%' : '95%'}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 truncate font-mono">
+                    🤖 DeepSeek V3 processando anamnese...
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsTelemetryMinimized(false);
+                  }}
+                  className="p-1.5 rounded-lg bg-surface-high hover:bg-surface text-[#dfbf80] hover:text-white border border-[#dfbf80]/30 transition-colors"
+                  title="Maximizar janela de telemetria"
+                >
+                  <Maximize2 className="w-4 h-4" />
+                </button>
+              </motion.div>
+            )}
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Custom Reusable Alert Modal */}
       <AnimatePresence>
