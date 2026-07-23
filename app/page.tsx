@@ -18,6 +18,7 @@ import { supabase } from './utils/supabase';
 import { User } from './types';
 import { getOfflineQueue, queueOfflineOperation, runOfflineSync } from './utils/offline';
 import { useTheme } from './contexts/ThemeContext';
+import { BRANDING } from './config/branding';
 
 export default function App() {
   const { theme } = useTheme();
@@ -1741,7 +1742,7 @@ function MainApp({
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
                <span>JIMMP Info</span>
                <span className="text-[#dfbf80]/30 shrink-0">|</span>
-               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão 1.4.1</span>
+               <span className="text-[#dfbf80]/70 uppercase tracking-widest font-mono text-[7px] sm:text-[8px] shrink-0">Versão {BRANDING.version}</span>
              </div>
            </footer>
         </div>
@@ -4766,7 +4767,7 @@ function PublicEvolutionView({ token, brandSettings }: { token: string, brandSet
 
       {/* Footer */}
       <footer className="mt-16 text-center text-[8px] text-zinc-600 font-medium tracking-widest select-none uppercase py-6 border-t border-surface-highest/30">
-        © 2026 - Todos os direitos reservados | {brandSettings?.name || "Elite Coach"} | Gestão Inteligente
+        © 2026 - Todos os direitos reservados | {brandSettings?.name || "Elite Coach"} | Gestão Inteligente | Versão {BRANDING.version}
       </footer>
     </div>
   );
